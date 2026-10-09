@@ -36,3 +36,8 @@ logs/
 .idea/
 .DS_Store
 Thumbs.db
+
+# Fichiers sensibles générés manuellement
+token_*.txt
+*.env.local
+secrets/
