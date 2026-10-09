@@ -1,0 +1,295 @@
+<!-- frontend/src/views/RisksView.vue -->
+<template>
+  <div class="risks-page">
+    <div class="page-header">
+      <h1>Registre des Risques SI</h1>
+      <button v-if="canCreate" @click="openCreateModal" class="add-risk-btn">+ Nouveau risque</button>
+    </div>
+
+    <!-- Heatmap résumé -->
+    <div class="heatmap-summary">
+      <div v-for="level in riskLevels" :key="level.range" class="heat-cell" :class="level.class">
+        <strong>{{ level.count }}</strong>
+        <span>{{ level.label }}</span>
+      </div>
+    </div>
+
+    <!-- Tableau des risques -->
+    <div class="table-container">
+      <table class="risks-table">
+        <thead>
+          <tr>
+            <th>Réf.</th>
+            <th>Titre</th>
+            <th>Site</th>
+            <th>Niveau</th>
+            <th>Statut</th>
+            <th>Actions</th>
+          </tr>
+        </thead>
+        <tbody>
+          <tr v-for="risk in risks" :key="risk.id">
+            <td><code>{{ risk.ref }}</code></td>
+            <td>{{ risk.title }}</td>
+            <td>{{ risk.site || '-' }}</td>
+            <td>
+              <span class="risk-badge" :class="getRiskClass(risk.risk_level)">
+                {{ risk.risk_level }}
+              </span>
+            </td>
+            <td>{{ risk.status }}</td>
+            <td class="actions-cell">
+              <button v-if="canUpdate" @click="editRisk(risk)" class="action-btn edit">✏️</button>
+              <button v-if="canDelete" @click="deleteRisk(risk.id)" class="action-btn delete">🗑️</button>
+            </td>
+          </tr>
+          <tr v-if="loading">
+            <td colspan="6" class="loading-row">Chargement...</td>
+          </tr>
+          <tr v-if="!loading && risks.length === 0">
+            <td colspan="6" class="empty-state">Aucun risque enregistré.</td>
+          </tr>
+        </tbody>
+      </table>
+    </div>
+
+    <!-- Modal création/édition -->
+    <Teleport to="body">
+      <div v-if="showModal" class="modal-overlay" @click.self="closeModal">
+        <div class="modal-content">
+          <h2>{{ editingRisk ? 'Modifier le risque' : 'Créer un nouveau risque' }}</h2>
+          
+          <form @submit.prevent="saveRisk" class="risk-form">
+            <label>Référence *</label>
+            <input v-model="formData.ref" required maxlength="50" placeholder="R-SIE-XXX" />
+
+            <label>Titre *</label>
+            <textarea v-model="formData.title" required rows="2" placeholder="Description courte du risque"></textarea>
+
+            <label>Menace associée</label>
+            <textarea v-model="formData.threat" rows="2" placeholder="Quelle menace exploite cette vulnérabilité ?"></textarea>
+
+            <div class="matrix-inputs">
+              <div>
+                <label>Impact (1-5)</label>
+                <select v-model.number="formData.impact">
+                  <option v-for="i in 5" :key="i" :value="i">{{ i }}</option>
+                </select>
+              </div>
+              <div>
+                <label>Probabilité (1-5)</label>
+                <select v-model.number="formData.likelihood">
+                  <option v-for="i in 5" :key="i" :value="i">{{ i }}</option>
+                </select>
+              </div>
+            </div>
+
+            <label>Site concerné</label>
+            <input v-model="formData.site" placeholder="Ex: Tunis Siège, Gabès Rig..." />
+
+            <label>Propriétaire (ID utilisateur UUID)</label>
+            <input v-model="formData.owner_id" placeholder="Laisser vide pour auto-attribution" />
+
+            <label>Statut</label>
+            <select v-model="formData.status">
+              <option>Ouvert</option>
+              <option>En traitement</option>
+              <option>Traité</option>
+              <option>Accepté</option>
+            </select>
+
+            <label>Plan de traitement</label>
+            <textarea v-model="formData.treatment_plan" rows="3" placeholder="Mesures correctives prévues..."></textarea>
+
+            <div class="computed-level">
+              Niveau calculé : <strong>{{ formData.impact * formData.likelihood }}</strong>/25
+            </div>
+
+            <div class="modal-actions">
+              <button type="button" @click="closeModal" class="cancel-btn">Annuler</button>
+              <button type="submit" :disabled="saving" class="save-btn">
+                {{ saving ? 'Sauvegarde...' : 'Enregistrer' }}
+              </button>
+            </div>
+          </form>
+        </div>
+      </div>
+    </Teleport>
+  </div>
+</template>
+
+<script setup>
+import { ref, reactive, computed, onMounted } from 'vue';
+import { useAuthStore } from '@/stores/auth';
+import apiClient from '@/services/api';
+
+const authStore = useAuthStore();
+const risks = ref([]);
+const loading = ref(true);
+const showModal = ref(false);
+const editingRisk = ref(null);
+const saving = ref(false);
+
+const formData = reactive({
+  ref: '',
+  title: '',
+  threat: '',
+  impact: 3,
+  likelihood: 3,
+  site: '',
+  owner_id: '',
+  status: 'Ouvert',
+  treatment_plan: '',
+});
+
+// Permissions basées sur matrice backend
+const canCreate = computed(() => authStore.canAccessModule('risks', 'create'));
+const canUpdate = computed(() => authStore.canAccessModule('risks', 'update'));
+const canDelete = computed(() => authStore.canAccessModule('risks', 'delete'));
+
+// Classification heatmap
+const riskLevels = computed(() => {
+  const buckets = [
+    { range: '1-4', label: 'Faible', class: 'low', count: 0 },
+    { range: '5-9', label: 'Modéré', class: 'medium', count: 0 },
+    { range: '10-14', label: 'Élevé', class: 'high', count: 0 },
+    { range: '15-19', label: 'Critique', class: 'critical', count: 0 },
+    { range: '20-25', label: 'Inacceptable', class: 'extreme', count: 0 },
+  ];
+  
+  risks.value.forEach(r => {
+    const lvl = r.risk_level;
+    if (lvl <= 4) buckets[0].count++;
+    else if (lvl <= 9) buckets[1].count++;
+    else if (lvl <= 14) buckets[2].count++;
+    else if (lvl <= 19) buckets[3].count++;
+    else buckets[4].count++;
+  });
+  
+  return buckets;
+});
+
+function getRiskClass(level) {
+  if (level <= 4) return 'low';
+  if (level <= 9) return 'medium';
+  if (level <= 14) return 'high';
+  if (level <= 19) return 'critical';
+  return 'extreme';
+}
+
+async function loadRisks() {
+  loading.value = true;
+  try {
+    const { data } = await apiClient.get('/risks/');
+    risks.value = data;
+  } catch (err) {
+    console.error('Erreur chargement risques:', err);
+  } finally {
+    loading.value = false;
+  }
+}
+
+function openCreateModal() {
+  editingRisk.value = null;
+  Object.assign(formData, {
+    ref: '', title: '', threat: '', impact: 3, likelihood: 3,
+    site: '', owner_id: '', status: 'Ouvert', treatment_plan: ''
+  });
+  showModal.value = true;
+}
+
+function editRisk(risk) {
+  editingRisk.value = risk;
+  Object.assign(formData, {
+    ref: risk.ref,
+    title: risk.title,
+    threat: risk.threat || '',
+    impact: risk.impact,
+    likelihood: risk.likelihood,
+    site: risk.site || '',
+    owner_id: risk.owner_id || '',
+    status: risk.status,
+    treatment_plan: risk.treatment_plan || ''
+  });
+  showModal.value = true;
+}
+
+function closeModal() {
+  showModal.value = false;
+  editingRisk.value = null;
+}
+
+async function saveRisk() {
+  saving.value = true;
+  try {
+    if (editingRisk.value) {
+      // Update
+      await apiClient.put(`/risks/${editingRisk.value.id}`, formData);
+    } else {
+      // Create
+      await apiClient.post('/risks/', formData);
+    }
+    await loadRisks();
+    closeModal();
+  } catch (err) {
+    alert(err.response?.data?.detail || 'Erreur sauvegarde risque.');
+  } finally {
+    saving.value = false;
+  }
+}
+
+async function deleteRisk(id) {
+  if (!confirm('Supprimer définitivement ce risque ? Cette action est irréversible.')) return;
+  try {
+    await apiClient.delete(`/risks/${id}`);
+    await loadRisks();
+  } catch (err) {
+    alert(err.response?.data?.detail || 'Erreur suppression.');
+  }
+}
+
+onMounted(loadRisks);
+</script>
+
+<style scoped>
+.risks-page { max-width: 1400px; margin: 0 auto; }
+.page-header { display: flex; justify-content: space-between; align-items: center; margin-bottom: 1.5rem; }
+.page-header h1 { font-size: 1.5rem; color: #0f172a; }
+.add-risk-btn { padding: 0.6rem 1.2rem; background: #0ea5e9; color: white; border: none; border-radius: 6px; font-weight: 600; cursor: pointer; }
+.add-risk-btn:hover { background: #0284c7; }
+
+.heatmap-summary { display: grid; grid-template-columns: repeat(5, 1fr); gap: 0.75rem; margin-bottom: 1.5rem; }
+.heat-cell { padding: 1rem; border-radius: 8px; text-align: center; color: white; font-weight: bold; }
+.heat-cell strong { font-size: 1.8rem; display: block; }
+.heat-cell span { font-size: 0.85rem; opacity: 0.9; }
+.low { background: #22c55e; }
+.medium { background: #eab308; }
+.high { background: #f97316; }
+.critical { background: #ef4444; }
+.extreme { background: #7f1d1d; }
+
+.table-container { overflow-x: auto; background: white; border-radius: 8px; box-shadow: 0 1px 3px rgba(0,0,0,0.1); }
+.risks-table { width: 100%; border-collapse: collapse; }
+.risks-table th, .risks-table td { padding: 0.75rem 1rem; text-align: left; border-bottom: 1px solid #e2e8f0; }
+.risks-table th { background: #f8fafc; font-weight: 600; color: #475569; font-size: 0.85rem; text-transform: uppercase; letter-spacing: 0.5px; }
+.risks-table tr:hover { background: #f1f5f9; }
+.risk-badge { display: inline-block; padding: 0.25rem 0.6rem; border-radius: 12px; font-size: 0.8rem; font-weight: 700; color: white; }
+.actions-cell { display: flex; gap: 0.5rem; }
+.action-btn { padding: 0.3rem 0.6rem; border: none; border-radius: 4px; cursor: pointer; font-size: 0.9rem; }
+.action-btn.edit { background: #dbeafe; color: #1d4ed8; }
+.action-btn.delete { background: #fee2e2; color: #dc2626; }
+.loading-row, .empty-state { text-align: center; color: #64748b; padding: 2rem !important; }
+
+.modal-overlay { position: fixed; inset: 0; background: rgba(0,0,0,0.5); display: flex; justify-content: center; align-items: center; z-index: 1000; }
+.modal-content { background: white; border-radius: 12px; padding: 2rem; width: 90%; max-width: 600px; max-height: 90vh; overflow-y: auto; }
+.modal-content h2 { margin-bottom: 1.5rem; color: #0f172a; }
+.risk-form { display: flex; flex-direction: column; gap: 1rem; }
+.risk-form label { font-size: 0.85rem; font-weight: 600; color: #334155; }
+.risk-form input, .risk-form textarea, .risk-form select { padding: 0.6rem; border: 1px solid #cbd5e1; border-radius: 6px; font-size: 0.95rem; }
+.matrix-inputs { display: grid; grid-template-columns: 1fr 1fr; gap: 1rem; }
+.computed-level { background: #f1f5f9; padding: 0.75rem; border-radius: 6px; text-align: center; font-size: 0.9rem; }
+.modal-actions { display: flex; justify-content: flex-end; gap: 0.75rem; margin-top: 1rem; }
+.cancel-btn { padding: 0.6rem 1.2rem; background: #e2e8f0; color: #475569; border: none; border-radius: 6px; cursor: pointer; }
+.save-btn { padding: 0.6rem 1.2rem; background: #0ea5e9; color: white; border: none; border-radius: 6px; font-weight: 600; cursor: pointer; }
+.save-btn:disabled { opacity: 0.6; cursor: not-allowed; }
+</style>
