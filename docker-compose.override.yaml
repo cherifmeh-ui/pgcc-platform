@@ -1,0 +1,11 @@
+# docker-compose.override.yaml
+# Fusionné automatiquement avec docker-compose.yaml en local.
+# NE PAS utiliser sur la VM CTF (lancer avec -f docker-compose.yaml).
+services:
+  backend:
+    volumes:
+      - ./backend/app:/app/app
+    command: uvicorn app.main:app --host 0.0.0.0 --port 8000 --reload
+    environment:
+      DEBUG: "true"
+      ENVIRONMENT: development
