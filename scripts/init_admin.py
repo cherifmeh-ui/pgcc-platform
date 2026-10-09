@@ -20,13 +20,13 @@ ADMINS = [
     {
         "email": "rssi@ctf.com.tn",
         "full_name": "Responsable Sécurité Informatique (RSSI)",
-        "department": "DSI",
+        "department": "Direction Générale (DG)",
         "role": "admin",
     },
     {
         "email": "dg@ctf.com.tn",
-        "full_name": "Direction Générale (PDG)",
-        "department": "Direction Générale",
+        "full_name": "Président-Directeur Général (PDG)",
+        "department": "Direction Générale (DG)",
         "role": "executive",
     },
 ]
