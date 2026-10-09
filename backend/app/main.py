@@ -5,13 +5,19 @@ from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 
 from app.core.config import settings
+from app.core.database import Base, engine
 
 
 @asynccontextmanager
 async def lifespan(app: FastAPI):
-    print("✅ PGCC backend démarré (Phase 0 - squelette)")
+    # Importer les modeles AVANT create_all pour qu'ils s'enregistrent dans le metadata
+    from app.models import user  # noqa: F401
+
+    async with engine.begin() as conn:
+        await conn.run_sync(Base.metadata.create_all)
+    print("✅ PGCC | tables créées/vérifiées (Phase 1)")
     yield
-    print("🛑 PGCC backend arrêté")
+    print("🛑 PGCC | arrêt")
 
 
 app = FastAPI(
@@ -19,7 +25,7 @@ app = FastAPI(
     version=settings.APP_VERSION,
     description=(
         "Socle de gouvernance cyber interne pour la Compagnie Tunisienne de Forage. "
-        "Phase 0 : squelette minimal."
+        "Phase 1 : authentification + modèle User + sécurité."
     ),
     lifespan=lifespan,
 )
@@ -39,7 +45,7 @@ async def root():
         "message": "🛡️ PGCC API - Plateforme de Gouvernance Cyber CTF",
         "status": "OK",
         "version": settings.APP_VERSION,
-        "phase": "0 - squelette",
+        "phase": "1 - socle auth + user",
     }
 
 
@@ -48,7 +54,8 @@ async def health():
     return {
         "status": "healthy",
         "service": "pgcc-backend",
-        "phase": 0,
+        "phase": 1,
         "environment": settings.ENVIRONMENT,
         "ai_enabled": settings.AI_ENABLED,
+        "db": "branchée",
     }
