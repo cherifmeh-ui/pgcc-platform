@@ -12,7 +12,7 @@ from app.api.v1.endpoints.auth import router as auth_router
 
 @asynccontextmanager
 async def lifespan(app: FastAPI):
-    from app.models import user  # noqa: F401
+    from app.models import user, security_log, risk  # noqa: F401
 
     async with engine.begin() as conn:
         await conn.run_sync(Base.metadata.create_all)
@@ -26,7 +26,7 @@ app = FastAPI(
     version=settings.APP_VERSION,
     description=(
         "Socle de gouvernance cyber interne pour la Compagnie Tunisienne de Forage. "
-        "Phase 2 : RBAC backend + dépendances d'authentification."
+        "Phase 4 : Audit immuable + Module Risques CRUD."
     ),
     lifespan=lifespan,
 )
@@ -58,7 +58,7 @@ async def health():
     return {
         "status": "healthy",
         "service": "pgcc-backend",
-        "phase": 2,
+        "phase": 4,
         "environment": settings.ENVIRONMENT,
         "ai_enabled": settings.AI_ENABLED,
         "db": "branchée",
