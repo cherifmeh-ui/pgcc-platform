@@ -12,9 +12,9 @@ logger = logging.getLogger(__name__)
 
 # Configuration Réseau & Modèle
 OLLAMA_BASE_URL = "http://host.docker.internal:11434"
-DEFAULT_MODEL = "llama3:latest" 
+DEFAULT_MODEL = "phi3:latest" 
 # ⚠️ IMPORTANT : Timeout élevé (120s) car le chargement initial du modèle peut être long sur CPU/GPU partagé
-TIMEOUT_SECONDS = 120 
+TIMEOUT_SECONDS = 180 
 
 
 class AIService:

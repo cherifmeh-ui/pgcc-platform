@@ -1,6 +1,7 @@
 <!-- frontend/src/views/RisksView.vue -->
 <template>
   <div class="risks-page">
+    <!-- En-tête de page -->
     <div class="page-header">
       <h1>Registre des Risques SI</h1>
       <button v-if="canCreate" @click="openCreateModal" class="add-risk-btn">+ Nouveau risque</button>
@@ -14,7 +15,7 @@
       </div>
     </div>
 
-    <!-- Tableau des risques -->
+    <!-- Tableau principal -->
     <div class="table-container">
       <table class="risks-table">
         <thead>
@@ -39,8 +40,9 @@
             </td>
             <td>{{ risk.status }}</td>
             <td class="actions-cell">
-              <button v-if="canUpdate" @click="editRisk(risk)" class="action-btn edit">✏️</button>
-              <button v-if="canDelete" @click="deleteRisk(risk.id)" class="action-btn delete">🗑️</button>
+              <button v-if="canUpdate" @click="editRisk(risk)" class="action-btn edit" title="Modifier">✏️</button>
+              <button @click="openAiAssistant(risk)" class="action-btn ai" title="Assistant IA">✨</button>
+              <button v-if="canDelete" @click="deleteRisk(risk.id)" class="action-btn delete" title="Supprimer">🗑️</button>
             </td>
           </tr>
           <tr v-if="loading">
@@ -53,18 +55,21 @@
       </table>
     </div>
 
-    <!-- Modal création/édition -->
+    <!-- Modal Création/Édition -->
     <Teleport to="body">
       <div v-if="showModal" class="modal-overlay" @click.self="closeModal">
         <div class="modal-content">
           <h2>{{ editingRisk ? 'Modifier le risque' : 'Créer un nouveau risque' }}</h2>
-          
+
           <form @submit.prevent="saveRisk" class="risk-form">
             <label>Référence *</label>
             <input v-model="formData.ref" required maxlength="50" placeholder="R-SIE-XXX" />
 
             <label>Titre *</label>
             <textarea v-model="formData.title" required rows="2" placeholder="Description courte du risque"></textarea>
+
+            <label>Description détaillée</label>
+            <textarea v-model="formData.description" rows="3" placeholder="Contexte technique détaillé (utilisé par l'assistant IA)..."></textarea>
 
             <label>Menace associée</label>
             <textarea v-model="formData.threat" rows="2" placeholder="Quelle menace exploite cette vulnérabilité ?"></textarea>
@@ -115,6 +120,13 @@
         </div>
       </div>
     </Teleport>
+
+    <!-- Panneau Assistant IA -->
+    <AiAssistantPanel
+      :is-open="showAiPanel"
+      :risk-data="selectedRiskForAi"
+      @close="showAiPanel = false"
+    />
   </div>
 </template>
 
@@ -122,17 +134,26 @@
 import { ref, reactive, computed, onMounted } from 'vue';
 import { useAuthStore } from '@/stores/auth';
 import apiClient from '@/services/api';
+import AiAssistantPanel from '@/components/AiAssistantPanel.vue';
 
 const authStore = useAuthStore();
+
+// --- État Local UI ---
 const risks = ref([]);
 const loading = ref(true);
 const showModal = ref(false);
 const editingRisk = ref(null);
 const saving = ref(false);
 
+// --- État Assistant IA ---
+const showAiPanel = ref(false);
+const selectedRiskForAi = ref(null);
+
+// Formulaire création/modif (description AJOUTÉE)
 const formData = reactive({
   ref: '',
   title: '',
+  description: '',
   threat: '',
   impact: 3,
   likelihood: 3,
@@ -142,12 +163,12 @@ const formData = reactive({
   treatment_plan: '',
 });
 
-// Permissions basées sur matrice backend
+// --- Permissions RBAC ---
 const canCreate = computed(() => authStore.canAccessModule('risks', 'create'));
 const canUpdate = computed(() => authStore.canAccessModule('risks', 'update'));
 const canDelete = computed(() => authStore.canAccessModule('risks', 'delete'));
 
-// Classification heatmap
+// --- Calcul Heatmap ---
 const riskLevels = computed(() => {
   const buckets = [
     { range: '1-4', label: 'Faible', class: 'low', count: 0 },
@@ -156,7 +177,6 @@ const riskLevels = computed(() => {
     { range: '15-19', label: 'Critique', class: 'critical', count: 0 },
     { range: '20-25', label: 'Inacceptable', class: 'extreme', count: 0 },
   ];
-  
   risks.value.forEach(r => {
     const lvl = r.risk_level;
     if (lvl <= 4) buckets[0].count++;
@@ -165,7 +185,6 @@ const riskLevels = computed(() => {
     else if (lvl <= 19) buckets[3].count++;
     else buckets[4].count++;
   });
-  
   return buckets;
 });
 
@@ -177,6 +196,7 @@ function getRiskClass(level) {
   return 'extreme';
 }
 
+// --- Actions CRUD ---
 async function loadRisks() {
   loading.value = true;
   try {
@@ -192,7 +212,7 @@ async function loadRisks() {
 function openCreateModal() {
   editingRisk.value = null;
   Object.assign(formData, {
-    ref: '', title: '', threat: '', impact: 3, likelihood: 3,
+    ref: '', title: '', description: '', threat: '', impact: 3, likelihood: 3,
     site: '', owner_id: '', status: 'Ouvert', treatment_plan: ''
   });
   showModal.value = true;
@@ -203,6 +223,7 @@ function editRisk(risk) {
   Object.assign(formData, {
     ref: risk.ref,
     title: risk.title,
+    description: risk.description || '',
     threat: risk.threat || '',
     impact: risk.impact,
     likelihood: risk.likelihood,
@@ -219,20 +240,43 @@ function closeModal() {
   editingRisk.value = null;
 }
 
+// --- Action Assistant IA (payload complet et typé) ---
+function openAiAssistant(risk) {
+  selectedRiskForAi.value = {
+    ref: risk.ref || 'SANS-REF',
+    title: risk.title || 'Risque sans titre',
+    description: risk.description || risk.treatment_plan || risk.title || '',
+    threat: risk.threat || '',
+    impact: risk.impact || 3,
+    likelihood: risk.likelihood || 3,
+    site: risk.site || ''
+  };
+  showAiPanel.value = true;
+}
+
 async function saveRisk() {
   saving.value = true;
   try {
+    // Nettoyage du payload : owner_id vide → null (le backend attend UUID ou null, pas "")
+    const payload = { ...formData };
+    if (!payload.owner_id || !payload.owner_id.trim()) {
+      payload.owner_id = null;
+    }
+
     if (editingRisk.value) {
-      // Update
-      await apiClient.put(`/risks/${editingRisk.value.id}`, formData);
+      await apiClient.put(`/risks/${editingRisk.value.id}`, payload);
     } else {
-      // Create
-      await apiClient.post('/risks/', formData);
+      await apiClient.post('/risks/', payload);
     }
     await loadRisks();
     closeModal();
   } catch (err) {
-    alert(err.response?.data?.detail || 'Erreur sauvegarde risque.');
+    const detail = err.response?.data?.detail;
+    if (Array.isArray(detail)) {
+      alert('Données invalides : ' + detail.map(d => `${(d.loc || []).join('.')} — ${d.msg}`).join('\n'));
+    } else {
+      alert(detail || 'Erreur sauvegarde risque.');
+    }
   } finally {
     saving.value = false;
   }
@@ -275,9 +319,13 @@ onMounted(loadRisks);
 .risks-table tr:hover { background: #f1f5f9; }
 .risk-badge { display: inline-block; padding: 0.25rem 0.6rem; border-radius: 12px; font-size: 0.8rem; font-weight: 700; color: white; }
 .actions-cell { display: flex; gap: 0.5rem; }
-.action-btn { padding: 0.3rem 0.6rem; border: none; border-radius: 4px; cursor: pointer; font-size: 0.9rem; }
+.action-btn { padding: 0.3rem 0.6rem; border: none; border-radius: 4px; cursor: pointer; font-size: 0.9rem; transition: transform 0.1s; }
+.action-btn:hover { transform: scale(1.1); }
 .action-btn.edit { background: #dbeafe; color: #1d4ed8; }
 .action-btn.delete { background: #fee2e2; color: #dc2626; }
+.action-btn.ai { background: #ede9fe; color: #6d28d9; font-weight: bold; }
+.action-btn.ai:hover { background: #ddd6fe; }
+
 .loading-row, .empty-state { text-align: center; color: #64748b; padding: 2rem !important; }
 
 .modal-overlay { position: fixed; inset: 0; background: rgba(0,0,0,0.5); display: flex; justify-content: center; align-items: center; z-index: 1000; }
