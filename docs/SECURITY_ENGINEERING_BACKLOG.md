@@ -23,8 +23,8 @@ Status: active engineering review. This is a static review backlog, not a securi
 - [x] Consume recovery codes after successful use.
 - [ ] Persist refresh-token sessions and implement rotation/reuse detection.
 - [ ] Revoke sessions on password change, account disable, role change, and logout.
-- [ ] Rework forced-password-change flow: dedicated token, no access-token fallback.
-- [ ] Add rate limiting for login, MFA, enrollment, and refresh endpoints (distributed backend, not process-local only).
+- [x] Require dedicated change-password token for forced password change; remove access-token fallback.\n- [ ] Complete frontend forced-password-change flow and validate token issuance.
+- [x] Apply account lockout policy to MFA verification failures.\n- [ ] Add distributed rate limiting for login, MFA, enrollment, and refresh endpoints.
 - [ ] Encrypt MFA secrets at rest and define key rotation.
 - [ ] Add MFA reset/recovery process with audit and administrator approval.
 - [ ] Verify anti-enumeration behavior and consistent login responses.
@@ -69,7 +69,7 @@ Status: active engineering review. This is a static review backlog, not a securi
 - [ ] Verify embedding model dimensions and pgvector compatibility.
 - [ ] Include document/page/version citations and confidence/missing-context notes.
 - [ ] AI suggestions must be reviewable and never silently change GRC records.
-- [ ] Add prompt-injection handling for uploaded content and retrieved documents.
+- [x] Treat risk data as untrusted in ISO suggestion prompt and validate/filter returned control references.\n- [ ] Add prompt-injection handling for uploaded content and retrieved documents.
 
 ## Phase 7 — Observability and release
 
