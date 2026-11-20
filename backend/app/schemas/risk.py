@@ -9,22 +9,22 @@ class RiskResponse(BaseModel):
     id: UUID
     ref: str
     title: str
-    description: Optional[str] = None
-    threat: Optional[str] = None
+    description: Optional[str] = Field(default=None, max_length=10000)
+    threat: Optional[str] = Field(default=None, max_length=5000)
     impact: int
     likelihood: int
     risk_level: int
-    site: Optional[str] = None
+    site: Optional[str] = Field(default=None, max_length=100)
     owner_id: Optional[UUID] = None
     status: Optional[str] = None
-    treatment_plan: Optional[str] = None
+    treatment_plan: Optional[str] = Field(default=None, max_length=10000)
     created_at: Optional[str] = None
 
     model_config = {"from_attributes": True}
 
 
 class RiskCreate(BaseModel):
-    ref: str = Field(..., min_length=3, max_length=50)
+    ref: str = Field(..., min_length=3, max_length=50, pattern=r"^[A-Za-z0-9][A-Za-z0-9._-]*$")
     title: str = Field(..., min_length=3, max_length=500)
     description: Optional[str] = None
     threat: Optional[str] = None
@@ -34,7 +34,7 @@ class RiskCreate(BaseModel):
 
     site: Optional[str] = None
     owner_id: Optional[UUID] = None
-    status: str = Field(default="Ouvert", max_length=50)
+    status: str = Field(default="Ouvert", max_length=50, pattern=r"^(Ouvert|En traitement|Traité|Accepté)$")
     treatment_plan: Optional[str] = None
 
 
@@ -48,5 +48,5 @@ class RiskUpdate(BaseModel):
 
     site: Optional[str] = None
     owner_id: Optional[UUID] = None
-    status: Optional[str] = Field(default=None, max_length=50)
+    status: Optional[str] = Field(default=None, max_length=50, pattern=r"^(Ouvert|En traitement|Traité|Accepté)$")
     treatment_plan: Optional[str] = None
