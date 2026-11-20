@@ -50,7 +50,7 @@ Status: active engineering review. This is a static review backlog, not a securi
 
 - [ ] Verify ISO/IEC 27002:2022 control references and titles against an authoritative licensed source.
 - [ ] Version control reference datasets; never mix editions.
-- [ ] Separate applicability, implementation status, maturity, verification and evidence.
+- [x] Current compliance score is explicitly declarative; text-linked risks/actions are shown as 'À vérifier' rather than treated as implemented controls.\n- [ ] Separate applicability, implementation status, maturity, verification and evidence.
 - [ ] Implement statement of applicability and justified exclusions.
 - [ ] Add audit findings, nonconformities, recommendations and linked actions.
 
