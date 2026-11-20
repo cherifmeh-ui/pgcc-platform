@@ -146,3 +146,13 @@ def verify_backup_code(code: str, hashed_codes: Optional[list[str]]) -> bool:
         return False
     cleaned = str(code).strip().upper()
     return any(verify_password(cleaned, h) for h in hashed_codes)
+
+def consume_backup_code(code: str, hashed_codes: Optional[list[str]]) -> Optional[list[str]]:
+    """Validate and consume one recovery code; return the remaining hashes or None."""
+    if not code or not hashed_codes:
+        return None
+    cleaned = str(code).strip().upper()
+    for index, hashed in enumerate(hashed_codes):
+        if verify_password(cleaned, hashed):
+            return hashed_codes[:index] + hashed_codes[index + 1 :]
+    return None
