@@ -63,7 +63,8 @@
         <input 
           id="totp-code"
           v-model="totpCode" 
-          maxlength="6"\n          pattern="\\d{6}" 
+          maxlength="6"
+          pattern="\\d{6}" 
           placeholder="123456" 
           inputmode="numeric"
           autofocus
