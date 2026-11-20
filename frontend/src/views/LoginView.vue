@@ -179,7 +179,16 @@ async function handleLogin() {
     // Donc on force 'verify-mfa' pour tester le flow principal du RSSI.
     // Pour un vrai nouvel utilisateur, il faudrait appeler /start-enrollment ici.
     
-    step.value = 'verify-mfa'; 
+    if (data.mfa_enabled) {
+      step.value = 'verify-mfa';
+    } else {
+      const enrollRes = await apiClient.post('/auth/start-enrollment', {}, {
+        headers: { Authorization: `Bearer ${currentPreAuthToken}` },
+      });
+      provisioningUri.value = enrollRes.data.provisioning_uri;
+      mfaSecret.value = enrollRes.data.secret;
+      step.value = 'setup-mfa';
+    }
 
   } catch (err) {
     errorMessage.value = err.response?.data?.detail || 'Erreur de connexion. Vérifiez vos identifiants.';
@@ -199,16 +208,8 @@ async function confirmMfaEnrollment() {
   errorMessage.value = null;
 
   try {
-    // 1. Démarrer l'enrollment (génère secret côté serveur)
-    const enrollRes = await apiClient.post('/auth/start-enrollment', {}, {
-      headers: { Authorization: `Bearer ${currentPreAuthToken}` },
-    });
-    
-    // Mise à jour UI avec le QR reçu
-    provisioningUri.value = enrollRes.data.provisioning_uri;
-    mfaSecret.value = enrollRes.data.secret;
-    
-    // 2. Confirmer avec le code saisi
+    // Le secret/QR est déjà obtenu au passage login pour un compte non enrôlé.
+    // Confirmer avec le code saisi.
     const confirmRes = await apiClient.post('/auth/confirm-mfa', {
       pre_auth_token: currentPreAuthToken,
       mfa_code: totpCode.value,
@@ -263,6 +264,8 @@ function goBackToCredentials() {
   step.value = 'credentials';
   totpCode.value = '';
   errorMessage.value = null;
+  provisioningUri.value = '';
+  mfaSecret.value = '';
   currentPreAuthToken = null;
 }
 </script>
