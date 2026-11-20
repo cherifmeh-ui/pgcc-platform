@@ -118,3 +118,24 @@ def test_document_extractor_rejects_invalid_pdf_signature():
 def test_document_extractor_rejects_invalid_docx_archive():
     with pytest.raises(ValueError):
         DocumentExtractor.extract_text(b"PK-not-a-zip", "file.docx")
+
+from app.services.rag_service import _split_text
+
+
+def test_rag_split_text_empty_and_short_text():
+    assert _split_text("", 100, 10) == []
+    assert _split_text("one two three", 100, 10) == ["one two three"]
+
+
+def test_rag_split_text_chunks_and_overlap():
+    chunks = _split_text("alpha beta gamma delta epsilon zeta eta theta", 16, 5)
+    assert len(chunks) > 1
+    assert all(len(chunk) <= 16 for chunk in chunks)
+    assert any(set(chunk.split()) & set(chunks[index + 1].split()) for index, chunk in enumerate(chunks[:-1]))
+
+
+def test_rag_split_text_rejects_invalid_parameters():
+    with pytest.raises(ValueError):
+        _split_text("text", 0, 0)
+    with pytest.raises(ValueError):
+        _split_text("text", 10, 10)
