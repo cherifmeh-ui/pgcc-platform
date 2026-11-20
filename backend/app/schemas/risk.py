@@ -45,7 +45,7 @@ class RiskCreate(BaseModel):
     impact: Optional[int] = Field(default=None, ge=1, le=5)
     likelihood: Optional[int] = Field(default=None, ge=1, le=5)
 
-    site: Optional[str] = None
+    site: Optional[str] = Field(default=None, max_length=100)
     owner_id: Optional[UUID] = None
     status: Optional[str] = Field(default=None, max_length=50, pattern=r"^(Ouvert|En traitement|Traité|Accepté)$")
     treatment_plan: Optional[str] = Field(default=None, max_length=10000)
