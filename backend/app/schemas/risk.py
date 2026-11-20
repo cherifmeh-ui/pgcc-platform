@@ -41,8 +41,8 @@ class RiskCreate(BaseModel):
     def validate_treatment_rationale(self):
         if self.status == "Accepté" and not (self.treatment_plan or "").strip():
             raise ValueError("Un risque accepté doit comporter une justification documentée dans le plan de traitement.")
-        if self.status == "En traitement" and not (self.treatment_plan or "").strip():
-            raise ValueError("Un risque en traitement doit comporter un plan de traitement.")
+        if self.status in {"En traitement", "Traité"} and not (self.treatment_plan or "").strip():
+            raise ValueError("Un risque en traitement ou traité doit comporter un plan documenté.")
         return self
 
 
