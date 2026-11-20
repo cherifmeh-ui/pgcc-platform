@@ -1,6 +1,7 @@
 # backend/app/models/document_chunk.py
 from sqlalchemy import Column, String, Integer, Text, ForeignKey
-from sqlalchemy.dialects.postgresql import UUID as PG_UUID, VECTOR # ⬅️ IMPORT CRUCIAL
+from sqlalchemy.dialects.postgresql import UUID as PG_UUID
+from pgvector.sqlalchemy import Vector
 import uuid
 from app.core.database import Base
 
@@ -19,7 +20,7 @@ class DocumentChunk(Base):
     # Note : La dimension dépend du modèle embedding choisi dans Ollama.
     # Pour 'nomic-embed-text', c'est souvent 768. Pour 'phi3', c'est différent.
     # On va supposer 768 pour commencer (standard Nomic).
-    embedding = Column(VECTOR(768), nullable=True) 
+    embedding = Column(Vector(768), nullable=True) 
     
     # Métadonnées pour retrouver la source exacte
     page_number = Column(Integer, nullable=True)
