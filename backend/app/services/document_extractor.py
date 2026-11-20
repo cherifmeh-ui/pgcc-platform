@@ -1,5 +1,6 @@
 # backend/app/services/document_extractor.py
 import io
+import zipfile
 from typing import Tuple
 from pypdf import PdfReader
 from docx import Document as DocxDocument
@@ -16,7 +17,8 @@ class DocumentExtractor:
         try:
             if ext == 'pdf':
                 return _extract_pdf_limited(file_bytes), "PDF"
-            elif ext in ['doc', 'docx']:
+            elif ext == 'docx':
+                _validate_docx_archive(file_bytes)
                 return _extract_docx_safe(file_bytes), "DOCX"
             else:
                 raise ValueError(f"Format non supporté : .{ext}.")
@@ -28,7 +30,9 @@ class DocumentExtractor:
 
 def _extract_pdf_limited(data: bytes, max_pages: int = 50) -> str:
     """Extraction PDF avec limite de pages pour éviter timeouts."""
-    reader = PdfReader(io.BytesIO(data))
+    reader = PdfReader(io.BytesIO(data), strict=True)
+    if reader.is_encrypted:
+        raise ValueError("Les PDF chiffrés ne sont pas acceptés.")
     text_parts = []
     
     total_pages = len(reader.pages)
@@ -64,3 +68,23 @@ def _extract_docx_safe(data: bytes) -> str:
         raise ValueError("Document Word vide ou illisible.")
         
     return '\n\n'.join(paragraphs)
+
+def _validate_docx_archive(data: bytes, max_entries: int = 1000, max_uncompressed: int = 50 * 1024 * 1024) -> None:
+    """Reject malformed or suspiciously large DOCX ZIP containers before parsing."""
+    try:
+        with zipfile.ZipFile(io.BytesIO(data)) as archive:
+            entries = archive.infolist()
+            if len(entries) > max_entries:
+                raise ValueError("DOCX contenant trop d'éléments.")
+            total_uncompressed = sum(entry.file_size for entry in entries)
+            if total_uncompressed > max_uncompressed:
+                raise ValueError("DOCX décompressé trop volumineux.")
+            if "word/document.xml" not in archive.namelist():
+                raise ValueError("Structure DOCX invalide.")
+            for entry in entries:
+                if entry.file_size > 0 and entry.compress_size == 0:
+                    raise ValueError("Archive DOCX suspecte.")
+                if entry.compress_size and entry.file_size / entry.compress_size > 1000:
+                    raise ValueError("Ratio de compression DOCX suspect.")
+    except zipfile.BadZipFile as exc:
+        raise ValueError("Fichier DOCX invalide.") from exc
