@@ -48,8 +48,8 @@ class RiskCreate(BaseModel):
 
 class RiskUpdate(BaseModel):
     title: Optional[str] = Field(default=None, min_length=3, max_length=500)
-    description: Optional[str] = None
-    threat: Optional[str] = None
+    description: Optional[str] = Field(default=None, max_length=10000)
+    threat: Optional[str] = Field(default=None, max_length=5000)
 
     impact: Optional[int] = Field(default=None, ge=1, le=5)
     likelihood: Optional[int] = Field(default=None, ge=1, le=5)
