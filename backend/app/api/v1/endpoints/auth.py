@@ -23,6 +23,7 @@ from app.core.security import (
     hash_backup_codes,
     hash_password,
     verify_backup_code,
+    consume_backup_code,
     verify_mfa,
     verify_password,
 )
@@ -51,7 +52,7 @@ class StartEnrollmentResponse(BaseModel):
 
 class ConfirmMfaRequest(BaseModel):
     pre_auth_token: str
-    mfa_code: str = Field(min_length=6, max_length=6)
+    mfa_code: str = Field(min_length=6, max_length=32)
 
 
 class ChangePasswordRequest(BaseModel):
@@ -196,9 +197,11 @@ async def start_enrollment(
     if not user:
         raise HTTPException(status_code=401, detail="Utilisateur non trouvé.")
 
-    # Si déjà activé, inutile de ré-enrôler
+    # Enrôlement uniquement pour les comptes sans MFA actif.
     if user.mfa_enabled:
         raise HTTPException(status_code=400, detail="MFA déjà activé.")
+    if not user.is_active:
+        raise HTTPException(status_code=403, detail="Compte désactivé.")
 
     secret = generate_mfa_secret()
     user.mfa_secret = secret
@@ -247,7 +250,15 @@ async def confirm_mfa(
             detail="Aucune procédure d'enrôlement MFA active. Appelez /start-enrollment d'abord.",
         )
 
-    if not verify_mfa(user.mfa_secret, payload.mfa_code):
+    if not user.is_active:
+        raise HTTPException(status_code=403, detail="Compte désactivé.")
+
+    valid_totp = verify_mfa(user.mfa_secret, payload.mfa_code)
+    remaining_backup_codes = None
+    if not valid_totp and user.mfa_enabled:
+        remaining_backup_codes = consume_backup_code(payload.mfa_code, user.backup_codes_hashed)
+
+    if not valid_totp and remaining_backup_codes is None:
         await log_action(
             user_email=user.email,
             action="MFA_FAILED",
@@ -258,13 +269,18 @@ async def confirm_mfa(
         )
         raise HTTPException(status_code=401, detail="Code MFA invalide.")
 
-    # ACTIVATION DÉFINITIVE
-    backup_codes = generate_backup_codes(10)
-    hashed_backups = hash_backup_codes(backup_codes)
+    # MFA existant : un code de secours consommé ne doit jamais être réutilisable.
+    if user.mfa_enabled and remaining_backup_codes is not None:
+        user.backup_codes_hashed = remaining_backup_codes
 
-    user.mfa_enabled = True
-    user.mfa_confirmed_at = _now()
-    user.backup_codes_hashed = hashed_backups
+    # Enrôlement initial : activer MFA et générer les codes de secours une seule fois.
+    backup_codes = []
+    if not user.mfa_enabled:
+        backup_codes = generate_backup_codes(10)
+        user.backup_codes_hashed = hash_backup_codes(backup_codes)
+        user.mfa_enabled = True
+        user.mfa_confirmed_at = _now()
+
     user.last_login_at = _now()
     user.failed_login_attempts = 0
     user.locked_until = None
@@ -292,7 +308,7 @@ async def confirm_mfa(
             "role": user.role,
             "must_change_password": user.must_change_password,
             "mfa_enabled": True,
-            "backup_codes": backup_codes, # Affiché UNE SEULE FOIS
+            **({"backup_codes": backup_codes} if backup_codes else {}), # Initial enrollment only
         }
     )
 
@@ -328,6 +344,9 @@ async def change_password(
 
     if not user:
         raise HTTPException(status_code=401, detail="Utilisateur non trouvé.")
+
+    if not user.is_active:
+        raise HTTPException(status_code=403, detail="Compte désactivé.")
 
     user.password_hash = hash_password(payload.new_password)
     user.must_change_password = False
@@ -388,6 +407,14 @@ async def refresh_tokens(
 
     if not user.is_active:
         raise HTTPException(status_code=403, detail="Compte désactivé.")
+
+    # Revoke refresh tokens issued before the last password change.
+    password_changed_at = user.password_changed_at
+    token_issued_at = data.get("iat")
+    if password_changed_at and token_issued_at:
+        issued = datetime.fromtimestamp(token_issued_at, tz=timezone.utc)
+        if issued < password_changed_at:
+            raise HTTPException(status_code=401, detail="Refresh token révoqué.")
 
     # Régénérer les tokens
     access_token = create_access_token(subject=user.email, role=user.role)
