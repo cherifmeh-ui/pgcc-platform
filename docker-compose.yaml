@@ -1,7 +1,13 @@
 # docker-compose.yaml
+# ⚠️ La ligne "version:" est OBSOLÈTE en Compose v2+. On la supprime.
+
 services:
+  # ===================================================================
+  # BASE DE DONNÉES POSTGRESQL AVEC EXTENSION VECTOR (PGVECTOR)
+  # ===================================================================
   postgres:
-    image: postgres:15-alpine
+    # ⬇️ IMAGE CORRECTE ET DISPONIBLE
+    image: ankane/pgvector:latest 
     container_name: pgcc_postgres
     restart: unless-stopped
     env_file:
@@ -22,6 +28,9 @@ services:
     networks:
       - pgcc_network
 
+  # ===================================================================
+  # BACKEND FASTAPI (Python Async + SQLAlchemy + Ollama Client)
+  # ===================================================================
   backend:
     build:
       context: ./backend
@@ -32,17 +41,57 @@ services:
       - .env
     environment:
       DATABASE_URL: postgresql+asyncpg://${POSTGRES_USER}:${POSTGRES_PASSWORD}@postgres:5432/${POSTGRES_DB}
+      # Configuration IA Locale (Ollama tourne sur ta machine Windows hôte)
+      OLLAMA_BASE_URL: http://host.docker.internal:11434
+      AI_ENABLED: true
+      ENVIRONMENT: development
     ports:
       - "8000:8000"
     depends_on:
       postgres:
         condition: service_healthy
+    extra_hosts:
+      # Permet au conteneur Docker d'accéder à localhost:11434 de Windows/Mac/Linux Hôte
+      - "host.docker.internal:host-gateway"
+    networks:
+      - pgcc_network
+    volumes:
+      # Mount du code source pour hot-reload en dev
+      - ./backend/app:/app/app
+      - ./backend/scripts:/app/scripts
+
+  # ===================================================================
+  # FRONTEND VUE.JS / VITE (Serveur de Développement Node.js)
+  # ===================================================================
+  frontend:
+    image: node:20-alpine
+    container_name: pgcc_frontend
+    restart: unless-stopped
+    working_dir: /app
+    command: sh -c "npm install && npm run dev -- --host 0.0.0.0"
+    ports:
+      - "5173:5173"
+    volumes:
+      - ./frontend:/app
+      - /app/node_modules  # Volume anonyme pour éviter conflits permissions
+    environment:
+      NODE_ENV: development
+      VITE_API_URL: http://localhost:8000/api/v1
+    depends_on:
+      - backend
     networks:
       - pgcc_network
 
+# ===================================================================
+# VOLUMES PERSISTANTS
+# ===================================================================
 volumes:
   pgdata:
+    driver: local
 
+# ===================================================================
+# RÉSEAUX ISOLÉS
+# ===================================================================
 networks:
   pgcc_network:
     driver: bridge

@@ -1,0 +1,188 @@
+# backend/app/api/v1/endpoints/documents.py
+from fastapi import APIRouter, Depends, HTTPException, UploadFile, File, Form
+from sqlalchemy.ext.asyncio import AsyncSession
+from sqlalchemy import select
+from pydantic import BaseModel
+from typing import List, Optional
+import uuid
+from datetime import datetime
+
+from app.api.deps import require_permission
+from app.core.database import get_db
+from app.models.document import Document
+from app.services.document_extractor import DocumentExtractor
+from app.models.user import User
+
+# ⬇️ IMPORT DU SERVICE RAG POUR L'INDEXATION VECTORIELLE
+try:
+    from app.services.rag_service import rag_service
+except ImportError:
+    rag_service = None # Fallback si le module n'est pas encore déployé
+
+router = APIRouter(prefix="/documents", tags=["Gestion Documentaire"])
+
+
+class DocumentResponse(BaseModel):
+    id: str          # String explicite pour éviter les bugs Pydantic v2 stricts
+    title: str
+    doc_type: str
+    filename: str
+    file_size_kb: float
+    is_indexed: bool
+    created_at: str  # ISO String explicite
+    
+    class Config:
+        from_attributes = True
+
+
+@router.post("/upload", response_model=DocumentResponse, status_code=201)
+async def upload_document(
+    file: UploadFile = File(...),
+    title: str = Form(..., description="Titre humain du document"),
+    doc_type: str = Form(..., description="Type: PSSI, Procedure, Contrat, Audit_Report"),
+    version: Optional[str] = Form(None),
+    author: Optional[str] = Form(None),
+    db: AsyncSession = Depends(get_db),
+    current_user: User = require_permission("documents", "create"),
+):
+    """
+    Uploade un document (PDF/DOCX), extrait son texte et le sauvegarde.
+    """
+    # 1. Lire le contenu binaire
+    contents = await file.read()
+    if not contents:
+        raise HTTPException(status_code=400, detail="Fichier vide.")
+    
+    # Vérification taille rapide (ex: < 10 Mo autorisé)
+    MAX_SIZE_BYTES = 10 * 1024 * 1024 
+    if len(contents) > MAX_SIZE_BYTES:
+         raise HTTPException(status_code=413, detail="Fichier trop volumineux (Max 10 Mo).")
+
+    # 2. Extraire le texte via le service dédié
+    try:
+        extracted_text, detected_format = DocumentExtractor.extract_text(contents, file.filename)
+    except ValueError as ve:
+        raise HTTPException(status_code=400, detail=str(ve))
+    
+    # 3. Calculer taille et hash simple pour déduplication rapide
+    size_kb = round(len(contents) / 1024, 2)
+    
+    # 4. Vérifier si déjà présent (par nom de fichier exact)
+    existing_q = await db.execute(
+        select(Document).where(Document.filename == file.filename)
+    )
+    if existing_q.scalar_one_or_none():
+         raise HTTPException(status_code=409, detail=f"Un document nommé '{file.filename}' existe déjà. Supprimez-le d'abord ou renommez le fichier.")
+
+    # 5. Créer l'objet ORM
+    new_doc = Document(
+        title=title,
+        doc_type=doc_type.upper(), 
+        version=version,
+        author=author,
+        filename=file.filename,
+        content_text=extracted_text,
+        file_data=contents, # Stocker le binaire aussi (utile pour download futur)
+        file_size_kb=size_kb,
+        mime_type=file.content_type,
+        is_indexed=False # Pas encore vectorisé
+    )
+    
+    db.add(new_doc)
+    await db.commit()
+    await db.refresh(new_doc)
+    
+    # ✅ CONSTRUCTION MANUELLE DE LA RÉPONSE POUR ÉVITER LES BUGS PYDANTIC
+    return {
+        "id": str(new_doc.id),
+        "title": new_doc.title,
+        "doc_type": new_doc.doc_type,
+        "filename": new_doc.filename,
+        "file_size_kb": float(new_doc.file_size_kb or 0),
+        "is_indexed": bool(new_doc.is_indexed),
+        "created_at": new_doc.created_at.isoformat() if new_doc.created_at else ""
+    }
+
+
+@router.get("/", response_model=List[DocumentResponse])
+async def list_documents(
+    db: AsyncSession = Depends(get_db),
+    current_user: User = require_permission("documents", "read"),
+):
+    result = await db.execute(select(Document).order_by(Document.created_at.desc()))
+    docs = result.scalars().all()
+    
+    # ✅ MAPPING EXPLICITE VERS UN DICTIONNAIRE PYTHON STANDARD
+    formatted_docs = []
+    for doc in docs:
+        formatted_docs.append({
+            "id": str(doc.id),
+            "title": doc.title,
+            "doc_type": doc.doc_type,
+            "filename": doc.filename,
+            "file_size_kb": float(doc.file_size_kb or 0),
+            "is_indexed": bool(doc.is_indexed),
+            "created_at": doc.created_at.isoformat() if doc.created_at else ""
+        })
+        
+    return formatted_docs
+
+
+@router.delete("/{doc_id}", status_code=204)
+async def delete_document(
+    doc_id: str,
+    db: AsyncSession = Depends(get_db),
+    current_user: User = require_permission("documents", "delete"),
+):
+    try:
+        uid = uuid.UUID(doc_id)
+    except ValueError:
+        raise HTTPException(status_code=400, detail="ID invalide")
+        
+    result = await db.execute(select(Document).where(Document.id == uid))
+    doc = result.scalar_one_or_none()
+    if not doc:
+        raise HTTPException(status_code=404, detail="Document introuvable")
+        
+    await db.delete(doc)
+    await db.commit()
+
+
+# ===================================================================
+# NOUVEL ENDPOINT : DÉCLENCHEMENT DE L'INDEXATION VECTORIELLE (RAG)
+# ===================================================================
+@router.post("/{doc_id}/index", status_code=202)
+async def trigger_indexation(
+    doc_id: str,
+    db: AsyncSession = Depends(get_db),
+    current_user: User = require_permission("documents", "update"),
+):
+    """
+    Déclenche l'indexation vectorielle (RAG) d'un document.
+    Retourne 202 Accepted car le traitement est asynchrone/long.
+    """
+    if not rag_service:
+        raise HTTPException(status_code=503, detail="Service RAG indisponible. Vérifiez que 'rag_service.py' est bien chargé.")
+
+    try:
+        uid = uuid.UUID(doc_id)
+    except ValueError:
+        raise HTTPException(status_code=400, detail="ID invalide")
+        
+    # Vérifier existence
+    result = await db.execute(select(Document).where(Document.id == uid))
+    doc = result.scalar_one_or_none()
+    if not doc:
+        raise HTTPException(status_code=404, detail="Document introuvable")
+        
+    if doc.is_indexed:
+         return {"message": "Document déjà indexé.", "status": "completed"}
+
+    # Lancer l'indexation (Attention : Bloquant si gros volume, idéalement Celery/RQ)
+    # Pour MVP Dev, on attend le résultat directement.
+    success = await rag_service.index_document(db, str(uid))
+    
+    if success:
+        return {"message": f"Indexation réussie pour '{doc.title}'.", "status": "indexed"}
+    else:
+        raise HTTPException(status_code=500, detail="Échec partiel ou complet de l'indexation.")

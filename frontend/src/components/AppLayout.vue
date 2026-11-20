@@ -45,7 +45,9 @@ const router = useRouter();
 const allMenuItems = [
   { path: '/dashboard', label: 'Tableau de bord', module: 'dashboard' },
   { path: '/risks', label: 'Registre des risques', module: 'risks' },
-  { path: '/apps', label: 'Applications critiques', module: 'apps' }, // ✅ CORRIGÉ ICI
+  { path: '/apps', label: 'Applications critiques', module: 'apps' },
+  { path: '/compliance', label: 'Conformité ISO', module: 'iso27002' },
+  { path: '/documents', label: 'Bibliothèque Docs', module: 'documents' },
 ];
 
 const visibleMenuItems = computed(() =>

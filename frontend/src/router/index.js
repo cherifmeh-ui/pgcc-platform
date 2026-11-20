@@ -2,51 +2,74 @@
 import { createRouter, createWebHistory } from 'vue-router';
 import { useAuthStore } from '@/stores/auth';
 
-// Imports statiques pour les vues principales (meilleur UX au chargement initial)
+// Imports statiques directs des vues principales
 import LoginView from '@/views/LoginView.vue';
 import DashboardView from '@/views/DashboardView.vue';
 import RisksView from '@/views/RisksView.vue';
-import AppsView from '@/views/AppsView.vue'; // ← Import direct pour éviter le flash blanc lazy-load
+import AppsView from '@/views/AppsView.vue';
+import IsoComplianceView from '@/views/IsoComplianceView.vue';
+import DocumentsView from '@/views/DocumentsView.vue'; // ⬅️ NOUVELLE VUE BIBLIOTHÈQUE
 import NotFoundView from '@/views/NotFoundView.vue';
 import AppLayout from '@/components/AppLayout.vue';
 
 const routes = [
+  // --- Route Publique : LOGIN ---
   {
     path: '/login',
     name: 'Login',
     component: LoginView,
-    meta: { requiresGuest: true },
+    meta: { requiresGuest: true }, // Si déjà connecté, rediriger vers dashboard
   },
+
+  // --- Routes Protégées : LAYOUT PRINCIPAL ---
   {
     path: '/',
-    component: AppLayout, // Conteneur parent (Header + Menu + Router-View)
+    component: AppLayout, // Conteneur parent (Header + Menu Navigation)
     children: [
-      {
-        path: '', // Racine -> Redirection vers Dashboard
-        redirect: '/dashboard',
+      // Redirection racine vers Dashboard
+      { path: '', redirect: '/dashboard' },
+
+      // ✅ CHEMINS RELATIFS (SANS SLASH INITIAL CAR ENFANTS DE '/')
+      { 
+        path: 'dashboard', 
+        name: 'Dashboard', 
+        component: DashboardView, 
+        meta: { requiresAuth: true, module: 'dashboard', action: 'read' } 
       },
-      {
-        path: 'dashboard',
-        name: 'Dashboard',
-        component: DashboardView,
-        meta: { requiresAuth: true, module: 'dashboard', action: 'read' },
+      
+      { 
+        path: 'risks', 
+        name: 'Risks', 
+        component: RisksView, 
+        meta: { requiresAuth: true, module: 'risks', action: 'read' } 
       },
-      {
-        path: 'risks',
-        name: 'Risks',
-        component: RisksView,
-        meta: { requiresAuth: true, module: 'risks', action: 'read' },
+      
+      { 
+        path: 'apps', 
+        name: 'AppsInventory', 
+        component: AppsView, 
+        meta: { requiresAuth: true, module: 'apps', action: 'read' } 
       },
-      {
-        path: 'apps', // ⚠️ Chemin relatif 'apps' car on est DANS les children du '/'
-        name: 'AppsInventory',
-        component: AppsView,
-        meta: { requiresAuth: true, module: 'apps', action: 'read' },
+      
+      { 
+        path: 'compliance', 
+        name: 'IsoCompliance', 
+        component: IsoComplianceView, 
+        meta: { requiresAuth: true, module: 'iso27002', action: 'read' } 
+      },
+      
+      { 
+        path: 'documents', // ⬅️ AJOUTÉ ICI : Bibliothèque Documentaire
+        name: 'Library', 
+        component: DocumentsView, 
+        meta: { requiresAuth: true, module: 'documents', action: 'read' } 
       },
     ],
   },
+
+  // --- Catch-all : PAGE 404 ---
   {
-    path: '/:pathMatch(.*)*', // Catch-all pour les URLs inconnues
+    path: '/:pathMatch(.*)*', // Attrape toute URL non définie ci-dessus
     name: 'NotFound',
     component: NotFoundView,
   },
@@ -57,39 +80,43 @@ const router = createRouter({
   routes,
 });
 
-// Guard global pour protéger les routes privées
+/**
+ * Guard Global de Sécurité & Permissions RBAC
+ */
 router.beforeEach(async (to, from, next) => {
   const authStore = useAuthStore();
 
-  // 1. Route publique (Login) -> Si déjà connecté, aller au Dashboard
+  // 1. Gestion Invités (Page Login)
   if (to.meta.requiresGuest && authStore.isAuthenticated) {
     return next('/dashboard');
   }
 
-  // 2. Route privée -> Si non connecté, aller au Login
+  // 2. Gestion Authentification Obligatoire
   if (to.meta.requiresAuth && !authStore.isAuthenticated) {
     return next({ name: 'Login', query: { redirect: to.fullPath } });
   }
 
-  // 3. Vérification des permissions RBAC
+  // 3. Vérification Fine des Permissions Modules/Actions
   if (to.meta.module && authStore.isAuthenticated) {
-    // Attente si les permissions ne sont pas encore chargées (race condition après refresh page)
+    // S'assurer que les permissions sont chargées (évite race condition au refresh page)
     if (!authStore.permissions || Object.keys(authStore.permissions).length === 0) {
       try { 
         await authStore.fetchPermissions(); 
       } catch(e) { 
-        console.error("Erreur récupération permissions:", e);
+        console.warn("Impossible de charger les permissions backend.", e);
       }
     }
     
     const hasPermission = authStore.canAccessModule(to.meta.module, to.meta.action || 'read');
     
     if (!hasPermission) {
-      console.warn(`Accès refusé : module=${to.meta.module}, action=${to.meta.action}`);
-      return next({ name: 'Dashboard' }); // Redirige vers dashboard si accès refusé
+      console.warn(`Accès refusé au module '${to.meta.module}' pour l'action '${to.meta.action}'.`);
+      // Option A : Rediriger vers Dashboard si pas autorisé
+      return next({ name: 'Dashboard' }); 
+      // Option B : Afficher une page 403 Forbidden (si tu crées cette vue plus tard)
     }
   }
-
+  
   next();
 });
 

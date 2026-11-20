@@ -1,7 +1,7 @@
 # backend/app/models/risk.py
 import uuid
 from datetime import datetime, timezone
-
+from sqlalchemy.orm import relationship
 from sqlalchemy import Column, DateTime, ForeignKey, Integer, String, Text
 from sqlalchemy.dialects.postgresql import UUID
 
@@ -35,6 +35,7 @@ class Risk(Base):
         index=True,
     )
 
+    actions = relationship("ActionItem", back_populates="risk", cascade="all, delete-orphan")
     status = Column(String(50), nullable=False, default="Ouvert", index=True)
     treatment_plan = Column(Text, nullable=True)
 

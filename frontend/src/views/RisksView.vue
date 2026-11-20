@@ -7,7 +7,7 @@
       <button v-if="canCreate" @click="openCreateModal" class="add-risk-btn">+ Nouveau risque</button>
     </div>
 
-    <!-- Heatmap résumé -->
+    <!-- Heatmap résumé (Barre de couleurs) -->
     <div class="heatmap-summary">
       <div v-for="level in riskLevels" :key="level.range" class="heat-cell" :class="level.class">
         <strong>{{ level.count }}</strong>
@@ -15,7 +15,7 @@
       </div>
     </div>
 
-    <!-- Tableau principal -->
+    <!-- Tableau principal des risques -->
     <div class="table-container">
       <table class="risks-table">
         <thead>
@@ -25,31 +25,56 @@
             <th>Site</th>
             <th>Niveau</th>
             <th>Statut</th>
+            <th>MAJ</th>
             <th>Actions</th>
           </tr>
         </thead>
         <tbody>
           <tr v-for="risk in risks" :key="risk.id">
             <td><code>{{ risk.ref }}</code></td>
-            <td>{{ risk.title }}</td>
+            <td>
+              {{ risk.title }}
+              <br/>
+              <small v-if="risk.threat" class="threat-hint">Menace : {{ truncate(risk.threat, 40) }}</small>
+            </td>
             <td>{{ risk.site || '-' }}</td>
             <td>
               <span class="risk-badge" :class="getRiskClass(risk.risk_level)">
                 {{ risk.risk_level }}
               </span>
             </td>
-            <td>{{ risk.status }}</td>
+            <td>
+              <span class="status-pill" :class="'status-' + normalizeStatus(risk.status)">
+                {{ risk.status }}
+              </span>
+            </td>
+            <td>
+              <small>{{ formatDate(risk.updated_at || risk.created_at) }}</small>
+            </td>
             <td class="actions-cell">
+              <!-- Bouton Éditer -->
               <button v-if="canUpdate" @click="editRisk(risk)" class="action-btn edit" title="Modifier">✏️</button>
+              
+              <!-- Bouton Assistant IA -->
               <button @click="openAiAssistant(risk)" class="action-btn ai" title="Assistant IA">✨</button>
+              
+              <!-- Bouton Plan d'Action (Phase 8.5) -->
+              <button 
+                @click="openActionsPanel(risk)" 
+                class="action-btn pac" 
+                title="Plan d'Action Correctif"
+              >📝</button>
+              
+              <!-- Bouton Supprimer -->
               <button v-if="canDelete" @click="deleteRisk(risk.id)" class="action-btn delete" title="Supprimer">🗑️</button>
             </td>
           </tr>
+          <!-- États Loading / Vide -->
           <tr v-if="loading">
-            <td colspan="6" class="loading-row">Chargement...</td>
+            <td colspan="7" class="loading-row">Chargement...</td>
           </tr>
           <tr v-if="!loading && risks.length === 0">
-            <td colspan="6" class="empty-state">Aucun risque enregistré.</td>
+            <td colspan="7" class="empty-state">Aucun risque enregistré.</td>
           </tr>
         </tbody>
       </table>
@@ -60,16 +85,21 @@
       <div v-if="showModal" class="modal-overlay" @click.self="closeModal">
         <div class="modal-content">
           <h2>{{ editingRisk ? 'Modifier le risque' : 'Créer un nouveau risque' }}</h2>
-
           <form @submit.prevent="saveRisk" class="risk-form">
+            
             <label>Référence *</label>
             <input v-model="formData.ref" required maxlength="50" placeholder="R-SIE-XXX" />
 
             <label>Titre *</label>
             <textarea v-model="formData.title" required rows="2" placeholder="Description courte du risque"></textarea>
 
+            <!-- Description détaillée pour l'IA -->
             <label>Description détaillée</label>
-            <textarea v-model="formData.description" rows="3" placeholder="Contexte technique détaillé (utilisé par l'assistant IA)..."></textarea>
+            <textarea 
+              v-model="formData.description" 
+              rows="3" 
+              placeholder="Contexte technique complet utilisé par l'assistant IA..."
+            ></textarea>
 
             <label>Menace associée</label>
             <textarea v-model="formData.threat" rows="2" placeholder="Quelle menace exploite cette vulnérabilité ?"></textarea>
@@ -103,11 +133,14 @@
               <option>Accepté</option>
             </select>
 
-            <label>Plan de traitement</label>
+            <label>Plan de traitement (synthèse rapide)</label>
             <textarea v-model="formData.treatment_plan" rows="3" placeholder="Mesures correctives prévues..."></textarea>
 
             <div class="computed-level">
               Niveau calculé : <strong>{{ formData.impact * formData.likelihood }}</strong>/25
+              <span class="level-label" :class="getRiskClass(formData.impact * formData.likelihood)">
+                {{ getRiskLabel(formData.impact * formData.likelihood) }}
+              </span>
             </div>
 
             <div class="modal-actions">
@@ -121,11 +154,20 @@
       </div>
     </Teleport>
 
-    <!-- Panneau Assistant IA -->
+    <!-- Composant Panneau Assistant IA -->
     <AiAssistantPanel
       :is-open="showAiPanel"
       :risk-data="selectedRiskForAi"
       @close="showAiPanel = false"
+    />
+
+    <!-- Composant Panneau Plan d'Action (PAC) -->
+    <ActionsPanel
+      v-if="showActionsPanel"
+      :is-open="showActionsPanel"
+      :risk-id="selectedRiskIdForActions"
+      :risk-title="selectedRiskTitleForActions"
+      @close="handleCloseActionsPanel"
     />
   </div>
 </template>
@@ -135,6 +177,7 @@ import { ref, reactive, computed, onMounted } from 'vue';
 import { useAuthStore } from '@/stores/auth';
 import apiClient from '@/services/api';
 import AiAssistantPanel from '@/components/AiAssistantPanel.vue';
+import ActionsPanel from '@/components/ActionsPanel.vue'; // ✅ IMPORT CRUCIAL POUR LE PAC
 
 const authStore = useAuthStore();
 
@@ -149,7 +192,13 @@ const saving = ref(false);
 const showAiPanel = ref(false);
 const selectedRiskForAi = ref(null);
 
-// Formulaire création/modif (description AJOUTÉE)
+// --- État Plan d'Action (Phase 8.5) ---
+// ⚠️ DÉCLARATION AVANT UTILISATION DANS LES FONCTIONS
+const showActionsPanel = ref(false);
+const selectedRiskIdForActions = ref(null);
+const selectedRiskTitleForActions = ref('');
+
+// Formulaire création/modif (avec description ajoutée)
 const formData = reactive({
   ref: '',
   title: '',
@@ -178,7 +227,7 @@ const riskLevels = computed(() => {
     { range: '20-25', label: 'Inacceptable', class: 'extreme', count: 0 },
   ];
   risks.value.forEach(r => {
-    const lvl = r.risk_level;
+    const lvl = r.risk_level || 0;
     if (lvl <= 4) buckets[0].count++;
     else if (lvl <= 9) buckets[1].count++;
     else if (lvl <= 14) buckets[2].count++;
@@ -196,14 +245,40 @@ function getRiskClass(level) {
   return 'extreme';
 }
 
+function getRiskLabel(level) {
+  if (level <= 4) return 'Faible';
+  if (level <= 9) return 'Modéré';
+  if (level <= 14) return 'Élevé';
+  if (level <= 19) return 'Critique';
+  return 'Inacceptable';
+}
+
+function normalizeStatus(status) {
+  return (status || '').toLowerCase().replace(/\s+/g, '-');
+}
+
+function truncate(text, maxLen) {
+  return text && text.length > maxLen ? text.substring(0, maxLen) + '...' : text;
+}
+
+function formatDate(isoString) {
+  if (!isoString) return '-';
+  try {
+    return new Date(isoString).toLocaleDateString('fr-FR', { day: '2-digit', month: 'short' });
+  } catch {
+    return '-';
+  }
+}
+
 // --- Actions CRUD ---
 async function loadRisks() {
   loading.value = true;
   try {
     const { data } = await apiClient.get('/risks/');
-    risks.value = data;
+    risks.value = Array.isArray(data) ? data : [];
   } catch (err) {
     console.error('Erreur chargement risques:', err);
+    risks.value = [];
   } finally {
     loading.value = false;
   }
@@ -254,6 +329,20 @@ function openAiAssistant(risk) {
   showAiPanel.value = true;
 }
 
+// --- Action Plan d'Action (UNE SEULE FOIS !) ---
+function openActionsPanel(risk) {
+  selectedRiskIdForActions.value = risk.id;
+  selectedRiskTitleForActions.value = risk.title;
+  showActionsPanel.value = true;
+}
+
+// Handler pour fermer le panel et recharger si besoin
+function handleCloseActionsPanel() {
+  showActionsPanel.value = false;
+  // Optionnel : Recharger les risques pour voir si le statut a changé suite aux actions
+  // loadRisks(); 
+}
+
 async function saveRisk() {
   saving.value = true;
   try {
@@ -296,14 +385,17 @@ onMounted(loadRisks);
 </script>
 
 <style scoped>
+/* Styles existants améliorés */
 .risks-page { max-width: 1400px; margin: 0 auto; }
 .page-header { display: flex; justify-content: space-between; align-items: center; margin-bottom: 1.5rem; }
 .page-header h1 { font-size: 1.5rem; color: #0f172a; }
 .add-risk-btn { padding: 0.6rem 1.2rem; background: #0ea5e9; color: white; border: none; border-radius: 6px; font-weight: 600; cursor: pointer; }
 .add-risk-btn:hover { background: #0284c7; }
 
+/* Heatmap */
 .heatmap-summary { display: grid; grid-template-columns: repeat(5, 1fr); gap: 0.75rem; margin-bottom: 1.5rem; }
-.heat-cell { padding: 1rem; border-radius: 8px; text-align: center; color: white; font-weight: bold; }
+.heat-cell { padding: 1rem; border-radius: 8px; text-align: center; color: white; font-weight: bold; box-shadow: 0 2px 4px rgba(0,0,0,0.08); transition: transform 0.2s; }
+.heat-cell:hover { transform: translateY(-2px); }
 .heat-cell strong { font-size: 1.8rem; display: block; }
 .heat-cell span { font-size: 0.85rem; opacity: 0.9; }
 .low { background: #22c55e; }
@@ -312,32 +404,55 @@ onMounted(loadRisks);
 .critical { background: #ef4444; }
 .extreme { background: #7f1d1d; }
 
+/* Table */
 .table-container { overflow-x: auto; background: white; border-radius: 8px; box-shadow: 0 1px 3px rgba(0,0,0,0.1); }
-.risks-table { width: 100%; border-collapse: collapse; }
-.risks-table th, .risks-table td { padding: 0.75rem 1rem; text-align: left; border-bottom: 1px solid #e2e8f0; }
-.risks-table th { background: #f8fafc; font-weight: 600; color: #475569; font-size: 0.85rem; text-transform: uppercase; letter-spacing: 0.5px; }
+.risks-table { width: 100%; border-collapse: collapse; min-width: 900px; }
+.risks-table th, .risks-table td { padding: 0.75rem 1rem; text-align: left; border-bottom: 1px solid #e2e8f0; vertical-align: middle; }
+.risks-table th { background: #f8fafc; font-weight: 600; color: #475569; font-size: 0.85rem; text-transform: uppercase; letter-spacing: 0.5px; position: sticky; top: 0; z-index: 10; }
 .risks-table tr:hover { background: #f1f5f9; }
+.threat-hint { color: #64748b; font-size: 0.8rem; }
+
 .risk-badge { display: inline-block; padding: 0.25rem 0.6rem; border-radius: 12px; font-size: 0.8rem; font-weight: 700; color: white; }
-.actions-cell { display: flex; gap: 0.5rem; }
-.action-btn { padding: 0.3rem 0.6rem; border: none; border-radius: 4px; cursor: pointer; font-size: 0.9rem; transition: transform 0.1s; }
+.risk-badge.low { background: #22c55e; }
+.risk-badge.medium { background: #eab308; }
+.risk-badge.high { background: #f97316; }
+.risk-badge.critical { background: #ef4444; }
+.risk-badge.extreme { background: #7f1d1d; }
+
+.status-pill { display: inline-block; padding: 0.2rem 0.6rem; border-radius: 12px; font-size: 0.75rem; font-weight: 600; }
+.status-ouvert { background: #fef3c7; color: #92400e; }
+.status-en-traitement { background: #dbeafe; color: #1e40af; }
+.status-traité { background: #dcfce7; color: #166534; }
+.status-accepté { background: #f3e8ff; color: #6b21a8; }
+
+.actions-cell { display: flex; gap: 0.4rem; }
+.action-btn { padding: 0.3rem 0.6rem; border: none; border-radius: 4px; cursor: pointer; font-size: 0.9rem; transition: all 0.15s; }
 .action-btn:hover { transform: scale(1.1); }
 .action-btn.edit { background: #dbeafe; color: #1d4ed8; }
 .action-btn.delete { background: #fee2e2; color: #dc2626; }
 .action-btn.ai { background: #ede9fe; color: #6d28d9; font-weight: bold; }
-.action-btn.ai:hover { background: #ddd6fe; }
+.action-btn.pac { background: #fef3c7; color: #92400e; font-weight: bold; } /* ✅ Style Plan d'Action */
 
 .loading-row, .empty-state { text-align: center; color: #64748b; padding: 2rem !important; }
 
-.modal-overlay { position: fixed; inset: 0; background: rgba(0,0,0,0.5); display: flex; justify-content: center; align-items: center; z-index: 1000; }
-.modal-content { background: white; border-radius: 12px; padding: 2rem; width: 90%; max-width: 600px; max-height: 90vh; overflow-y: auto; }
-.modal-content h2 { margin-bottom: 1.5rem; color: #0f172a; }
+/* Modal */
+.modal-overlay { position: fixed; inset: 0; background: rgba(0,0,0,0.5); display: flex; justify-content: center; align-items: center; z-index: 1000; backdrop-filter: blur(2px); }
+.modal-content { background: white; border-radius: 12px; padding: 2rem; width: 90%; max-width: 650px; max-height: 90vh; overflow-y: auto; box-shadow: 0 20px 25px -5px rgba(0,0,0,0.1); }
+.modal-content h2 { margin-top: 0; margin-bottom: 1.5rem; color: #0f172a; border-bottom: 1px solid #e2e8f0; padding-bottom: 0.5rem; }
 .risk-form { display: flex; flex-direction: column; gap: 1rem; }
-.risk-form label { font-size: 0.85rem; font-weight: 600; color: #334155; }
-.risk-form input, .risk-form textarea, .risk-form select { padding: 0.6rem; border: 1px solid #cbd5e1; border-radius: 6px; font-size: 0.95rem; }
+.risk-form label { font-size: 0.85rem; font-weight: 600; color: #334155; margin-bottom: 0.25rem; display: block; }
+.risk-form input, .risk-form textarea, .risk-form select { width: 100%; padding: 0.6rem; border: 1px solid #cbd5e1; border-radius: 6px; font-size: 0.95rem; box-sizing: border-box; }
+.risk-form input:focus, .risk-form textarea:focus { outline: 2px solid #0ea5e9; border-color: transparent; }
 .matrix-inputs { display: grid; grid-template-columns: 1fr 1fr; gap: 1rem; }
-.computed-level { background: #f1f5f9; padding: 0.75rem; border-radius: 6px; text-align: center; font-size: 0.9rem; }
-.modal-actions { display: flex; justify-content: flex-end; gap: 0.75rem; margin-top: 1rem; }
-.cancel-btn { padding: 0.6rem 1.2rem; background: #e2e8f0; color: #475569; border: none; border-radius: 6px; cursor: pointer; }
+.computed-level { background: #f1f5f9; padding: 0.75rem; border-radius: 6px; text-align: center; font-size: 0.9rem; display: flex; justify-content: center; align-items: center; gap: 0.75rem; }
+.level-label { padding: 0.2rem 0.6rem; border-radius: 12px; font-weight: 700; color: white; font-size: 0.8rem; }
+.level-label.low { background: #22c55e; }
+.level-label.medium { background: #eab308; }
+.level-label.high { background: #f97316; }
+.level-label.critical { background: #ef4444; }
+.level-label.extreme { background: #7f1d1d; }
+.modal-actions { display: flex; justify-content: flex-end; gap: 0.75rem; margin-top: 1rem; padding-top: 1rem; border-top: 1px solid #e2e8f0; }
+.cancel-btn { padding: 0.6rem 1.2rem; background: #e2e8f0; color: #475569; border: none; border-radius: 6px; cursor: pointer; font-weight: 500; }
 .save-btn { padding: 0.6rem 1.2rem; background: #0ea5e9; color: white; border: none; border-radius: 6px; font-weight: 600; cursor: pointer; }
 .save-btn:disabled { opacity: 0.6; cursor: not-allowed; }
 </style>
