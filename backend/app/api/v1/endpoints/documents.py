@@ -5,6 +5,7 @@ from sqlalchemy import select
 from pydantic import BaseModel
 from typing import List, Optional
 import uuid
+import re
 from datetime import datetime
 
 from app.api.deps import require_permission
@@ -48,31 +49,37 @@ async def upload_document(
     """
     Uploade un document (PDF/DOCX), extrait son texte et le sauvegarde.
     """
-    # 1. Lire le contenu binaire
-    contents = await file.read()
+    # Read at most the configured limit plus one byte to avoid unbounded memory use.
+    MAX_SIZE_BYTES = 10 * 1024 * 1024
+    contents = await file.read(MAX_SIZE_BYTES + 1)
     if not contents:
         raise HTTPException(status_code=400, detail="Fichier vide.")
-    
-    # Vérification taille rapide (ex: < 10 Mo autorisé)
-    MAX_SIZE_BYTES = 10 * 1024 * 1024 
     if len(contents) > MAX_SIZE_BYTES:
-         raise HTTPException(status_code=413, detail="Fichier trop volumineux (Max 10 Mo).")
+        raise HTTPException(status_code=413, detail="Fichier trop volumineux (Max 10 Mo).")
 
-    # 2. Extraire le texte via le service dédié
+    raw_filename = (file.filename or "").replace("\\", "/").split("/")[-1]
+    safe_filename = re.sub(r"[^A-Za-z0-9._ -]", "_", raw_filename).strip(" .")
+    if not safe_filename or len(safe_filename) > 200:
+        raise HTTPException(status_code=400, detail="Nom de fichier invalide ou trop long.")
+    extension = safe_filename.rsplit(".", 1)[-1].lower() if "." in safe_filename else ""
+    if extension not in {"pdf", "docx"}:
+        raise HTTPException(status_code=400, detail="Formats autorisés : PDF et DOCX.")
+
+    # Validate file signatures rather than trusting extension or client MIME.
+    if extension == "pdf" and not contents.startswith(b"%PDF-"):
+        raise HTTPException(status_code=400, detail="Signature PDF invalide.")
+    if extension == "docx" and not contents.startswith(b"PK"):
+        raise HTTPException(status_code=400, detail="Signature DOCX invalide.")
+
     try:
-        extracted_text, detected_format = DocumentExtractor.extract_text(contents, file.filename)
+        extracted_text, detected_format = DocumentExtractor.extract_text(contents, safe_filename)
     except ValueError as ve:
         raise HTTPException(status_code=400, detail=str(ve))
-    
-    # 3. Calculer taille et hash simple pour déduplication rapide
+
     size_kb = round(len(contents) / 1024, 2)
-    
-    # 4. Vérifier si déjà présent (par nom de fichier exact)
-    existing_q = await db.execute(
-        select(Document).where(Document.filename == file.filename)
-    )
+    existing_q = await db.execute(select(Document).where(Document.filename == safe_filename))
     if existing_q.scalar_one_or_none():
-         raise HTTPException(status_code=409, detail=f"Un document nommé '{file.filename}' existe déjà. Supprimez-le d'abord ou renommez le fichier.")
+        raise HTTPException(status_code=409, detail="Un document portant ce nom existe déjà.")
 
     # 5. Créer l'objet ORM
     new_doc = Document(
@@ -80,11 +87,11 @@ async def upload_document(
         doc_type=doc_type.upper(), 
         version=version,
         author=author,
-        filename=file.filename,
+        filename=safe_filename,
         content_text=extracted_text,
         file_data=contents, # Stocker le binaire aussi (utile pour download futur)
         file_size_kb=size_kb,
-        mime_type=file.content_type,
+        mime_type="application/pdf" if detected_format == "PDF" else "application/vnd.openxmlformats-officedocument.wordprocessingml.document",
         is_indexed=False # Pas encore vectorisé
     )
     
