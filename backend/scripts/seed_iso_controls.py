@@ -7,6 +7,7 @@ sys.path.insert(0, os.path.abspath(os.path.join(os.path.dirname(__file__), '..')
 
 from sqlalchemy.ext.asyncio import create_async_engine, AsyncSession
 from sqlalchemy.orm import sessionmaker
+from sqlalchemy import select
 from app.core.config import settings
 from app.models.iso_control import IsoControl
 
@@ -115,22 +116,58 @@ SEED_DATA = [
     ("A.8.34", "Protected system test data", "Masked/anonymized records stored encrypted isolated sandbox zones.", "Technologiques"),
 ]
 
+def validate_seed_data():
+    refs = [item[0].strip() for item in SEED_DATA]
+    if len(refs) != len(set(refs)):
+        raise ValueError("Le seed contient des références de contrôle dupliquées.")
+    expected = {"Organisationnels": 37, "Personnes": 8, "Physique": 14, "Technologiques": 34}
+    counts = {}
+    for _, _, _, domain in SEED_DATA:
+        counts[domain] = counts.get(domain, 0) + 1
+    if counts != expected:
+        raise ValueError(f"Répartition ISO 27002:2022 invalide: {counts}; attendu: {expected}")
+    if len(SEED_DATA) != 93:
+        raise ValueError(f"Le seed doit contenir 93 contrôles, trouvé: {len(SEED_DATA)}")
+
+
 async def seed():
+    validate_seed_data()
     engine = create_async_engine(settings.DATABASE_URL)
     async_session_maker = sessionmaker(engine, class_=AsyncSession, expire_on_commit=False)
-    
-    print("⏳ Connexion à la base...")
+
+    print("Connexion à la base...")
     try:
         async with async_session_maker() as session:
-            await session.execute(IsoControl.__table__.delete())
-            for item in SEED_DATA:
-                ref_code, title, desc, domain = item
-                obj = IsoControl(ref_code=ref_code.strip(), title=title.strip(), description=desc.strip(), domain=domain.strip(), category="ISO_27002_v2022", is_manually_covered=False)
-                session.add(obj)
+            existing_result = await session.execute(select(IsoControl))
+            existing = {control.ref_code: control for control in existing_result.scalars().all()}
+            inserted = updated = 0
+            for ref_code, title, desc, domain in SEED_DATA:
+                ref_code = ref_code.strip()
+                obj = existing.get(ref_code)
+                if obj is None:
+                    obj = IsoControl(
+                        ref_code=ref_code,
+                        title=title.strip(),
+                        description=desc.strip(),
+                        domain=domain.strip(),
+                        category="ISO_27002_v2022",
+                        is_manually_covered=False,
+                    )
+                    session.add(obj)
+                    inserted += 1
+                else:
+                    # Update reference metadata only; preserve assessment/coverage fields.
+                    obj.title = title.strip()
+                    obj.description = desc.strip()
+                    obj.domain = domain.strip()
+                    obj.category = "ISO_27002_v2022"
+                    updated += 1
             await session.commit()
-            print(f"✅ Succès ! {len(SEED_DATA)} contrôles insérés.")
-    except Exception as e:
-        print(f"❌ ERREUR : {e}")
+            print(f"Seed terminé: {inserted} ajoutés, {updated} mis à jour.")
+            print("Aucun contrôle existant n'a été supprimé.")
+    except Exception:
+        await engine.dispose()
+        raise
     finally:
         await engine.dispose()
 
