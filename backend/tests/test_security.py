@@ -88,7 +88,7 @@ from app.schemas.risk import RiskCreate, RiskUpdate
 
 
 def test_risk_schema_accepts_valid_ref_and_status():
-    payload = RiskCreate(ref="M-EXT-01", title="Cyber risk", impact=5, likelihood=4, status="En traitement")
+    payload = RiskCreate(ref="M-EXT-01", title="Cyber risk", impact=5, likelihood=4, status="En traitement", treatment_plan="Plan de traitement initial.")
     assert payload.ref == "M-EXT-01"
     assert payload.status == "En traitement"
 
@@ -155,3 +155,22 @@ def test_security_logger_uses_direct_peer_not_forwarded_header():
 def test_security_logger_truncates_user_agent():
     request = SimpleNamespace(headers={"user-agent": "x" * 400}, client=None)
     assert len(get_user_agent(request)) == 255
+
+def test_risk_schema_requires_treatment_plan_for_accepted_risk():
+    with pytest.raises(ValidationError, match="justification"):
+        RiskCreate(ref="R-ACCEPT-01", title="Accepted risk", status="Accepté")
+
+
+def test_risk_schema_accepts_documented_risk_acceptance():
+    payload = RiskCreate(
+        ref="R-ACCEPT-02",
+        title="Accepted risk",
+        status="Accepté",
+        treatment_plan="Acceptation formelle par la Direction, revue prévue le 31/12.",
+    )
+    assert payload.status == "Accepté"
+
+
+def test_risk_schema_requires_plan_for_in_treatment():
+    with pytest.raises(ValidationError, match="plan"):
+        RiskCreate(ref="R-TREAT-01", title="Treatment risk", status="En traitement")
