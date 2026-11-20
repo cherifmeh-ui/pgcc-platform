@@ -34,7 +34,7 @@ Status: active engineering review. This is a static review backlog, not a securi
 
 ## Phase 2 — Core GRC
 
-- [x] Risk API validates owner existence on create/update and bounds optional text fields.\n- [ ] Risk register: scenario, threat, vulnerability, affected asset/process, owners, inherent and residual risk.
+- [x] Risk API validates owner existence on create/update and bounds optional text fields.\n- [x] Risk API now requires a documented treatment plan for statuses `En traitement`, `Traité` and `Accepté`; update transitions validate the combined status/plan.\n- [x] Action-plan deletion is audit-logged.\n- [ ] Risk register: scenario, threat, vulnerability, affected asset/process, owners, inherent and residual risk.
 - [ ] Formal risk treatment (avoid/reduce/transfer/accept), rationale and approval.
 - [ ] Residual-risk acceptance with approver, expiry, review date, compensating controls.
 - [x] Audit log for action-plan create/update/delete and bounded input validation.\n- [ ] Action-plan workflow with owner, evidence, validation, history and overdue tracking.
