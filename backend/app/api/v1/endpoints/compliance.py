@@ -30,6 +30,7 @@ class MatrixResponse(BaseModel):
     uncovered_count: int
     overall_score: float # % global
     rows: List[ComplianceMatrixRow]
+    methodology: str
 
 @router.get("/matrix", response_model=MatrixResponse)
 async def get_compliance_matrix(
@@ -43,7 +44,7 @@ async def get_compliance_matrix(
         controls = ctrl_query.scalars().all()
         
         if not controls:
-             return MatrixResponse(total_controls=0, covered_count=0, partial_count=0, uncovered_count=0, overall_score=0.0, rows=[])
+             return MatrixResponse(total_controls=0, covered_count=0, partial_count=0, uncovered_count=0, overall_score=0.0, rows=[], methodology="Score déclaratif : seuls les contrôles marqués manuellement sont comptés comme couverts; les liens textuels sont des indicateurs à vérifier.")
 
         # 2. Fetch relevant risks/actions to determine coverage
         risk_query = await db.execute(select(Risk))
@@ -66,7 +67,7 @@ async def get_compliance_matrix(
             
             # Check manual override first
             if c.is_manually_covered:
-                status = "Couvert"
+                status = "Déclaré couvert"
                 covered += 1
                 rows.append(ComplianceMatrixRow(
                     ref_code=c.ref_code, title=c.title, domain=c.domain,
@@ -87,11 +88,8 @@ async def get_compliance_matrix(
                     has_done_action = True
             
             # Determine Status Logic
-            if has_done_action:
-                status = "Couvert"
-                covered += 1
-            elif found_links > 0:
-                status = "Partiel" 
+            if has_done_action or found_links > 0:
+                status = "À vérifier"
                 partial += 1
             else:
                 status = "Non Couvert"
@@ -111,8 +109,9 @@ async def get_compliance_matrix(
             partial_count=partial,
             uncovered_count=uncovered,
             overall_score=score,
-            rows=rows
+            rows=rows,
+            methodology="Score déclaratif : seuls les contrôles marqués manuellement sont comptés comme couverts; les liens textuels sont des indicateurs à vérifier."
         )
         
     except Exception as e:
-        raise HTTPException(status_code=500, detail=f"Erreur calcul matrice: {str(e)}")
+        raise HTTPException(status_code=500, detail="Erreur lors du calcul de la matrice de conformité.")
