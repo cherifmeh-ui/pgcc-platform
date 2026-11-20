@@ -37,7 +37,7 @@ Status: active engineering review. This is a static review backlog, not a securi
 - [ ] Risk register: scenario, threat, vulnerability, affected asset/process, owners, inherent and residual risk.
 - [ ] Formal risk treatment (avoid/reduce/transfer/accept), rationale and approval.
 - [ ] Residual-risk acceptance with approver, expiry, review date, compensating controls.
-- [ ] Action-plan workflow with owner, evidence, validation, history and overdue tracking.
+- [x] Audit log for action-plan create/update/delete and bounded input validation.\n- [ ] Action-plan workflow with owner, evidence, validation, history and overdue tracking.
 - [x] Audit log for document upload, deletion and successful indexing.\n- [ ] Audit trail for every sensitive business mutation.
 
 ## Phase 3 — Asset and application inventory
