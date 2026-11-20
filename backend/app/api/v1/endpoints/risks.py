@@ -111,6 +111,10 @@ async def update_risk(
         )
 
     update_data = risk_data.model_dump(exclude_unset=True)
+    if update_data.get("owner_id"):
+        owner_result = await db.execute(select(User.id).where(User.id == update_data["owner_id"]))
+        if owner_result.scalar_one_or_none() is None:
+            raise HTTPException(status_code=400, detail="Le propriétaire du risque n'existe pas.")
 
     # RECALCULER LE NIVEAU SI IMPACT OU LIKELIHOOD CHANGENT
     if "impact" in update_data or "likelihood" in update_data:
