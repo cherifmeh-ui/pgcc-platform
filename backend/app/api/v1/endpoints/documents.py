@@ -39,10 +39,10 @@ class DocumentResponse(BaseModel):
 @router.post("/upload", response_model=DocumentResponse, status_code=201)
 async def upload_document(
     file: UploadFile = File(...),
-    title: str = Form(..., description="Titre humain du document"),
-    doc_type: str = Form(..., description="Type: PSSI, Procedure, Contrat, Audit_Report"),
-    version: Optional[str] = Form(None),
-    author: Optional[str] = Form(None),
+    title: str = Form(..., min_length=1, max_length=200, description="Titre humain du document"),
+    doc_type: str = Form(..., min_length=1, max_length=50, description="Type: PSSI, Procedure, Contrat, Audit_Report"),
+    version: Optional[str] = Form(None, max_length=20),
+    author: Optional[str] = Form(None, max_length=100),
     db: AsyncSession = Depends(get_db),
     current_user: User = require_permission("documents", "create"),
 ):
@@ -76,7 +76,7 @@ async def upload_document(
     except ValueError as ve:
         raise HTTPException(status_code=400, detail=str(ve))
 
-    size_kb = round(len(contents) / 1024, 2)
+    size_kb = int((len(contents) + 1023) / 1024)
     existing_q = await db.execute(select(Document).where(Document.filename == safe_filename))
     if existing_q.scalar_one_or_none():
         raise HTTPException(status_code=409, detail="Un document portant ce nom existe déjà.")
