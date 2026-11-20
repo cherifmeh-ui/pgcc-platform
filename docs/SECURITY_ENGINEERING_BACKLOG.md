@@ -34,7 +34,7 @@ Status: active engineering review. This is a static review backlog, not a securi
 
 ## Phase 2 — Core GRC
 
-- [ ] Risk register: scenario, threat, vulnerability, affected asset/process, owners, inherent and residual risk.
+- [x] Risk API validates owner existence on create/update and bounds optional text fields.\n- [ ] Risk register: scenario, threat, vulnerability, affected asset/process, owners, inherent and residual risk.
 - [ ] Formal risk treatment (avoid/reduce/transfer/accept), rationale and approval.
 - [ ] Residual-risk acceptance with approver, expiry, review date, compensating controls.
 - [x] Audit log for action-plan create/update/delete and bounded input validation.\n- [ ] Action-plan workflow with owner, evidence, validation, history and overdue tracking.
@@ -60,7 +60,7 @@ Status: active engineering review. This is a static review backlog, not a securi
 - [ ] Hashing, versioning, classification, retention, ownership and approval.
 - [ ] Prefer object storage for binaries; database stores metadata and references.
 - [ ] Evidence links to risks, controls, audits and actions.
-- [x] Validate uploaded file type/signature, bounds, filename and PDF/DOCX parsing containers.\n- [ ] Secure RAG ingestion, chunk metadata, processing states, failure handling and citations.
+- [x] Validate uploaded file type/signature, bounds, filename and PDF/DOCX parsing containers.\n- [x] RAG indexing now uses Ollama `/api/embed`, validates vector count/dimensions, and atomically replaces old chunks only after successful embedding generation.\n- [ ] Add processing states, chunk metadata, citations, hybrid retrieval and permission/classification filters.
 
 ## Phase 6 — AI/RAG
 
