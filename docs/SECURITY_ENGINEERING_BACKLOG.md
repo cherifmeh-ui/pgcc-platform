@@ -30,7 +30,7 @@ Status: active engineering review. This is a static review backlog, not a securi
 - [ ] Verify anti-enumeration behavior and consistent login responses.
 - [ ] Review all endpoint permissions; add authorization tests.
 - [ ] Replace browser localStorage bearer-token persistence with safer session design (HttpOnly Secure SameSite cookie strategy, CSRF controls, short-lived access token).
-- [ ] Add security headers and trusted proxy configuration.
+- [x] Security logger no longer trusts client-supplied X-Forwarded-For by default; user-agent length bounded.\n- [ ] Add security headers and trusted proxy configuration.
 
 ## Phase 2 — Core GRC
 
