@@ -26,16 +26,16 @@ class RiskResponse(BaseModel):
 class RiskCreate(BaseModel):
     ref: str = Field(..., min_length=3, max_length=50, pattern=r"^[A-Za-z0-9][A-Za-z0-9._-]*$")
     title: str = Field(..., min_length=3, max_length=500)
-    description: Optional[str] = None
-    threat: Optional[str] = None
+    description: Optional[str] = Field(default=None, max_length=10000)
+    threat: Optional[str] = Field(default=None, max_length=5000)
 
     impact: int = Field(default=3, ge=1, le=5)
     likelihood: int = Field(default=3, ge=1, le=5)
 
-    site: Optional[str] = None
+    site: Optional[str] = Field(default=None, max_length=100)
     owner_id: Optional[UUID] = None
     status: str = Field(default="Ouvert", max_length=50, pattern=r"^(Ouvert|En traitement|Traité|Accepté)$")
-    treatment_plan: Optional[str] = None
+    treatment_plan: Optional[str] = Field(default=None, max_length=10000)
 
 
 class RiskUpdate(BaseModel):
