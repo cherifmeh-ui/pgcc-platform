@@ -1,5 +1,5 @@
 # backend/app/api/v1/endpoints/documents.py
-from fastapi import APIRouter, Depends, HTTPException, UploadFile, File, Form
+from fastapi import APIRouter, Depends, HTTPException, UploadFile, File, Form, Request
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy import select
 from pydantic import BaseModel
@@ -13,6 +13,7 @@ from app.core.database import get_db
 from app.models.document import Document
 from app.services.document_extractor import DocumentExtractor
 from app.models.user import User
+from app.services.security_logger import log_action
 
 # ⬇️ IMPORT DU SERVICE RAG POUR L'INDEXATION VECTORIELLE
 try:
@@ -43,6 +44,7 @@ async def upload_document(
     doc_type: str = Form(..., min_length=1, max_length=50, description="Type: PSSI, Procedure, Contrat, Audit_Report"),
     version: Optional[str] = Form(None, max_length=20),
     author: Optional[str] = Form(None, max_length=100),
+    request: Request = None,
     db: AsyncSession = Depends(get_db),
     current_user: User = require_permission("documents", "create"),
 ):
@@ -138,6 +140,7 @@ async def list_documents(
 @router.delete("/{doc_id}", status_code=204)
 async def delete_document(
     doc_id: str,
+    request: Request,
     db: AsyncSession = Depends(get_db),
     current_user: User = require_permission("documents", "delete"),
 ):
@@ -151,8 +154,14 @@ async def delete_document(
     if not doc:
         raise HTTPException(status_code=404, detail="Document introuvable")
         
+    filename = doc.filename
     await db.delete(doc)
     await db.commit()
+    await log_action(
+        user_email=current_user.email, action="DELETE", resource="documents",
+        resource_id=str(uid), details=f"Document deleted: {filename}",
+        event_type="DOCUMENT", request=request,
+    )
 
 
 # ===================================================================
@@ -161,6 +170,7 @@ async def delete_document(
 @router.post("/{doc_id}/index", status_code=202)
 async def trigger_indexation(
     doc_id: str,
+    request: Request,
     db: AsyncSession = Depends(get_db),
     current_user: User = require_permission("documents", "update"),
 ):
@@ -188,8 +198,12 @@ async def trigger_indexation(
     # Lancer l'indexation (Attention : Bloquant si gros volume, idéalement Celery/RQ)
     # Pour MVP Dev, on attend le résultat directement.
     success = await rag_service.index_document(db, str(uid))
-    
     if success:
+        await log_action(
+            user_email=current_user.email, action="INDEX", resource="documents",
+            resource_id=str(uid), details=f"Document indexed: {doc.title}",
+            event_type="DOCUMENT", request=request,
+        )
         return {"message": f"Indexation réussie pour '{doc.title}'.", "status": "indexed"}
     else:
         raise HTTPException(status_code=500, detail="Échec partiel ou complet de l'indexation.")
