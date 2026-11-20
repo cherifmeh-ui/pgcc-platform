@@ -59,6 +59,10 @@ async def create_risk(
         )
 
     data = risk_data.model_dump()
+    if data.get("owner_id") is not None:
+        owner_result = await db.execute(select(User.id).where(User.id == data["owner_id"]))
+        if owner_result.scalar_one_or_none() is None:
+            raise HTTPException(status_code=400, detail="Le propriétaire du risque n'existe pas.")
     # CALCUL BACKEND DU NIVEAU DE RISQUE (source de vérité)
     data["risk_level"] = data["impact"] * data["likelihood"]
 
@@ -111,7 +115,7 @@ async def update_risk(
         )
 
     update_data = risk_data.model_dump(exclude_unset=True)
-    if update_data.get("owner_id"):
+    if "owner_id" in update_data and update_data["owner_id"] is not None:
         owner_result = await db.execute(select(User.id).where(User.id == update_data["owner_id"]))
         if owner_result.scalar_one_or_none() is None:
             raise HTTPException(status_code=400, detail="Le propriétaire du risque n'existe pas.")
