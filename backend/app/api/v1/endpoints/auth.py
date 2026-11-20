@@ -254,6 +254,11 @@ async def confirm_mfa(
 
     if not user.is_active:
         raise HTTPException(status_code=403, detail="Compte désactivé.")
+    if user.is_locked:
+        raise HTTPException(
+            status_code=status.HTTP_423_LOCKED,
+            detail="Compte temporairement verrouillé après plusieurs échecs MFA.",
+        )
 
     valid_totp = verify_mfa(user.mfa_secret, payload.mfa_code)
     remaining_backup_codes = None
@@ -261,14 +266,25 @@ async def confirm_mfa(
         remaining_backup_codes = consume_backup_code(payload.mfa_code, user.backup_codes_hashed)
 
     if not valid_totp and remaining_backup_codes is None:
+        user.failed_login_attempts = (user.failed_login_attempts or 0) + 1
+        locked = user.failed_login_attempts >= settings.LOGIN_MAX_ATTEMPTS
+        if locked:
+            user.locked_until = _now() + timedelta(minutes=settings.LOGIN_LOCK_MINUTES)
+            user.failed_login_attempts = 0
+        await db.commit()
         await log_action(
             user_email=user.email,
             action="MFA_FAILED",
             resource="auth",
-            details="Code MFA invalide lors de la confirmation",
+            details="Code MFA invalide" + ("; compte verrouillé temporairement" if locked else ""),
             event_type="AUTH",
             request=request,
         )
+        if locked:
+            raise HTTPException(
+                status_code=status.HTTP_423_LOCKED,
+                detail="Compte temporairement verrouillé après plusieurs échecs MFA.",
+            )
         raise HTTPException(status_code=401, detail="Code MFA invalide.")
 
     # MFA existant : un code de secours consommé ne doit jamais être réutilisable.
