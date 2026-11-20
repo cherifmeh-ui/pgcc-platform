@@ -11,10 +11,8 @@ def get_client_ip(request: Optional[Request]) -> Optional[str]:
     if not request:
         return None
 
-    forwarded = request.headers.get("x-forwarded-for")
-    if forwarded:
-        return forwarded.split(",")[0].strip()
-
+    # Never trust client-supplied X-Forwarded-For unless a trusted-proxy
+    # configuration is explicitly implemented. Direct peer is the safe default.
     if request.client:
         return request.client.host
 
@@ -24,7 +22,8 @@ def get_client_ip(request: Optional[Request]) -> Optional[str]:
 def get_user_agent(request: Optional[Request]) -> Optional[str]:
     if not request:
         return None
-    return request.headers.get("user-agent")
+    user_agent = request.headers.get("user-agent")
+    return user_agent[:255] if user_agent else None
 
 
 async def log_action(
