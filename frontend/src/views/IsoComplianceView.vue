@@ -339,7 +339,7 @@ onMounted(fetchMatrix);
 .domain-tag { display: inline-block; padding: 0.25rem 0.6rem; border-radius: 12px; font-size: 0.75rem; font-weight: 600; text-transform: capitalize; }
 .tag-orga { background: #dbeafe; color: #1d4ed8; } .tag-pers { background: #ede9fe; color: #6d28d9; } .tag-phys { background: #ffedd5; color: #c2410c; } .tag-tech { background: #fce7f3; color: #be185d; }
 .status-badge.modern { display: inline-flex; align-items: center; gap: 0.4rem; padding: 0.3rem 0.8rem; border-radius: 20px; font-size: 0.8rem; font-weight: 700; }
-.st-covered { background: #dcfce7; color: #166534; } .st-partial { background: #fef3c7; color: #92400e; } .st-uncovered { background: #fee2e2; color: #991b1b; }
+.st-declared { background: #fef3c7; color: #92400e; } .st-partial { background: #fef3c7; color: #92400e; } .st-uncovered { background: #fee2e2; color: #991b1b; }
 .links-count .link-pill { padding: 0.2rem 0.5rem; border-radius: 12px; font-size: 0.8rem; font-weight: 600; }
 .active { background: #eff6ff; color: #1d4ed8; } .inactive { color: #94a3b8; }
 .btn-ai-gap.modern { background: #ede9fe; color: #6d28d9; border: none; padding: 0.4rem 0.8rem; border-radius: 6px; cursor: pointer; font-weight: 600; font-size: 0.85rem; transition: all 0.2s; }
