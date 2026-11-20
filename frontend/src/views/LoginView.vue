@@ -63,9 +63,8 @@
         <input 
           id="totp-code"
           v-model="totpCode" 
-          maxlength="6" 
-          pattern="\d{6}" 
-          placeholder="123456" 
+          maxlength="32" 
+          placeholder="123456 ou code de secours" 
           inputmode="numeric"
           autofocus
           :disabled="isLoading"
@@ -90,7 +89,7 @@
         <h2>Vérification en deux étapes</h2>
         <p>Votre compte est sécurisé par MFA.<br/>Entrez le code depuis votre application :</p>
 
-        <label for="verify-totp">Code de vérification</label>
+        <label for="verify-totp">Code TOTP ou code de secours</label>
         <input 
           id="verify-totp"
           v-model="totpCode" 
@@ -105,7 +104,7 @@
 
         <button 
           @click="verifyExistingMfa" 
-          :disabled="!totpCode || totpCode.length !== 6 || isLoading" 
+          :disabled="!totpCode || totpCode.length < 6 || isLoading" 
           class="primary-btn"
         >
           {{ isLoading ? 'Vérification...' : 'Valider et se connecter' }}
@@ -234,7 +233,7 @@ async function confirmMfaEnrollment() {
  * car le secret est déjà en base.
  */
 async function verifyExistingMfa() {
-  if (!totpCode.value || totpCode.value.length !== 6) return;
+  if (!totpCode.value || totpCode.value.trim().length < 6) return;
 
   isLoading.value = true;
   errorMessage.value = null;
