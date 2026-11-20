@@ -174,3 +174,16 @@ def test_risk_schema_accepts_documented_risk_acceptance():
 def test_risk_schema_requires_plan_for_in_treatment():
     with pytest.raises(ValidationError, match="plan"):
         RiskCreate(ref="R-TREAT-01", title="Treatment risk", status="En traitement")
+
+from scripts.seed_iso_controls import SEED_DATA, validate_seed_data
+
+
+def test_iso_control_seed_has_93_unique_controls_and_expected_domains():
+    validate_seed_data()
+    refs = [item[0] for item in SEED_DATA]
+    assert len(refs) == 93
+    assert len(set(refs)) == 93
+    assert sum(ref.startswith("A.5.") for ref in refs) == 37
+    assert sum(ref.startswith("A.6.") for ref in refs) == 8
+    assert sum(ref.startswith("A.7.") for ref in refs) == 14
+    assert sum(ref.startswith("A.8.") for ref in refs) == 34
