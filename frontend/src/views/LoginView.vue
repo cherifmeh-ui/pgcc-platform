@@ -63,8 +63,8 @@
         <input 
           id="totp-code"
           v-model="totpCode" 
-          maxlength="32" 
-          placeholder="123456 ou code de secours" 
+          maxlength="6"\n          pattern="\\d{6}" 
+          placeholder="123456" 
           inputmode="numeric"
           autofocus
           :disabled="isLoading"
