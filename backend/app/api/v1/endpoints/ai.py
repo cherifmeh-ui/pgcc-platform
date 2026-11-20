@@ -67,7 +67,7 @@ async def rewrite_for_dg(
         logger.exception(f"Erreur critique endpoint AI Rewrite: {e}")
         raise HTTPException(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-            detail=f"Erreur interne lors de la génération IA: {str(e)}"
+            detail="Service IA indisponible ou erreur de génération."
         )
 
 
@@ -110,7 +110,7 @@ async def suggest_iso_measures(
         logger.exception(f"Erreur critique endpoint AI Controls: {e}")
         raise HTTPException(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-            detail=f"Erreur interne lors de la suggestion de contrôles: {str(e)}"
+            detail="Service IA indisponible ou erreur de génération des contrôles."
         )
 
 class GenerateRequest(BaseModel):
