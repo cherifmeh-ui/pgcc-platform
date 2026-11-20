@@ -61,8 +61,22 @@ class Settings(BaseSettings):
         if not self.DATABASE_URL:
             raise ValueError("DATABASE_URL est obligatoire (voir .env).")
 
+        if self.JWT_ALGORITHM not in {"HS256", "RS256"}:
+            raise ValueError("JWT_ALGORITHM doit être HS256 ou RS256.")
+
         if self.JWT_ALGORITHM == "HS256" and not self.JWT_SECRET:
             raise ValueError("JWT_SECRET est obligatoire avec HS256.")
+
+        if self.JWT_ALGORITHM == "HS256" and len(self.JWT_SECRET) < 32:
+            raise ValueError("JWT_SECRET doit contenir au moins 32 caractères.")
+
+        if self.ENVIRONMENT.lower() == "production":
+            if self.DEBUG:
+                raise ValueError("DEBUG doit être désactivé en production.")
+            if "*" in self.cors_origins_list:
+                raise ValueError("CORS wildcard interdit en production.")
+            if self.JWT_ALGORITHM == "HS256" and self.JWT_SECRET.startswith("CHANGE_ME"):
+                raise ValueError("JWT_SECRET placeholder interdit en production.")
 
         if self.JWT_ALGORITHM == "RS256":
             if not self.JWT_PRIVATE_KEY_PATH:
