@@ -139,3 +139,19 @@ def test_rag_split_text_rejects_invalid_parameters():
         _split_text("text", 0, 0)
     with pytest.raises(ValueError):
         _split_text("text", 10, 10)
+
+from types import SimpleNamespace
+from app.services.security_logger import get_client_ip, get_user_agent
+
+
+def test_security_logger_uses_direct_peer_not_forwarded_header():
+    request = SimpleNamespace(
+        headers={"x-forwarded-for": "203.0.113.99", "user-agent": "test-agent"},
+        client=SimpleNamespace(host="10.0.0.4"),
+    )
+    assert get_client_ip(request) == "10.0.0.4"
+
+
+def test_security_logger_truncates_user_agent():
+    request = SimpleNamespace(headers={"user-agent": "x" * 400}, client=None)
+    assert len(get_user_agent(request)) == 255
