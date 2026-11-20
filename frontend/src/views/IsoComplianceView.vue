@@ -5,13 +5,13 @@
     <div class="header-section">
       <div class="title-area">
         <h1>Matrice de Conformité ISO 27002:2022</h1>
-        <p class="subtitle">Couverture normative calculée dynamiquement depuis vos registres de risques et plans d'action.</p>
+        <p class="subtitle">Indicateur déclaratif : les liens risques/actions ne constituent pas une preuve de conformité. Chaque contrôle doit être évalué et justifié.</p>
       </div>
       
       <!-- Badge Score Global Style Solid Block -->
       <div class="global-score-badge" :class="getScoreClass(matrixData?.overall_score)">
         <span class="score-val">{{ matrixData?.overall_score || 0 }}%</span>
-        <span class="score-lbl">COUVERTURE GLOBALE</span>
+        <span class="score-lbl">COUVERTURE DÉCLARÉE</span>
       </div>
     </div>
 
@@ -44,9 +44,9 @@
       
       <select v-model="filterStatus" class="filter-select modern">
         <option value="">🚦 Tous les Statuts</option>
-        <option value="Couvert">✅ Couvert</option>
-        <option value="Partiel">🟡 Partiel</option>
-        <option value="Non Couvert">❌ Non Couvert</option>
+        <option value="Déclaré couvert">⚠️ Déclaré couvert</option>
+        <option value="À vérifier">🟡 À vérifier</option>
+        <option value="Non Couvert">❌ Non évalué / non couvert</option>
       </select>
     </div>
 
@@ -56,7 +56,7 @@
     </div>
 
     <!-- Table Grid Moderne -->
-    <div v-else-if="matrixData" class="table-container card-modern">
+    <div v-else-if="matrixData" class="table-container card-modern">\n      <p class="methodology-note">{{ matrixData.methodology }}</p>
       <table class="iso-table modern">
         <thead>
           <tr>
