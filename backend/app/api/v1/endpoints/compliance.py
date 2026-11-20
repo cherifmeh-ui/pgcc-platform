@@ -4,7 +4,6 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy import select
 from pydantic import BaseModel
 from typing import List, Dict, Any
-from datetime import datetime
 
 from app.api.deps import require_permission
 from app.core.database import get_db
@@ -58,7 +57,6 @@ async def get_compliance_matrix(
         partial = 0
         uncovered = 0
         
-        now_str = datetime.now().isoformat()
         
         for c in controls:
             ref = c.ref_code.lower().strip() # e.g., "a.8.9"
@@ -71,7 +69,7 @@ async def get_compliance_matrix(
                 covered += 1
                 rows.append(ComplianceMatrixRow(
                     ref_code=c.ref_code, title=c.title, domain=c.domain,
-                    status=status, linked_risks_count=0, last_update=now_str
+                    status=status, linked_risks_count=0, last_update=None
                 ))
                 continue
                 
