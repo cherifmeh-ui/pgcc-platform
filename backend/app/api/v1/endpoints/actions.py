@@ -1,5 +1,5 @@
 # backend/app/api/v1/endpoints/actions.py
-from fastapi import APIRouter, Depends, HTTPException, status, Query
+from fastapi import APIRouter, Depends, HTTPException, status, Query, Request
 from pydantic import BaseModel, Field
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy import select, and_
@@ -12,6 +12,7 @@ from app.core.database import get_db
 from app.models.action_item import ActionItem, ActionStatus, Priority
 from app.models.risk import Risk
 from app.models.user import User
+from app.services.security_logger import log_action
 
 router = APIRouter(prefix="/actions", tags=["Plans d'Action"])
 
@@ -20,10 +21,10 @@ router = APIRouter(prefix="/actions", tags=["Plans d'Action"])
 
 class ActionBase(BaseModel):
     title: str = Field(..., min_length=1, max_length=200)
-    description: Optional[str] = None
+    description: Optional[str] = Field(default=None, max_length=10000)
     status: ActionStatus = ActionStatus.TODO
     priority: Priority = Priority.MEDIUM
-    assigned_to: Optional[str] = None
+    assigned_to: Optional[str] = Field(default=None, max_length=100)
     due_date: Optional[datetime] = None
 
 
@@ -33,10 +34,10 @@ class ActionCreate(ActionBase):
 
 class ActionUpdate(BaseModel):
     title: Optional[str] = Field(None, min_length=1, max_length=200)
-    description: Optional[str] = None
+    description: Optional[str] = Field(default=None, max_length=10000)
     status: Optional[ActionStatus] = None
     priority: Optional[Priority] = None
-    assigned_to: Optional[str] = None
+    assigned_to: Optional[str] = Field(default=None, max_length=100)
     due_date: Optional[datetime] = None
 
 
@@ -78,6 +79,7 @@ async def list_actions(
 @router.post("/", response_model=ActionResponse, status_code=status.HTTP_201_CREATED)
 async def create_action(
     data: ActionCreate,
+    request: Request,
     db: AsyncSession = Depends(get_db),
     current_user: User = require_permission("actions", "create"),
 ):
@@ -94,6 +96,11 @@ async def create_action(
     db.add(action)
     await db.commit()
     await db.refresh(action)
+    await log_action(
+        user_email=current_user.email, action="CREATE", resource="actions",
+        resource_id=str(action.id), details=f"Action créée: {action.title}",
+        event_type="GRC_ACTION", request=request,
+    )
     return action
 
 
@@ -101,6 +108,7 @@ async def create_action(
 async def update_action(
     action_id: UUID,
     data: ActionUpdate,
+    request: Request,
     db: AsyncSession = Depends(get_db),
     current_user: User = require_permission("actions", "update"),
 ):
@@ -116,12 +124,18 @@ async def update_action(
         
     await db.commit()
     await db.refresh(action)
+    await log_action(
+        user_email=current_user.email, action="UPDATE", resource="actions",
+        resource_id=str(action.id), details=f"Action mise à jour: {action.title}; statut={action.status.value if action.status else None}",
+        event_type="GRC_ACTION", request=request,
+    )
     return action
 
 
 @router.delete("/{action_id}", status_code=status.HTTP_204_NO_CONTENT)
 async def delete_action(
     action_id: UUID,
+    request: Request,
     db: AsyncSession = Depends(get_db),
     current_user: User = require_permission("actions", "delete"),
 ):
