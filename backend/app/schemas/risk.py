@@ -37,7 +37,16 @@ class RiskCreate(BaseModel):
     status: str = Field(default="Ouvert", max_length=50, pattern=r"^(Ouvert|En traitement|Traité|Accepté)$")
     treatment_plan: Optional[str] = Field(default=None, max_length=10000)
 
-    @model_validator(mode="after")\n    def validate_treatment_rationale(self):\n        if self.status == "Accepté" and not (self.treatment_plan or "").strip():\n            raise ValueError("Un risque accepté doit comporter une justification documentée dans le plan de traitement.")\n        if self.status == "En traitement" and not (self.treatment_plan or "").strip():\n            raise ValueError("Un risque en traitement doit comporter un plan de traitement.")\n        return self\n\n\nclass RiskUpdate(BaseModel):
+    @model_validator(mode="after")
+    def validate_treatment_rationale(self):
+        if self.status == "Accepté" and not (self.treatment_plan or "").strip():
+            raise ValueError("Un risque accepté doit comporter une justification documentée dans le plan de traitement.")
+        if self.status == "En traitement" and not (self.treatment_plan or "").strip():
+            raise ValueError("Un risque en traitement doit comporter un plan de traitement.")
+        return self
+
+
+class RiskUpdate(BaseModel):
     title: Optional[str] = Field(default=None, min_length=3, max_length=500)
     description: Optional[str] = None
     threat: Optional[str] = None
