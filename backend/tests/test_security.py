@@ -101,3 +101,20 @@ def test_risk_schema_rejects_invalid_ref():
 def test_risk_schema_rejects_invalid_status():
     with pytest.raises(ValidationError):
         RiskUpdate(status="Whatever")
+
+from app.services.document_extractor import DocumentExtractor
+
+
+def test_document_extractor_rejects_unsupported_format():
+    with pytest.raises(ValueError, match="non supporté"):
+        DocumentExtractor.extract_text(b"malicious", "file.exe")
+
+
+def test_document_extractor_rejects_invalid_pdf_signature():
+    with pytest.raises(ValueError):
+        DocumentExtractor.extract_text(b"not a pdf", "file.pdf")
+
+
+def test_document_extractor_rejects_invalid_docx_archive():
+    with pytest.raises(ValueError):
+        DocumentExtractor.extract_text(b"PK-not-a-zip", "file.docx")
