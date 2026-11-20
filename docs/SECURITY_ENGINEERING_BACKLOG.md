@@ -56,7 +56,7 @@ Status: active engineering review. This is a static review backlog, not a securi
 
 ## Phase 5 — Documents and evidence
 
-- [ ] MIME/signature validation, file size/page limits, malware scanning and safe parsing.
+- [x] Signature/format validation, bounded upload read, file size/page limits, PDF encryption rejection, DOCX ZIP structure/expansion checks and safe parsing.\n- [ ] Malware scanning and isolated parsing.
 - [ ] Hashing, versioning, classification, retention, ownership and approval.
 - [ ] Prefer object storage for binaries; database stores metadata and references.
 - [ ] Evidence links to risks, controls, audits and actions.
