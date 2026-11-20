@@ -38,7 +38,7 @@ Status: active engineering review. This is a static review backlog, not a securi
 - [ ] Formal risk treatment (avoid/reduce/transfer/accept), rationale and approval.
 - [ ] Residual-risk acceptance with approver, expiry, review date, compensating controls.
 - [ ] Action-plan workflow with owner, evidence, validation, history and overdue tracking.
-- [ ] Audit trail for every sensitive business mutation.
+- [x] Audit log for document upload, deletion and successful indexing.\n- [ ] Audit trail for every sensitive business mutation.
 
 ## Phase 3 — Asset and application inventory
 
@@ -60,7 +60,7 @@ Status: active engineering review. This is a static review backlog, not a securi
 - [ ] Hashing, versioning, classification, retention, ownership and approval.
 - [ ] Prefer object storage for binaries; database stores metadata and references.
 - [ ] Evidence links to risks, controls, audits and actions.
-- [ ] Secure RAG ingestion, chunk metadata, processing states, failure handling and citations.
+- [x] Validate uploaded file type/signature, bounds, filename and PDF/DOCX parsing containers.\n- [ ] Secure RAG ingestion, chunk metadata, processing states, failure handling and citations.
 
 ## Phase 6 — AI/RAG
 
