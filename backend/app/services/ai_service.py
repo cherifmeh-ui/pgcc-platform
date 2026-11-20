@@ -69,7 +69,7 @@ Données du risque :
         if not isinstance(parsed, list):
             raise RuntimeError("La réponse IA doit être une liste JSON.")
         valid = []
-        reference_pattern = re.compile(r"^(?:5|6|7|8)\\.\\d{1,2}$")
+        reference_pattern = re.compile(r"^(?:5|6|7|8)\.\d{1,2}$")
         for item in parsed[:8]:
             if not isinstance(item, dict):
                 continue
