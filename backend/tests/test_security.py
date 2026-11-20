@@ -82,3 +82,22 @@ def test_iso_suggestion_parser_rejects_non_json(monkeypatch):
     monkeypatch.setattr(service, "generate_text", fake_generate_text)
     with pytest.raises(RuntimeError, match="JSON"):
         asyncio.run(service.suggest_iso_controls({"title": "Test risk"}))
+
+from pydantic import ValidationError
+from app.schemas.risk import RiskCreate, RiskUpdate
+
+
+def test_risk_schema_accepts_valid_ref_and_status():
+    payload = RiskCreate(ref="M-EXT-01", title="Cyber risk", impact=5, likelihood=4, status="En traitement")
+    assert payload.ref == "M-EXT-01"
+    assert payload.status == "En traitement"
+
+
+def test_risk_schema_rejects_invalid_ref():
+    with pytest.raises(ValidationError):
+        RiskCreate(ref="bad ref", title="Cyber risk")
+
+
+def test_risk_schema_rejects_invalid_status():
+    with pytest.raises(ValidationError):
+        RiskUpdate(status="Whatever")
