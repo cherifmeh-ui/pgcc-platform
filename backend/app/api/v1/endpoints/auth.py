@@ -350,11 +350,7 @@ async def change_password(
     try:
         data = decode_token(payload.change_password_token, expected_type="change_password")
     except Exception:
-        # Fallback : tenter de décoder comme access token (cas où user est déjà connecté mais veut changer mdp)
-        try:
-             data = decode_token(payload.change_password_token, expected_type="access")
-        except:
-             raise HTTPException(status_code=401, detail="Token invalide ou expiré.")
+        raise HTTPException(status_code=401, detail="Token invalide ou expiré.")
 
     email = data.get("sub")
     result = await db.execute(select(User).where(User.email == email))
@@ -365,6 +361,11 @@ async def change_password(
 
     if not user.is_active:
         raise HTTPException(status_code=403, detail="Compte désactivé.")
+    if not user.must_change_password:
+        raise HTTPException(
+            status_code=403,
+            detail="Ce token est réservé au changement obligatoire du mot de passe.",
+        )
 
     user.password_hash = hash_password(payload.new_password)
     user.must_change_password = False
