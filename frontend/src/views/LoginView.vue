@@ -91,6 +91,36 @@
 
         <label for="verify-totp">Code TOTP ou code de secours</label>
         <input 
+          id="totp-code"
+          v-model="totpCode" 
+          maxlength="32" 
+          placeholder="123456 ou code de secours" 
+          inputmode="numeric"
+          autofocus
+          :disabled="isLoading"
+          @keyup.enter="confirmMfaEnrollment"
+        />
+
+        <button 
+          @click="confirmMfaEnrollment" 
+          :disabled="!totpCode || totpCode.length !== 6 || isLoading" 
+          class="primary-btn"
+        >
+          {{ isLoading ? 'Activation...' : 'Activer MFA et continuer' }}
+        </button>
+
+        <p v-if="errorMessage" class="error-msg">{{ errorMessage }}</p>
+        
+        <a href="#" @click.prevent="goBackToCredentials" class="back-link">← Retour</a>
+      </div>
+
+      <!-- ÉTAPE 3 : VÉRIFICATION MFA (Compte déjà configuré) -->
+      <div v-else-if="step === 'verify-mfa'" class="mfa-verify">
+        <h2>Vérification en deux étapes</h2>
+        <p>Votre compte est sécurisé par MFA.<br/>Entrez le code depuis votre application :</p>
+
+        <label for="verify-totp">Code TOTP ou code de secours</label>
+        <input 
           id="verify-totp"
           v-model="totpCode" 
           maxlength="6" 
