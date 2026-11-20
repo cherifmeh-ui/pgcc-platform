@@ -123,10 +123,9 @@
         <input 
           id="verify-totp"
           v-model="totpCode" 
-          maxlength="6" 
-          pattern="\d{6}" 
-          placeholder="123456" 
-          inputmode="numeric"
+          maxlength="32" 
+          placeholder="123456 ou code de secours" 
+          inputmode="text"
           autofocus
           :disabled="isLoading"
           @keyup.enter="verifyExistingMfa"
