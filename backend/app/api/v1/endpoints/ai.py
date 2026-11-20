@@ -6,6 +6,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.api.deps import require_permission
 from app.core.database import get_db
+from app.core.config import settings
 from app.models.user import User
 from app.services.ai_service import ai_service
 from app.services.security_logger import log_action
