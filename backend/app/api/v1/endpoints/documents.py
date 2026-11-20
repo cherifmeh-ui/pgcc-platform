@@ -39,12 +39,12 @@ class DocumentResponse(BaseModel):
 
 @router.post("/upload", response_model=DocumentResponse, status_code=201)
 async def upload_document(
+    request: Request,
     file: UploadFile = File(...),
     title: str = Form(..., min_length=1, max_length=200, description="Titre humain du document"),
     doc_type: str = Form(..., min_length=1, max_length=50, description="Type: PSSI, Procedure, Contrat, Audit_Report"),
     version: Optional[str] = Form(None, max_length=20),
     author: Optional[str] = Form(None, max_length=100),
-    request: Request = None,
     db: AsyncSession = Depends(get_db),
     current_user: User = require_permission("documents", "create"),
 ):
