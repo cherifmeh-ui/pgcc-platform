@@ -42,6 +42,7 @@ class PreAuthTokenResponse(BaseModel):
     mfa_required: bool
     pre_auth_token: str
     email: str
+    mfa_enabled: bool
 
 
 class StartEnrollmentResponse(BaseModel):
@@ -171,6 +172,7 @@ async def login(
         mfa_required=True,
         pre_auth_token=pre_auth_token,
         email=user.email,
+        mfa_enabled=user.mfa_enabled,
     )
 
 
@@ -412,8 +414,8 @@ async def refresh_tokens(
     password_changed_at = user.password_changed_at
     token_issued_at = data.get("iat")
     if password_changed_at and token_issued_at:
-        issued = datetime.fromtimestamp(token_issued_at, tz=timezone.utc)
-        if issued < password_changed_at:
+        cutoff = int(password_changed_at.timestamp())
+        if token_issued_at < cutoff:
             raise HTTPException(status_code=401, detail="Refresh token révoqué.")
 
     # Régénérer les tokens
