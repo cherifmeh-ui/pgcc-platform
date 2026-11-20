@@ -308,6 +308,7 @@ onMounted(fetchMatrix);
 </script>
 
 <style scoped>
+.methodology-note { margin: 0 0 1rem; padding: 0.75rem 1rem; border-left: 4px solid #f59e0b; background: #fffbeb; color: #92400e; font-size: 0.9rem; line-height: 1.5; }
 /* Styles Page Principale (Inchangés) */
 .iso-page { padding: 2rem; max-width: 1400px; margin: 0 auto; background: #f8fafc; min-height: 100vh; }
 .header-section { display: flex; justify-content: space-between; align-items: flex-start; margin-bottom: 2rem; gap: 2rem; }
