@@ -74,8 +74,8 @@ def test_asset_reference_migration_has_safe_duplicate_and_downgrade_guards() -> 
 def test_asset_reference_and_type_migration_has_valid_postgresql_downgrade_guard() -> None:
     migration = MIGRATIONS_DIR / "0020_asset_reference_and_type_constraints.py"
     source = migration.read_text(encoding="utf-8")
-    assert "DO $$" in source
-    assert "END $$;" in source
+    assert "DO $pgcc$" in source
+    assert "END $pgcc$;" in source
     assert "DO $\\n" not in source
     assert "cloud_resource" in source
 
