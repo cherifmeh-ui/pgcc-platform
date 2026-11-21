@@ -172,3 +172,10 @@ Repository/static hardening is substantially progressed, but the remaining gates
 - CI exposed that the earlier lock patch had applied to refresh but not forced password-change; static assertion failed on `16627da` and `d040494`.
 - Corrected password-change query to use `SELECT ... FOR UPDATE` in `9a45c31`.
 - CI for `23d2136` was running at the checkpoint; latest code commit `9a45c31` is pending validation.
+
+
+### Development model-registration checkpoint
+
+- CI succeeded on `c43b1e3`.
+- Found and corrected missing import of `RefreshTokenSession` in development startup model-registration imports. Without this, `Base.metadata.create_all()` could omit the refresh-session table in development.
+- Added static regression test. Current HEAD `f034d9f`; CI pending.
