@@ -188,3 +188,12 @@ The initial code-level review found that DOCX extraction joined paragraphs/table
 - **Important:** migration 0020 fails safely if existing normalized duplicates are found. Resolve these records through a reviewed data-cleanup process before upgrading; do not automatically rewrite inventory references.
 
 - Migration 0020 downgrade also fails safely if `cloud_resource` assets exist, because the previous check constraint did not permit that type. The records must be migrated deliberately before downgrade.
+
+
+### 8. Asset relationship lifecycle validation
+
+- Relationship creation now locks the source and target asset rows in deterministic order and rejects links involving retired assets.
+- A pure helper and regression tests cover active, retired, and missing endpoint rows.
+- Existing dependency-cycle detection remains in place.
+- Limitation: row locking of endpoints reduces concurrent mutation races, but a database-level graph constraint is not available; high-concurrency cycle creation still requires integration tests or a serialized graph-mutation strategy.
+- Follow-up: test relationship creation against PostgreSQL and review all relationship types for lifecycle semantics.
