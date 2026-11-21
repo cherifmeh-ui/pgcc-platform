@@ -30,6 +30,7 @@
             <th>Réf.</th>
             <th>Titre</th>
             <th>Site</th>
+            <th>Responsable</th>
             <th>Niveau</th>
             <th>Statut</th>
             <th>MAJ</th>
@@ -45,6 +46,7 @@
               <small v-if="risk.threat" class="threat-hint">Menace : {{ truncate(risk.threat, 40) }}</small>
             </td>
             <td>{{ risk.site || '-' }}</td>
+            <td>{{ getOwnerName(risk.owner_id) }}</td>
             <td>
               <span class="risk-badge" :class="getRiskClass(risk.risk_level)">
                 {{ risk.risk_level }}
@@ -78,7 +80,7 @@
           </tr>
           <!-- États Loading / Vide -->
           <tr v-if="loading">
-            <td colspan="7" class="loading-row">Chargement...</td>
+            <td colspan="8" class="loading-row">Chargement...</td>
           </tr>
           <tr v-if="!loading && risks.length === 0">
             <td colspan="7" class="empty-state">Aucun risque ne correspond aux filtres.</td>
@@ -129,8 +131,8 @@
             <label>Site concerné</label>
             <input v-model="formData.site" placeholder="Ex: Tunis Siège, Gabès Rig..." />
 
-            <label>Propriétaire (ID utilisateur UUID)</label>
-            <input v-model="formData.owner_id" placeholder="Laisser vide pour auto-attribution" />
+            <label>Responsable du risque</label>
+            <select v-model="formData.owner_id"><option value="">Non attribué</option><option v-for="owner in riskOwners" :key="owner.id" :value="owner.id">{{ owner.full_name }}{{ owner.department ? " — " + owner.department : "" }}</option></select>
 
             <label>Statut</label>
             <select v-model="formData.status">
@@ -190,6 +192,7 @@ const authStore = useAuthStore();
 
 // --- État Local UI ---
 const risks = ref([]);
+const riskOwners = ref([]);
 const loading = ref(true);
 const showModal = ref(false);
 const editingRisk = ref(null);
@@ -330,6 +333,21 @@ function formatDate(isoString) {
 }
 
 // --- Actions CRUD ---
+async function loadRiskOwners() {
+  try {
+    const { data } = await apiClient.get("/risks/owners");
+    riskOwners.value = Array.isArray(data) ? data : [];
+  } catch (err) {
+    console.error("Erreur chargement responsables:", err);
+    riskOwners.value = [];
+  }
+}
+function getOwnerName(ownerId) {
+  if (!ownerId) return "Non attribué";
+  const owner = riskOwners.value.find(user => user.id === ownerId);
+  return owner ? owner.full_name : "Utilisateur";
+}
+
 async function loadRisks() {
   loading.value = true;
   try {
@@ -440,7 +458,7 @@ async function deleteRisk(id) {
   }
 }
 
-onMounted(loadRisks);
+onMounted(() => { loadRisks(); loadRiskOwners(); });
 </script>
 
 <style scoped>
