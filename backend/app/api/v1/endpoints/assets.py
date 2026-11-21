@@ -7,7 +7,7 @@ from uuid import UUID
 
 from fastapi import APIRouter, Depends, HTTPException, Query, Request, UploadFile, File, status
 from pydantic import BaseModel, Field
-from sqlalchemy import select
+from sqlalchemy import select, func
 from sqlalchemy.orm import aliased
 from sqlalchemy.ext.asyncio import AsyncSession
 
@@ -254,7 +254,7 @@ async def preview_asset_csv_import(
         hostnames = [row["data"]["hostname"] for row in rows if row["data"].get("hostname")]
         serials = [row["data"]["serial_number"] for row in rows if row["data"].get("serial_number")]
         existing_result = await db.execute(select(Asset).where(
-            (Asset.reference.in_(refs)) | (Asset.hostname.in_(hostnames)) | (Asset.serial_number.in_(serials))
+            (func.lower(Asset.reference).in_([v.casefold() for v in refs])) | (func.lower(Asset.hostname).in_([v.casefold() for v in hostnames])) | (func.lower(Asset.serial_number).in_([v.casefold() for v in serials])
         ))
         existing = existing_result.scalars().all()
         for row in rows:
