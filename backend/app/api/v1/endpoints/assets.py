@@ -208,7 +208,7 @@ async def get_asset_dependency_graph(
     asset_ids = {asset.id for asset in assets}
     relations = [relation for relation in relations_result.scalars().all() if relation.source_asset_id in asset_ids and relation.target_asset_id in asset_ids]
     return {
-        "nodes": [{"id": asset.id, "reference": asset.reference, "name": asset.name, "asset_type": asset.asset_type, "criticality": asset.criticality, "direction": asset.direction} for asset in assets],
+        "nodes": [{"id": asset.id, "reference": asset.reference, "name": asset.name, "asset_type": asset.asset_type, "criticality": asset.criticality, "direction": asset.direction, "lifecycle_status": asset.lifecycle_status, "owner": asset.owner, "location": asset.location} for asset in assets],
         "edges": [{"id": relation.id, "source": relation.source_asset_id, "target": relation.target_asset_id, "relationship_type": relation.relationship_type, "description": relation.description} for relation in relations],
         "node_count": len(assets), "edge_count": len(relations),
     }
