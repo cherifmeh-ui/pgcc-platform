@@ -69,8 +69,6 @@ PERMISSIONS: dict[str, dict[str, list[str]]] = {
         "read_contacts": [Role.ADMIN.value, Role.AUDITOR.value],
         "read_contracts": [Role.ADMIN.value, Role.AUDITOR.value],
         "manage_contracts": [Role.ADMIN.value],
-        "read_contracts": [Role.ADMIN.value, Role.AUDITOR.value],
-        "manage_contracts": [Role.ADMIN.value],
         "create": [Role.ADMIN.value],
         "update": [Role.ADMIN.value],
         "delete": [Role.ADMIN.value],
@@ -81,6 +79,8 @@ PERMISSIONS: dict[str, dict[str, list[str]]] = {
     "suppliers": {
         "read": [Role.ADMIN.value, Role.EXECUTIVE.value, Role.AUDITOR.value],
         "read_contacts": [Role.ADMIN.value, Role.AUDITOR.value],
+        "read_contracts": [Role.ADMIN.value, Role.AUDITOR.value],
+        "manage_contracts": [Role.ADMIN.value],
         "create": [Role.ADMIN.value],
         "update": [Role.ADMIN.value],
         "archive": [Role.ADMIN.value],
