@@ -69,6 +69,9 @@
           </tr>
         </thead>
         <tbody>
+          <tr v-if="filteredRows.length === 0">
+            <td colspan="6" class="empty-filter-state">Aucun contrôle ne correspond aux filtres sélectionnés.</td>
+          </tr>
           <tr v-for="row in filteredRows" :key="row.ref_code" class="table-row-hover">
             <td><code class="ref-code">{{ row.ref_code }}</code></td>
             <td class="title-cell">{{ row.title }}</td>
@@ -308,6 +311,7 @@ onMounted(fetchMatrix);
 </script>
 
 <style scoped>
+.empty-filter-state { text-align: center !important; padding: 2rem !important; color: #64748b; font-style: italic; }
 .methodology-note { margin: 0 0 1rem; padding: 0.75rem 1rem; border-left: 4px solid #f59e0b; background: #fffbeb; color: #92400e; font-size: 0.9rem; line-height: 1.5; }
 /* Styles Page Principale (Inchangés) */
 .iso-page { padding: 2rem; max-width: 1400px; margin: 0 auto; background: #f8fafc; min-height: 100vh; }
