@@ -109,6 +109,7 @@ class EvidenceResponse(BaseModel):
     is_expired: bool = False
 
 class ComplianceMatrixRow(BaseModel):
+    control_id: int
     ref_code: str
     title: str
     domain: str
@@ -415,7 +416,7 @@ async def get_compliance_matrix(
                 status = "Déclaré couvert"
                 covered += 1
                 rows.append(ComplianceMatrixRow(
-                    ref_code=c.ref_code, title=c.title, domain=c.domain,
+                    control_id=c.id, ref_code=c.ref_code, title=c.title, domain=c.domain,
                     status=status, linked_risks_count=0, last_update=None,
                     **assessment_fields
                 ))
@@ -442,7 +443,7 @@ async def get_compliance_matrix(
                 uncovered += 1
                 
             rows.append(ComplianceMatrixRow(
-                ref_code=c.ref_code, title=c.title, domain=c.domain,
+                control_id=c.id, ref_code=c.ref_code, title=c.title, domain=c.domain,
                 status=status, linked_risks_count=found_links, last_update=None,
                 **assessment_fields
             ))
