@@ -66,3 +66,8 @@ The current code implements a basic 1–5 impact and likelihood matrix (score = 
 Not yet implemented in the current risk model: separate inherent and residual assessments, rationale/evidence for ratings, methodology version, acceptance authority and expiry, assessment history, formal treatment options, risk appetite thresholds, and archival workflow. Risk score must not be interpreted as compliance or formal acceptance.
 
 Migration strategy: establish and test an Alembic baseline first; then introduce assessment/history/acceptance entities with an explicit legacy methodology label for existing records. Avoid destructive backfills or silently changing existing scores.
+
+
+## Data integrity note
+
+The API currently blocks hard deletion of risks with linked actions. The ORM/database cascade behavior is not yet changed because the repository does not have a validated migration baseline. A future Alembic migration should change the risk-action foreign key to RESTRICT/NO ACTION and remove ORM delete-orphan cascade, after testing existing data and upgrade/rollback behavior. Do not make this schema change only in ORM metadata against an existing database.
