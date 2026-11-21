@@ -180,6 +180,7 @@ class SupplierAccessRequest(Base):
         CheckConstraint("(status = 'Demandé' AND decided_by_id IS NULL AND decided_at IS NULL) OR (status != 'Demandé' AND decided_by_id IS NOT NULL AND decided_at IS NOT NULL)", name="ck_supplier_access_requests_decision_trace"),
         Index("ix_supplier_access_requests_supplier_status", "supplier_id", "status", "end_date"),
         Index("ix_supplier_access_requests_asset_status", "asset_id", "status", "end_date"),
+        Index("uq_supplier_access_requests_open_link", "supplier_asset_link_id", unique=True, postgresql_where=text("status IN ('Demandé', 'Approuvé', 'Suspendu')")),
     )
     id = Column(PG_UUID(as_uuid=True), primary_key=True, default=uuid4)
     supplier_id = Column(PG_UUID(as_uuid=True), ForeignKey("suppliers.id", ondelete="RESTRICT"), nullable=False, index=True)
