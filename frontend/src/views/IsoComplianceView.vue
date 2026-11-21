@@ -46,7 +46,7 @@
         <option value="">🚦 Tous les Statuts</option>
         <option value="Déclaré couvert">⚠️ Déclaré couvert</option>
         <option value="À vérifier">🟡 À vérifier</option>
-        <option value="Non Couvert">❌ Non évalué / non couvert</option>
+        <option value="Non évalué">⚪ Non évalué</option>
       </select>
     </div>
 
@@ -206,18 +206,18 @@ function getDomainCount(domainName) {
 
 function getStatusClass(status) {
   switch(status) {
-    case 'Couvert': return 'st-covered';
-    case 'Partiel': return 'st-partial';
-    case 'Non Couvert': return 'st-uncovered';
+    case 'Déclaré couvert': return 'st-declared';
+    case 'À vérifier': return 'st-partial';
+    case 'Non évalué': return 'st-uncovered';
     default: return '';
   }
 }
 
 function getStatusIcon(status) {
   switch(status) {
-    case 'Couvert': return '✅';
-    case 'Partiel': return '🟡';
-    case 'Non Couvert': return '❌';
+    case 'Déclaré couvert': return '⚠️';
+    case 'À vérifier': return '🟡';
+    case 'Non évalué': return '⚪';
     default: return '•';
   }
 }
