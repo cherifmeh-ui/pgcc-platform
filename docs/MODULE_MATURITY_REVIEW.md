@@ -384,3 +384,10 @@ The initial code-level review found that DOCX extraction joined paragraphs/table
 - Session persistence now validates that JWT `exp` is numeric before converting it to a timestamp.
 - Boolean values are explicitly rejected (`bool` subclasses `int` in Python); malformed signed claims cannot cause a persistence-path TypeError/KeyError.
 - Added tests for missing, string, and boolean expiry values.
+
+
+### 31. Serialize refresh with password-change revocation
+
+- Refresh and forced password-change paths now acquire a row lock on the user before evaluating policy or revoking/creating sessions.
+- This serializes the two operations, preventing a refresh transaction from creating a new session concurrently with password-change session revocation.
+- Added static regression coverage for both lock paths. PostgreSQL concurrency integration test remains required.
