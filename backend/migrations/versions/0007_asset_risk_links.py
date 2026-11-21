@@ -28,7 +28,7 @@ def upgrade() -> None:
             sa.PrimaryKeyConstraint("id"),
             sa.UniqueConstraint("asset_id", "risk_id", name="uq_asset_risk_link"),
         )
-        indexes = {item["name"] for item in sa.inspect(op.get_bind()).get_indexes("asset_risk_links")}
+    indexes = {item["name"] for item in sa.inspect(op.get_bind()).get_indexes("asset_risk_links")}
     if "ix_asset_risk_links_asset_id" not in indexes:
         op.create_index("ix_asset_risk_links_asset_id", "asset_risk_links", ["asset_id"], unique=False)
     if "ix_asset_risk_links_risk_id" not in indexes:
