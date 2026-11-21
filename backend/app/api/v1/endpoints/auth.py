@@ -489,6 +489,13 @@ async def refresh_tokens(
         token_issued_at=data.get("iat"),
     )
     if denial_reason:
+        # Revoke all sessions when the account is no longer eligible to refresh.
+        await db.execute(
+            update(RefreshTokenSession)
+            .where(RefreshTokenSession.user_id == user.id, RefreshTokenSession.revoked_at.is_(None))
+            .values(revoked_at=_now())
+        )
+        await db.commit()
         denial_status = status.HTTP_423_LOCKED if user.is_locked else status.HTTP_403_FORBIDDEN if not user.is_active or user.must_change_password else status.HTTP_401_UNAUTHORIZED
         raise HTTPException(status_code=denial_status, detail=denial_reason)
 
