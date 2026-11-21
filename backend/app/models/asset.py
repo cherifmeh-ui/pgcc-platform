@@ -112,3 +112,22 @@ class AssetRelationship(Base):
     criticality = Column(String(20), nullable=True)
     created_at = Column(DateTime(timezone=True), server_default=func.now(), nullable=False)
     created_by = Column(String(255), nullable=True)
+
+
+class AssetRiskLink(Base):
+    """Explicit association between an asset and an information-security risk."""
+    __tablename__ = "asset_risk_links"
+    __table_args__ = (
+        UniqueConstraint("asset_id", "risk_id", name="uq_asset_risk_link"),
+    )
+
+    id = Column(PG_UUID(as_uuid=True), primary_key=True, default=uuid4)
+    asset_id = Column(
+        PG_UUID(as_uuid=True), ForeignKey("assets.id", ondelete="RESTRICT"), nullable=False, index=True
+    )
+    risk_id = Column(
+        PG_UUID(as_uuid=True), ForeignKey("risks.id", ondelete="CASCADE"), nullable=False, index=True
+    )
+    relationship_context = Column(String(500), nullable=True)
+    created_at = Column(DateTime(timezone=True), server_default=func.now(), nullable=False)
+    created_by = Column(String(255), nullable=True)
