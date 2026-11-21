@@ -675,14 +675,27 @@ async def get_asset_impact(
     asset_result = await db.execute(select(Asset).where(Asset.id.in_(impacted_ids)))
     assets_by_id = {asset.id: asset for asset in asset_result.scalars().all()}
     risks_by_asset: dict[UUID, list[dict]] = {}
+    risk_summary = {"total": 0, "critical": 0, "high": 0, "moderate": 0, "low": 0, "by_status": {}}
     if role_has_permission((current_user.role or "").lower(), "risks", "read"):
         risk_result = await db.execute(
-            select(AssetRiskLink.asset_id, Risk.id, Risk.ref, Risk.title)
+            select(AssetRiskLink.asset_id, Risk.id, Risk.ref, Risk.title, Risk.risk_level, Risk.status)
             .join(Risk, Risk.id == AssetRiskLink.risk_id)
             .where(AssetRiskLink.asset_id.in_(impacted_ids))
         )
-        for linked_asset_id, risk_id, risk_ref, risk_title in risk_result.all():
-            risks_by_asset.setdefault(linked_asset_id, []).append({"id": risk_id, "ref": risk_ref, "title": risk_title})
+        unique_risks: dict[UUID, dict] = {}
+        for linked_asset_id, risk_id, risk_ref, risk_title, risk_level, risk_status in risk_result.all():
+            risks_by_asset.setdefault(linked_asset_id, []).append({
+                "id": risk_id, "ref": risk_ref, "title": risk_title,
+                "risk_level": risk_level, "status": risk_status,
+            })
+            unique_risks[risk_id] = {"risk_level": risk_level, "status": risk_status}
+        risk_summary["total"] = len(unique_risks)
+        for risk in unique_risks.values():
+            level = risk["risk_level"]
+            bucket = "critical" if level >= 16 else "high" if level >= 10 else "moderate" if level >= 5 else "low"
+            risk_summary[bucket] += 1
+            status_key = str(risk["status"] or "Non renseigné")
+            risk_summary["by_status"][status_key] = risk_summary["by_status"].get(status_key, 0) + 1
     results = []
     for impacted_id, distance in impacted:
         asset = assets_by_id.get(impacted_id)
@@ -695,7 +708,7 @@ async def get_asset_impact(
             "direction": asset.direction, "application_id": asset.application_id,
             "dependency_distance": distance, "linked_risks": risks_by_asset.get(asset.id, []),
         })
-    return {"source": {"id": source.id, "reference": source.reference, "name": source.name}, "impacted_assets": results, "total_impacted": len(results)}
+    return {"source": {"id": source.id, "reference": source.reference, "name": source.name}, "impacted_assets": results, "total_impacted": len(results), "risk_summary": risk_summary}
 
 
 @router.get("/{asset_id}/relationships", response_model=list[RelationshipResponse])
