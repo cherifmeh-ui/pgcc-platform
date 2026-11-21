@@ -12,6 +12,7 @@ Les modules PGCC sont intégrés autour d'une source de vérité commune. Un mod
 
 | Module source | Module cible | Interaction |
 |---|---|---|
+| Applications existantes | Cartographie | Les applications du catalogue existant peuvent être enrichies par une fiche Asset liée, sans duplication ni remplacement du module Applications. |
 | Cartographie | Risques | Un actif peut être affecté à un ou plusieurs risques ; l'analyse de risque peut prendre en compte sa criticité et ses dépendances. |
 | Cartographie | Conformité | Les actifs et périmètres peuvent être associés aux contrôles pertinents. |
 | Cartographie | Documents | Les fiches, schémas, configurations et preuves sont référencés. |
