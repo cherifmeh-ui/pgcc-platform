@@ -1,5 +1,5 @@
 # backend/app/api/v1/endpoints/compliance.py
-from fastapi import APIRouter, Depends, HTTPException
+from fastapi import APIRouter, Depends, HTTPException, Request
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy import select
 from pydantic import BaseModel, Field, field_validator, model_validator
@@ -17,6 +17,7 @@ from app.models.user import User
 from app.models.iso_control_assessment import IsoControlAssessment
 from app.models.iso_control_evidence import IsoControlEvidence
 from app.models.document import Document
+from app.services.security_logger import log_action
 
 router = APIRouter(prefix="/compliance", tags=["Conformité ISO"])
 
@@ -219,6 +220,7 @@ async def list_control_evidence(
 async def create_control_evidence(
     ref_code: str,
     payload: EvidenceCreate,
+    request: Request,
     db: AsyncSession = Depends(get_db),
     current_user: User = require_permission("iso27002", "update"),
 ):
@@ -265,13 +267,43 @@ async def create_control_evidence(
     db.add(evidence)
     await db.commit()
     await db.refresh(evidence)
+    await log_action(
+        user_email=current_user.email, action="CREATE", resource="iso_evidence",
+        resource_id=str(evidence.id), details=f"Evidence linked to ISO control {ref_code}",
+        event_type="COMPLIANCE", request=request,
+    )
     return evidence_response(evidence, document)
+
+
+@router.delete("/evidence/{evidence_id}", status_code=204)
+async def delete_control_evidence(
+    evidence_id: UUID,
+    request: Request,
+    db: AsyncSession = Depends(get_db),
+    current_user: User = require_permission("iso27002", "update"),
+):
+    result = await db.execute(
+        select(IsoControlEvidence).where(IsoControlEvidence.id == evidence_id)
+    )
+    evidence = result.scalar_one_or_none()
+    if evidence is None:
+        raise HTTPException(status_code=404, detail="Preuve introuvable.")
+    document_id = str(evidence.document_id)
+    control_id = evidence.control_id
+    await db.delete(evidence)
+    await db.commit()
+    await log_action(
+        user_email=current_user.email, action="DELETE", resource="iso_evidence",
+        resource_id=str(evidence_id), details=f"Evidence removed from ISO control {control_id}; document {document_id}",
+        event_type="COMPLIANCE", request=request,
+    )
 
 
 @router.patch("/evidence/{evidence_id}/verify", response_model=EvidenceResponse)
 async def verify_control_evidence(
     evidence_id: UUID,
     payload: EvidenceVerify,
+    request: Request,
     db: AsyncSession = Depends(get_db),
     current_user: User = require_permission("iso27002", "update"),
 ):
@@ -293,6 +325,11 @@ async def verify_control_evidence(
         evidence.notes = payload.notes.strip() or None
     await db.commit()
     await db.refresh(evidence)
+    await log_action(
+        user_email=current_user.email, action="VERIFY", resource="iso_evidence",
+        resource_id=str(evidence.id), details=f"Evidence verification status: {payload.verification_status}",
+        event_type="COMPLIANCE", request=request,
+    )
     return evidence_response(evidence, document)
 
 
