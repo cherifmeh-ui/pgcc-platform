@@ -53,3 +53,30 @@ def test_supplier_risk_overview_flags_critical_supplier_without_valid_assessment
     assert result["suppliers"]["critical_without_current_assessment"] == 1
     assert result["risks"]["distinct_linked"] == 0
     assert result["access"]["active_authorizations"] == 0
+
+
+def test_newer_closed_assessment_supersedes_older_validated_assessment():
+    supplier_id = uuid4()
+    result = build_supplier_risk_overview(
+        suppliers=[{"id": supplier_id, "criticality": "Critique"}],
+        supplier_risks=[],
+        assessments=[
+            {
+                "supplier_id": supplier_id,
+                "status": "Validée",
+                "next_review_at": date(2027, 1, 1),
+                "created_at": datetime(2026, 8, 1, tzinfo=timezone.utc),
+            },
+            {
+                "supplier_id": supplier_id,
+                "status": "Clôturée",
+                "next_review_at": date(2027, 1, 1),
+                "created_at": datetime(2026, 11, 1, tzinfo=timezone.utc),
+            },
+        ],
+        access_requests=[],
+        contracts=[],
+        today=date(2026, 11, 21),
+    )
+    assert result["assessments"]["latest_validated"] == 0
+    assert result["suppliers"]["critical_without_current_assessment"] == 1
