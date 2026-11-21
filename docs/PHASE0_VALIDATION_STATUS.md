@@ -133,3 +133,12 @@ Repository/static hardening is substantially progressed, but the remaining gates
 - Explicit logout and forced logout now clear Axios default `Authorization` header as well as localStorage credentials.
 - Current HEAD: `c4df80cdcd3d2e041f85340f3e59b66749e3e25e`.
 - CI status for this exact HEAD: pending; prior Backend checks succeeded on `01bafc8`.
+
+
+### Current checkpoint — 2026-11-21 (refresh-session unit coverage)
+
+- Current HEAD: `54348ad3f06640e594b2cf840524ff47d289b1c4`.
+- Backend checks succeeded through `e6da608`; workflow for `6f469ea` is still in progress, and commits after it are pending.
+- Added `backend/tests/test_refresh_token_sessions.py`: verifies SHA-256 JTI hash stability, invalid JTI rejection, session persistence of user/hash/expiry, absence of raw JWT in session representation, and expected refresh-token decode type.
+- No local test runner is available through the GitHub connector; CI is the source of test execution evidence.
+- PostgreSQL migration/runtime and concurrency tests remain outstanding.
