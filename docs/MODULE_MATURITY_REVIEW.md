@@ -204,3 +204,10 @@ The initial code-level review found that DOCX extraction joined paragraphs/table
 - The transition is isolated in a pure helper with regression tests for retirement, decommissioning, reactivation, status-omitted updates, and timestamp preservation.
 - Asset-to-risk linking now rejects retired assets with HTTP 409; missing assets/risks remain 404, and duplicate association remains protected by the unique constraint.
 - **Remaining validation:** route-level authorization/HTTP tests and PostgreSQL lifecycle/relationship integration tests are still required. Review whether lifecycle changes should automatically unlink, retain, or mark historical asset relationships; current decision is to preserve associations for audit history.
+
+### 10. Application-to-asset referential integrity
+
+- The `assets.application_id` foreign key uses `ON DELETE RESTRICT`, which correctly prevents deleting an application still referenced by assets.
+- The application deletion endpoint previously allowed the database integrity error to escape as an unhandled server error.
+- **Correction applied:** the endpoint now rolls back and returns HTTP 409 with an actionable message when linked assets prevent deletion.
+- **Remaining validation:** add route-level tests for the conflict response and verify that successful deletion and audit logging still work.
