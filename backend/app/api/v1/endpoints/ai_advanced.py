@@ -58,7 +58,7 @@ async def query_with_context(
                     "content": snippet,
                 },
                 ensure_ascii=False,
-            ) + "\\n"
+            ) + "\n"
             sources.append({"id": str(document.id), "title": document.title[:200]})
 
     full_prompt = f"""Tu es un assistant RSSI spécialisé ISO 27002.
