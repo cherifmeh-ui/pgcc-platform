@@ -398,3 +398,10 @@ The initial code-level review found that DOCX extraction joined paragraphs/table
 - Backend rotation is single-use and detects refresh-token replay. Two browser tabs attempting refresh with the same token can therefore cause replay detection and revoke active refresh sessions.
 - Current frontend refresh queue only coordinates requests within one tab. It does not yet coordinate refresh across browser tabs.
 - This is documented as a residual usability/security integration issue for Phase 0; recommended next implementation is cross-tab refresh coordination (BroadcastChannel or Web Locks with a fallback) plus frontend tests before declaring auth stabilization complete.
+
+
+### 33. Refresh-session model registration in development
+
+- The development `Base.metadata.create_all()` lifecycle did not import `RefreshTokenSession`, so the new table could be omitted from fresh development schemas.
+- Registered the model in the development startup import and added a static regression check.
+- Production schema remains migration-managed; this does not replace PostgreSQL/Alembic runtime validation.
