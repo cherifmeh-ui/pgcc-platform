@@ -835,13 +835,24 @@ async def create_asset_relationship(
     current_user: User = require_permission("assets", "update"),
 ):
     if asset_id == data.target_asset_id:
-        raise HTTPException(status_code=422, detail="Un actif ne peut pas dépendre de lui-même")
+        raise HTTPException(status_code=422, detail="Un actif ne peut pas être lié à lui-même")
+
+    # Lock active asset rows in a deterministic order to serialize dependency
+    # graph mutations and prevent concurrent requests from introducing cycles.
+    locked_assets = await db.execute(
+        select(Asset.id, Asset.retired_at)
+        .where(Asset.id.in_([asset_id, data.target_asset_id]))
+        .order_by(Asset.id)
+        .with_for_update()
+    )
+    asset_rows = locked_assets.all()
+    if len(asset_rows) != 2:
+        raise HTTPException(status_code=404, detail="Actif source ou cible introuvable")
+    if any(retired_at is not None for _, retired_at in asset_rows):
+        raise HTTPException(status_code=409, detail="Les relations ne peuvent pas être créées sur un actif retiré")
+
     if data.relationship_type == "depends_on" and await _would_create_dependency_cycle(db, asset_id, data.target_asset_id):
         raise HTTPException(status_code=422, detail="Cette relation créerait un cycle de dépendances")
-    result = await db.execute(select(Asset.id).where(Asset.id.in_([asset_id, data.target_asset_id]))
-    )
-    if len(result.scalars().all()) != 2:
-        raise HTTPException(status_code=404, detail="Actif source ou cible introuvable")
     relationship = AssetRelationship(
         source_asset_id=asset_id,
         target_asset_id=data.target_asset_id,
