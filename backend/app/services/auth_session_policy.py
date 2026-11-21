@@ -19,6 +19,8 @@ def refresh_denial_reason(
 
     The caller must separately validate the token signature, type and subject.
     """
+    if token_issued_at is None:
+        return "Refresh token invalide."
     if not is_active:
         return "Compte désactivé."
     if is_locked:
