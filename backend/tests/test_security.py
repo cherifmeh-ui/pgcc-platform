@@ -187,3 +187,22 @@ def test_iso_control_seed_has_93_unique_controls_and_expected_domains():
     assert sum(ref.startswith("A.6.") for ref in refs) == 8
     assert sum(ref.startswith("A.7.") for ref in refs) == 14
     assert sum(ref.startswith("A.8.") for ref in refs) == 34
+
+@pytest.mark.parametrize("reserved_claim", ["sub", "type", "iat", "exp", "jti"])
+def test_access_token_rejects_reserved_extra_claim_override(reserved_claim):
+    with pytest.raises(ValueError, match="reserved JWT claims"):
+        create_access_token(
+            "user@example.test",
+            "viewer",
+            extra_claims={reserved_claim: "attacker-controlled"},
+        )
+
+
+def test_access_token_extra_claims_cannot_override_role():
+    token = create_access_token(
+        "user@example.test",
+        "viewer",
+        extra_claims={"role": "admin"},
+    )
+    payload = decode_token(token, expected_type="access")
+    assert payload["role"] == "admin"
