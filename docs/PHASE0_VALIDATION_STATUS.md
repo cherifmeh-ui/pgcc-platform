@@ -115,3 +115,14 @@ Repository/static hardening is substantially progressed, but the remaining gates
 - Refresh-policy denial now revokes active sessions before returning the denial.
 - Frontend refresh-queue bug fixed: undefined `reject` reference removed from the queued request promise.
 - Current implementation still requires runtime PostgreSQL integration tests, frontend build, and review of cross-tab refresh behavior.
+
+
+### Current checkpoint — 2026-11-21 (frontend logout and queue review)
+
+- HEAD: `be0569497789d46686d8078e4da344aa2b1113eb`.
+- Backend checks succeeded on `01bafc8`.
+- Runs for `7d4a308`, `c71af7c`, and current HEAD `be05694` are queued/in progress; do not treat these as validated yet.
+- Frontend Axios refresh queue undefined `reject` reference fixed.
+- Auth store logout now clears localStorage before Pinia `$reset()` to prevent stale credentials being reloaded into memory.
+- Password change revokes existing active refresh sessions; refresh policy denial revokes active sessions.
+- Frontend build and PostgreSQL runtime integration remain unverified.
