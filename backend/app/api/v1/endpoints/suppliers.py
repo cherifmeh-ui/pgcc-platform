@@ -21,6 +21,12 @@ from app.services.supplier_assessment import calculate_assessment_score, get_que
 
 router = APIRouter(prefix="/suppliers", tags=["Fournisseurs et tiers (TPRM)"])
 
+
+def _supplier_allows_new_asset_link(status: str) -> bool:
+    """Suspended or terminated suppliers cannot acquire new asset scope."""
+    return status not in ("Suspendu", "Terminé")
+
+
 Level = Literal["Faible", "Moyenne", "Élevée", "Critique"]
 SupplierStatus = Literal[
     "À qualifier", "En évaluation", "Approuvé",
@@ -781,7 +787,7 @@ async def link_supplier_asset(
     supplier = supplier_result.scalar_one_or_none()
     if supplier is None:
         raise HTTPException(status_code=404, detail="Fournisseur introuvable ou archivé")
-    if supplier.status in ("Suspendu", "Terminé"):
+    if not _supplier_allows_new_asset_link(supplier.status):
         raise HTTPException(
             status_code=409,
             detail="Impossible de créer une relation actif avec un fournisseur suspendu ou terminé.",
