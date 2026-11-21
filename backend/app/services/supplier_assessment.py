@@ -1,5 +1,25 @@
 """Deterministic scoring and validation for versioned supplier questionnaires."""
 from decimal import Decimal, ROUND_HALF_UP
+from copy import deepcopy
+
+QUESTIONNAIRES = {
+    "CTF-TPRM-1.0": [
+        {"id": "governance", "label": "Gouvernance SSI et responsabilités définies", "weight": 3, "max_score": 5, "required": True},
+        {"id": "access", "label": "Gestion des identités, authentification et accès privilégiés", "weight": 3, "max_score": 5, "required": True},
+        {"id": "incident", "label": "Détection, gestion et notification des incidents", "weight": 3, "max_score": 5, "required": True},
+        {"id": "continuity", "label": "Continuité d’activité, sauvegardes et reprise", "weight": 3, "max_score": 5, "required": True},
+        {"id": "vulnerability", "label": "Gestion des vulnérabilités et mises à jour", "weight": 2, "max_score": 5, "required": True},
+        {"id": "data", "label": "Protection, confidentialité et localisation des données", "weight": 3, "max_score": 5, "required": True},
+        {"id": "subcontracting", "label": "Maîtrise des sous-traitants ultérieurs", "weight": 2, "max_score": 5, "required": True},
+        {"id": "audit", "label": "Preuves, auditabilité et conformité contractuelle", "weight": 2, "max_score": 5, "required": True},
+    ],
+}
+
+
+def get_questionnaire_snapshot(version: str) -> list[dict]:
+    if version not in QUESTIONNAIRES:
+        raise ValueError("Version de questionnaire inconnue ou non publiée")
+    return deepcopy(QUESTIONNAIRES[version])
 
 def validate_questionnaire(questions: list[dict]) -> None:
     if not questions:
