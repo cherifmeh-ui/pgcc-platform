@@ -79,3 +79,10 @@ Repository/static hardening is substantially progressed, but the remaining gates
 - Refresh policy now rejects JWTs missing the `iat` (issued-at) claim, even if signature and type are otherwise valid.
 - Regression test added.
 - This is defense-in-depth only; server-side refresh-token persistence, rotation and revocation remain required before production.
+
+
+### Frontend session storage review
+
+- Auth store persists access and refresh tokens in localStorage; Axios refresh interceptor replaces them on successful refresh.
+- Local logout removes tokens but cannot revoke stateless refresh JWTs server-side.
+- XSS impact and lack of server revocation are production release risks; cookie/session architecture and token rotation/reuse detection remain required.
