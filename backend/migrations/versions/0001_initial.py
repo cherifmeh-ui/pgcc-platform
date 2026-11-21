@@ -25,8 +25,6 @@ def upgrade() -> None:
 
 
 def downgrade() -> None:
-    from app.core.database import Base
-    from app.models import action_item, application, document, document_chunk, entity_link, iso_control, risk, security_log, user  # noqa: F401
-
-    bind = op.get_bind()
-    Base.metadata.drop_all(bind=bind)
+    raise NotImplementedError(
+        "Initial baseline downgrade is intentionally disabled to prevent accidental data loss."
+    )
