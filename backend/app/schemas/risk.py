@@ -19,6 +19,7 @@ class RiskResponse(BaseModel):
     status: Optional[str] = None
     treatment_plan: Optional[str] = Field(default=None, max_length=10000)
     created_at: Optional[str] = None
+    updated_at: Optional[str] = None
 
     model_config = {"from_attributes": True}
 
