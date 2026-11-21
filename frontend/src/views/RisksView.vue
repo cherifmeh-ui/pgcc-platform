@@ -412,7 +412,9 @@ function openAiAssistant(risk) {
 }
 
 // --- Action Plan d'Action (UNE SEULE FOIS !) ---
-async function showRiskAssets(risk){assetsRiskModal.value=risk;linkedAssets.value=[];try{const {data}=await apiClient.get('/risks/'+risk.id+'/assets');linkedAssets.value=data}catch(e){alert(e.response?.data?.detail||'Erreur chargement actifs liés')}}\n\nfunction openActionsPanel(risk) {
+async function showRiskAssets(risk){assetsRiskModal.value=risk;linkedAssets.value=[];try{const {data}=await apiClient.get('/risks/'+risk.id+'/assets');linkedAssets.value=data}catch(e){alert(e.response?.data?.detail||'Erreur chargement actifs liés')}}
+
+function openActionsPanel(risk) {
   selectedRiskIdForActions.value = risk.id;
   selectedRiskTitleForActions.value = risk.title;
   showActionsPanel.value = true;
