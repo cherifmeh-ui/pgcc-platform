@@ -85,6 +85,33 @@
                     </span>
                   </div>
                 </div>
+                <div v-if="act.status === 'Terminé'" class="verification-inline">
+                  <button type="button" class="verification-toggle" @click="openVerification(act)">Vérification d'efficacité · {{ verificationHistory[act.id]?.length || 0 }}</button>
+                  <div v-if="verificationActionId === act.id" class="verification-form">
+                    <article v-for="record in (verificationHistory[act.id] || [])" :key="record.id" class="verification-record">
+                      <strong>{{ record.outcome }}</strong> · {{ formatIsoAssessmentDate(record.verified_at) }}
+                      <p>{{ record.notes }}</p>
+                    </article>
+                    <label>Résultat
+                      <select v-model="verificationForm.outcome">
+                        <option value="Effective">Efficace</option>
+                        <option value="Ineffective">Inefficace</option>
+                        <option value="Follow-up required">Suivi complémentaire requis</option>
+                      </select>
+                    </label>
+                    <label>Document de vérification (optionnel)
+                      <select v-model="verificationForm.evidence_document_id">
+                        <option value="">Aucun document</option>
+                        <option v-for="doc in verificationDocuments" :key="doc.id" :value="doc.id">{{ doc.title }} — {{ doc.filename }}</option>
+                      </select>
+                    </label>
+                    <label>Observations
+                      <textarea v-model="verificationForm.notes" rows="2" maxlength="10000" placeholder="Résultat de la vérification, preuve de l'efficacité..."></textarea>
+                    </label>
+                    <p v-if="verificationError" class="verification-error">{{ verificationError }}</p>
+                    <button type="button" class="btn-primary" @click="saveVerification(act.id)" :disabled="verificationSaving || !verificationForm.notes.trim()">{{ verificationSaving ? 'Enregistrement...' : 'Enregistrer la vérification' }}</button>
+                  </div>
+                </div>
                 
                 <div class="task-actions">
                   <button @click="toggleStatus(act)" class="icon-btn done" :disabled="act.status === 'Terminé'" :title="act.status === 'Terminé' ? 'Action clôturée' : act.status === 'En cours' ? 'Marquer terminé' : act.status === 'Bloqué' ? 'Reprendre l’action' : 'Démarrer l’action'">{{ act.status === 'Terminé' ? '✔️' : '▶️' }}</button>
@@ -119,6 +146,12 @@ const actions = ref([]);
 const assignees = ref([]);
 const isoControls = ref([]);
 const isoAssessments = ref([]);
+const verificationActionId = ref(null);
+const verificationHistory = ref({});
+const verificationDocuments = ref([]);
+const verificationForm = ref({ outcome: 'Effective', notes: '', evidence_document_id: '' });
+const verificationSaving = ref(false);
+const verificationError = ref('');
 
 
 // Formulaire création
@@ -170,6 +203,41 @@ async function loadControlAssessments(refCode) {
 }
 function formatIsoAssessmentDate(value) {
   return value ? new Date(value).toLocaleDateString('fr-FR') : '—';
+}
+
+async function openVerification(action) {
+  verificationActionId.value = action.id;
+  verificationError.value = '';
+  verificationForm.value = { outcome: 'Effective', notes: '', evidence_document_id: '' };
+  try {
+    const [historyResponse, documentsResponse] = await Promise.all([
+      apiClient.get(`/actions/${action.id}/verifications`),
+      apiClient.get('/documents/'),
+    ]);
+    verificationHistory.value = { ...verificationHistory.value, [action.id]: Array.isArray(historyResponse.data) ? historyResponse.data : [] };
+    verificationDocuments.value = Array.isArray(documentsResponse.data) ? documentsResponse.data : [];
+  } catch (error) {
+    verificationError.value = error.response?.data?.detail || "Impossible de charger la vérification.";
+  }
+}
+async function saveVerification(actionId) {
+  verificationSaving.value = true;
+  verificationError.value = '';
+  try {
+    const payload = {
+      outcome: verificationForm.value.outcome,
+      notes: verificationForm.value.notes.trim(),
+      evidence_document_id: verificationForm.value.evidence_document_id || null,
+    };
+    await apiClient.post(`/actions/${actionId}/verifications`, payload);
+    const { data } = await apiClient.get(`/actions/${actionId}/verifications`);
+    verificationHistory.value = { ...verificationHistory.value, [actionId]: Array.isArray(data) ? data : [] };
+    verificationForm.value = { outcome: 'Effective', notes: '', evidence_document_id: '' };
+  } catch (error) {
+    verificationError.value = error.response?.data?.detail || "Échec de l'enregistrement.";
+  } finally {
+    verificationSaving.value = false;
+  }
 }
 
 async function loadAssignees() {
@@ -319,6 +387,14 @@ function isOverdue(isoStr) {
 .action-filters button:hover { border-color: #64748b; }
 
 /* Task List */
+.verification-inline { margin-top:.6rem; }
+.verification-toggle { background:#f1f5f9; border:1px solid #cbd5e1; color:#334155; border-radius:6px; padding:.35rem .6rem; cursor:pointer; font-size:.8rem; }
+.verification-form { display:grid; gap:.5rem; padding:.7rem; margin-top:.4rem; border:1px solid #dbeafe; border-radius:8px; background:#f8fafc; }
+.verification-form label { display:grid; gap:.25rem; font-size:.8rem; color:#475569; font-weight:600; }
+.verification-form select,.verification-form textarea { width:100%; padding:.45rem; border:1px solid #cbd5e1; border-radius:6px; font:inherit; }
+.verification-record { padding:.5rem; border-bottom:1px solid #e2e8f0; font-size:.8rem; }
+.verification-record p { margin:.25rem 0; white-space:pre-wrap; }
+.verification-error { color:#b91c1c; font-size:.8rem; }
 .task-ul { list-style: none; padding: 0; margin: 0; }
 .task-li {
   display: flex; justify-content: space-between; align-items: flex-start;
