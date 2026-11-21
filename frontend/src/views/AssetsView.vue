@@ -14,7 +14,7 @@
       <input v-model="locationFilter" placeholder="Localisation" @input="applyFilters" />
       <input v-model="classificationFilter" placeholder="Classification exacte" @input="applyFilters" />
       <label class="retired-filter"><input v-model="includeRetired" type="checkbox" @change="applyFilters" /> Inclure les actifs retirés</label>
-      <button type="button" class="secondary" @click="exportInventory">Exporter CSV</button>
+      <button v-if="canExport" type="button" class="secondary" @click="exportInventory">Exporter CSV</button>
     </div>
     <div class="quality-panel"><div class="quality-score"><strong>{{ quality.completeness_percent }}%</strong><span>Complétude inventaire</span></div><div class="quality-indicators"><span><b>{{ quality.missing_owner }}</b> sans propriétaire</span><span><b>{{ quality.missing_classification }}</b> sans classification</span><span><b>{{ quality.missing_inventory_date }}</b> inventaire non daté</span><span><b>{{ quality.support_overdue }}</b> support expiré</span><span><b>{{ quality.support_ending_90_days }}</b> support expirant sous 90 jours</span></div></div><button class="graph-button" type="button" @click="showGraph">Graphe des dépendances</button><div class="summary">
       <article><strong>{{ pageData.total }}</strong><span>Actifs correspondant aux filtres</span></article>
@@ -70,7 +70,7 @@ import { ref, reactive, computed, onMounted } from 'vue';
 import apiClient from '@/services/api';
 import { useAuthStore } from '@/stores/auth';
 const auth=useAuthStore();
-const canCreate=computed(()=>auth.canAccessModule('assets','create')),canUpdate=computed(()=>auth.canAccessModule('assets','update')),canDelete=computed(()=>auth.canAccessModule('assets','delete')),canReadRisks=computed(()=>auth.canAccessModule('risks','read'));
+const canCreate=computed(()=>auth.canAccessModule('assets','create')),canExport=computed(()=>auth.canAccessModule('assets','export')),canUpdate=computed(()=>auth.canAccessModule('assets','update')),canDelete=computed(()=>auth.canAccessModule('assets','delete')),canReadRisks=computed(()=>auth.canAccessModule('risks','read'));
 const importOpen=ref(false),importFile=ref(null),importPreview=ref(null),importing=ref(false);const assets=ref([]),page=ref(1),pageSize=ref(25),pageData=ref({total:0,pages:1}),directionFilter=ref(''),ownerFilter=ref(''),locationFilter=ref(''),classificationFilter=ref(''),includeRetired=ref(false),quality=ref({total_active:0,missing_owner:0,missing_classification:0,missing_inventory_date:0,missing_criticality:0,missing_direction:0,support_overdue:0,support_ending_90_days:0,completeness_percent:100}),applications=ref([]),riskLinks=ref([]),availableRisks=ref([]),loading=ref(false),saving=ref(false),search=ref(''),typeFilter=ref(''),criticalityFilter=ref(''),statusFilter=ref('');
 const showForm=ref(false),editing=ref(null),relationAsset=ref(null),relations=ref([]),graphOpen=ref(false),graph=ref({nodes:[],edges:[]}),graphSearch=ref(''),graphType=ref(''),graphAssetType=ref(''),graphCriticality=ref(''),graphSelectedNode=ref(null),impactAsset=ref(null),impactLoading=ref(false),impactResult=ref({impacted_assets:[],total_impacted:0}),riskForm=reactive({risk_id:'',relationship_context:''});
 const levels=['Faible','Moyenne','Élevée','Critique'],lifecycle=['Identifié','Actif','En maintenance','En projet','Retiré','Décommissionné'];
