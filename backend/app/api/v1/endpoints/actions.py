@@ -11,6 +11,8 @@ from app.api.deps import require_permission
 from app.core.database import get_db
 from app.models.action_item import ActionItem, ActionStatus, Priority
 from app.models.risk import Risk
+from app.models.iso_control import IsoControl
+from app.models.iso_control_assessment import IsoControlAssessment
 from app.models.user import User
 from app.services.security_logger import log_action
 from app.services.action_lifecycle import validate_action_transition
@@ -47,6 +49,8 @@ class ActionBase(BaseModel):
 
 class ActionCreate(ActionBase):
     risk_id: UUID = Field(..., description="UUID du risque associé")
+    iso_control_id: Optional[int] = Field(default=None, gt=0)
+    iso_assessment_id: Optional[UUID] = None
 
 
 class ActionUpdate(BaseModel):
@@ -56,11 +60,15 @@ class ActionUpdate(BaseModel):
     priority: Optional[Priority] = None
     assigned_to: Optional[str] = Field(default=None, max_length=100)
     due_date: Optional[datetime] = None
+    iso_control_id: Optional[int] = Field(default=None, gt=0)
+    iso_assessment_id: Optional[UUID] = None
 
 
 class ActionResponse(ActionBase):
     id: UUID
     risk_id: UUID
+    iso_control_id: Optional[int] = None
+    iso_assessment_id: Optional[UUID] = None
     created_at: datetime
     updated_at: datetime
     
@@ -124,6 +132,20 @@ async def create_action(
     if not risk:
         raise HTTPException(status_code=404, detail=f"Risque ID={data.risk_id} introuvable.")
     
+    # Validate ISO traceability, if provided.
+    if data.iso_assessment_id:
+        assessment_result = await db.execute(select(IsoControlAssessment).where(IsoControlAssessment.id == data.iso_assessment_id))
+        assessment = assessment_result.scalar_one_or_none()
+        if assessment is None:
+            raise HTTPException(status_code=404, detail="Évaluation ISO introuvable.")
+        if data.iso_control_id is not None and assessment.control_id != data.iso_control_id:
+            raise HTTPException(status_code=422, detail="L'évaluation ne correspond pas au contrôle ISO sélectionné.")
+        data.iso_control_id = assessment.control_id
+    if data.iso_control_id is not None:
+        control_result = await db.execute(select(IsoControl).where(IsoControl.id == data.iso_control_id))
+        if control_result.scalar_one_or_none() is None:
+            raise HTTPException(status_code=404, detail="Contrôle ISO introuvable.")
+
     # Enforce a controlled initial state: creation cannot mark work completed.
     if data.status != ActionStatus.TODO:
         raise HTTPException(status_code=422, detail="Une action doit être créée au statut 'À faire'. Les transitions sont réalisées après création.")
@@ -175,6 +197,22 @@ async def update_action(
             validate_action_transition(action.status, effective_status)
         except ValueError as exc:
             raise HTTPException(status_code=409, detail=str(exc)) from exc
+
+    # Validate ISO references and preserve control/assessment consistency.
+    effective_control_id = update_data.get("iso_control_id", action.iso_control_id)
+    effective_assessment_id = update_data.get("iso_assessment_id", action.iso_assessment_id)
+    if effective_assessment_id:
+        assessment_result = await db.execute(select(IsoControlAssessment).where(IsoControlAssessment.id == effective_assessment_id))
+        assessment = assessment_result.scalar_one_or_none()
+        if assessment is None:
+            raise HTTPException(status_code=404, detail="Évaluation ISO introuvable.")
+        if effective_control_id is not None and assessment.control_id != effective_control_id:
+            raise HTTPException(status_code=422, detail="L'évaluation ne correspond pas au contrôle ISO sélectionné.")
+        update_data["iso_control_id"] = assessment.control_id
+    if effective_control_id is not None:
+        control_result = await db.execute(select(IsoControl).where(IsoControl.id == effective_control_id))
+        if control_result.scalar_one_or_none() is None:
+            raise HTTPException(status_code=404, detail="Contrôle ISO introuvable.")
 
     if "assigned_to" in update_data and update_data["assigned_to"]:
         assignee_result = await db.execute(
