@@ -150,3 +150,10 @@ Status: active engineering review. This is a static review backlog, not a securi
 - PostgreSQL uses `ankane/pgvector:latest`; pin a maintained image and version/digest. Other runtime images should also be pinned.
 - Prepare separate production Compose/deployment configuration: no public database port, production frontend build served by a hardened web server, no source bind mounts, production settings, non-root containers, resource limits, health checks, and private network boundaries.
 - `.env.example` includes a placeholder password and JWT secret; deployment automation must fail if placeholders remain and must never commit actual `.env` files.
+
+
+## GRC API audit coverage review (2026-11-21)
+
+- Applications (`apps.py`) create/update/delete operations currently commit without calling the security audit logger. These business mutations are not traceable in the current security-log API.
+- Document upload/delete and risk/action mutations have logging in reviewed paths, but audit logging is a separate best-effort transaction. A mutation can succeed while its audit event fails, leaving a gap. For high-assurance records, use a transactional audit/outbox pattern or append-only database mechanism and monitor failed delivery.
+- Expand audit coverage systematically to inventory, compliance assessments, user/role administration, evidence verification, configuration changes, and exports. Define mandatory fields, actor identity, target ID, event, outcome, timestamp, correlation ID, and sanitized before/after values.
