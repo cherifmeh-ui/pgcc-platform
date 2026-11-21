@@ -2,6 +2,14 @@
 
 Status: active engineering review. This is a static review backlog, not a security certification.
 
+## ISO corrective-action traceability (implemented)
+- Action items now support optional ISO control and assessment references.
+- API validates that the assessment belongs to the selected control and that referenced controls/assessments exist.
+- Actions can be filtered by ISO control ID.
+- UI in the risk action panel lets users link an action to a control and optionally to an assessment.
+- Database migration adds restrictive foreign keys to preserve assessment/control history.
+- Follow-up: add corrective-action verification evidence and effectiveness review before closure; maintain audit trail for lifecycle transitions.
+
 ## Phase 0 — Build and integration stability
 
 - [x] Declare PDF/DOCX extraction and pgvector dependencies.
