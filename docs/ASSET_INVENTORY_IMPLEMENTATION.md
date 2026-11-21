@@ -112,3 +112,5 @@ Tests unitaires ajoutés : chaîne de dépendances, actif non lié, chemins mult
 - Un raccourci permet de lancer l'analyse d'impact de l'actif sélectionné.
 - L'API du graphe inclut désormais le statut de cycle de vie, propriétaire et localisation, en plus des données de base.
 - La sélection est réinitialisée à l'ouverture du graphe pour éviter un état obsolète.
+
+- L'analyse d'impact refuse désormais les actifs retirés comme source et exclut les relations impliquant des actifs retirés, afin de limiter l'analyse au périmètre actif.
