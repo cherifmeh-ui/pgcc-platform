@@ -23,22 +23,30 @@ Status: active engineering review. This is a static review backlog, not a securi
 - [x] Consume recovery codes after successful use.
 - [ ] Persist refresh-token sessions and implement rotation/reuse detection.
 - [ ] Revoke sessions on password change, account disable, role change, and logout.
-- [x] Require dedicated change-password token for forced password change; remove access-token fallback.\n- [ ] Complete frontend forced-password-change flow and validate token issuance.
-- [x] Apply account lockout policy to MFA verification failures.\n- [ ] Add distributed rate limiting for login, MFA, enrollment, and refresh endpoints.
+- [x] Require dedicated change-password token for forced password change; remove access-token fallback.
+- [ ] Complete frontend forced-password-change flow and validate token issuance.
+- [x] Apply account lockout policy to MFA verification failures.
+- [ ] Add distributed rate limiting for login, MFA, enrollment, and refresh endpoints.
 - [ ] Encrypt MFA secrets at rest and define key rotation.
 - [ ] Add MFA reset/recovery process with audit and administrator approval.
 - [ ] Verify anti-enumeration behavior and consistent login responses.
 - [ ] Review all endpoint permissions; add authorization tests.
 - [ ] Replace browser localStorage bearer-token persistence with safer session design (HttpOnly Secure SameSite cookie strategy, CSRF controls, short-lived access token).
-- [x] Security logger no longer trusts client-supplied X-Forwarded-For by default; user-agent length bounded.\n- [ ] Add security headers and trusted proxy configuration.
+- [x] Security logger no longer trusts client-supplied X-Forwarded-For by default; user-agent length bounded.
+- [ ] Add security headers and trusted proxy configuration.
 
 ## Phase 2 — Core GRC
 
-- [x] Risk API validates owner existence on create/update and bounds optional text fields.\n- [x] Risk API now requires a documented treatment plan for statuses `En traitement`, `Traité` and `Accepté`; update transitions validate the combined status/plan.\n- [x] Action-plan deletion is audit-logged.\n- [ ] Risk register: scenario, threat, vulnerability, affected asset/process, owners, inherent and residual risk.
+- [x] Risk API validates owner existence on create/update and bounds optional text fields.
+- [x] Risk API now requires a documented treatment plan for statuses `En traitement`, `Traité` and `Accepté`; update transitions validate the combined status/plan.
+- [x] Action-plan deletion is audit-logged.
+- [ ] Risk register: scenario, threat, vulnerability, affected asset/process, owners, inherent and residual risk.
 - [ ] Formal risk treatment (avoid/reduce/transfer/accept), rationale and approval.
 - [ ] Residual-risk acceptance with approver, expiry, review date, compensating controls.
-- [x] Audit log for action-plan create/update/delete and bounded input validation.\n- [ ] Action-plan workflow with owner, evidence, validation, history and overdue tracking.
-- [x] Audit log for document upload, deletion and successful indexing.\n- [ ] Audit trail for every sensitive business mutation.
+- [x] Audit log for action-plan create/update/delete and bounded input validation.
+- [ ] Action-plan workflow with owner, evidence, validation, history and overdue tracking.
+- [x] Audit log for document upload, deletion and successful indexing.
+- [ ] Audit trail for every sensitive business mutation.
 
 ## Phase 3 — Asset and application inventory
 
@@ -50,17 +58,21 @@ Status: active engineering review. This is a static review backlog, not a securi
 
 - [ ] Verify ISO/IEC 27002:2022 control references and titles against an authoritative licensed source.
 - [ ] Version control reference datasets; never mix editions.
-- [x] Current compliance score is explicitly declarative; text-linked risks/actions are shown as 'À vérifier' rather than treated as implemented controls. UI badges/filters updated to reflect these states; fabricated last-update timestamps removed.\n- [ ] Separate applicability, implementation status, maturity, verification and evidence.
+- [x] Current compliance score is explicitly declarative; text-linked risks/actions are shown as 'À vérifier' rather than treated as implemented controls. UI badges/filters updated to reflect these states; fabricated last-update timestamps removed.
+- [ ] Separate applicability, implementation status, maturity, verification and evidence.
 - [ ] Implement statement of applicability and justified exclusions.
 - [ ] Add audit findings, nonconformities, recommendations and linked actions.
 
 ## Phase 5 — Documents and evidence
 
-- [x] Signature/format validation, bounded upload read, file size/page limits, PDF encryption rejection, DOCX ZIP structure/expansion checks and safe parsing.\n- [ ] Malware scanning and isolated parsing.
+- [x] Signature/format validation, bounded upload read, file size/page limits, PDF encryption rejection, DOCX ZIP structure/expansion checks and safe parsing.
+- [ ] Malware scanning and isolated parsing.
 - [ ] Hashing, versioning, classification, retention, ownership and approval.
 - [ ] Prefer object storage for binaries; database stores metadata and references.
 - [ ] Evidence links to risks, controls, audits and actions.
-- [x] Validate uploaded file type/signature, bounds, filename and PDF/DOCX parsing containers.\n- [x] RAG indexing now uses Ollama `/api/embed`, validates vector count/dimensions, and atomically replaces old chunks only after successful embedding generation.\n- [ ] Add processing states, chunk metadata, citations, hybrid retrieval and permission/classification filters.
+- [x] Validate uploaded file type/signature, bounds, filename and PDF/DOCX parsing containers.
+- [x] RAG indexing now uses Ollama `/api/embed`, validates vector count/dimensions, and atomically replaces old chunks only after successful embedding generation.
+- [ ] Add processing states, chunk metadata, citations, hybrid retrieval and permission/classification filters.
 
 ## Phase 6 — AI/RAG
 
@@ -69,7 +81,8 @@ Status: active engineering review. This is a static review backlog, not a securi
 - [ ] Verify embedding model dimensions and pgvector compatibility.
 - [ ] Include document/page/version citations and confidence/missing-context notes.
 - [ ] AI suggestions must be reviewable and never silently change GRC records.
-- [x] Treat risk data as untrusted in ISO suggestion prompt and validate/filter returned control references.\n- [ ] Add prompt-injection handling for uploaded content and retrieved documents.
+- [x] Treat risk data as untrusted in ISO suggestion prompt and validate/filter returned control references.
+- [ ] Add prompt-injection handling for uploaded content and retrieved documents.
 
 ## Phase 7 — Observability and release
 
@@ -96,3 +109,5 @@ Status: active engineering review. This is a static review backlog, not a securi
 - RAG indexing is synchronous and resource-consuming. A hard limit of 2,000 chunks per document is now enforced before embedding generation. Long-running indexing should move to a queue with status tracking, rate limits, and retry controls.
 - Upload validation covers PDF/DOCX signatures and parser/ZIP constraints, but production should additionally use malware scanning, quarantine, storage isolation, and document classification/approval.
 - No download endpoint currently exposes file bytes; if one is added, it must use the same RBAC checks, safe content disposition, and no public/static file path.
+
+- [x] Document indexing endpoint now returns HTTP 200 because indexing is synchronous in the current implementation; HTTP 202 is reserved for future queued processing.
