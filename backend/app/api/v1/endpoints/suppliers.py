@@ -896,7 +896,7 @@ async def get_supplier_risk_overview(
         {"id": row.id, "criticality": row.criticality, "archived": row.archived_at is not None, "status": row.status}
         for row in supplier_rows.all()
     ]
-    active_supplier_ids = [item["id"] for item in suppliers if not item["archived"]]
+    active_supplier_ids = [item["id"] for item in suppliers if not item["archived"] and item.get("status") != "Terminé"]
     if not active_supplier_ids:
         return build_supplier_risk_overview([], [], [], [], [])
 
@@ -915,10 +915,7 @@ async def get_supplier_risk_overview(
             SupplierAssessment.supplier_id, SupplierAssessment.status,
             SupplierAssessment.next_review_at, SupplierAssessment.created_at,
         )
-        .where(
-            SupplierAssessment.supplier_id.in_(active_supplier_ids),
-            SupplierAssessment.status == "Validée",
-        )
+        .where(SupplierAssessment.supplier_id.in_(active_supplier_ids))
         .order_by(SupplierAssessment.created_at.desc())
     )
     assessments = [
