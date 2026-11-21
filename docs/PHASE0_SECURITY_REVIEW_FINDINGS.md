@@ -48,8 +48,11 @@ This review is based on source inspection of the stabilization branch. It is not
 
 ## API authorization
 
+- RBAC matrix normalizes role/module/action and denies unknown values; unit tests cover normalization and default deny.
 - AST coverage test verifies that non-auth endpoints declare a dependency, but it does not prove correct permission, object-level authorization, tenant/scope enforcement, or authorization inside service functions.
-- Required: role matrix tests for read/write/delete/export, object-level access tests, document/RAG classification tests, and checks for IDOR.
+- Asset-risk linking performs additional cross-module permission checks, with API tests for unauthorized linking and unlinking.
+- Required: broad role matrix tests for read/write/delete/export, object-level access tests, document/RAG classification tests, and checks for IDOR.
+- Source review found the assets impact endpoint selectively omits linked risks/supplier access details based on module permissions; continue testing response field-level authorization to avoid leakage.
 
 ## Phase 0 exit gates
 
@@ -63,3 +66,11 @@ Do not close Phase 0 until evidence is attached for:
 7. Audit event coverage and operational integrity decisions.
 8. Full PR diff review and human approval.
 
+
+
+## RBAC source review — additional evidence
+
+- `role_has_permission` normalizes role/module/action and denies unknown roles/modules/actions.
+- Unit tests cover normalization and default-deny behavior.
+- Asset-risk endpoints perform explicit cross-module permission checks and API tests verify denial before DB access.
+- The endpoint dependency AST test is structural only; it is not a substitute for route-level permission and object-authorization tests.
