@@ -10,7 +10,7 @@ from sqlalchemy.pool import NullPool
 from app.core.config import settings
 from app.core.database import Base
 # Import every model so metadata is complete for autogeneration.
-from app.models import action_item, application, asset, document, document_chunk, entity_link, iso_control, risk, security_log, user  # noqa: F401
+from app.models import action_item, application, asset, document, document_chunk, entity_link, iso_control, risk, security_log, supplier, user  # noqa: F401
 
 config = context.config
 if config.config_file_name is not None:
