@@ -340,14 +340,15 @@ async def get_asset_impact(
     impacted_ids = [item[0] for item in impacted]
     asset_result = await db.execute(select(Asset).where(Asset.id.in_(impacted_ids)))
     assets_by_id = {asset.id: asset for asset in asset_result.scalars().all()}
-    risk_result = await db.execute(
-        select(AssetRiskLink.asset_id, Risk.id, Risk.ref, Risk.title)
-        .join(Risk, Risk.id == AssetRiskLink.risk_id)
-        .where(AssetRiskLink.asset_id.in_(impacted_ids))
-    )
     risks_by_asset: dict[UUID, list[dict]] = {}
-    for linked_asset_id, risk_id, risk_ref, risk_title in risk_result.all():
-        risks_by_asset.setdefault(linked_asset_id, []).append({"id": risk_id, "ref": risk_ref, "title": risk_title})
+    if role_has_permission((current_user.role or "").lower(), "risks", "read"):
+        risk_result = await db.execute(
+            select(AssetRiskLink.asset_id, Risk.id, Risk.ref, Risk.title)
+            .join(Risk, Risk.id == AssetRiskLink.risk_id)
+            .where(AssetRiskLink.asset_id.in_(impacted_ids))
+        )
+        for linked_asset_id, risk_id, risk_ref, risk_title in risk_result.all():
+            risks_by_asset.setdefault(linked_asset_id, []).append({"id": risk_id, "ref": risk_ref, "title": risk_title})
     results = []
     for impacted_id, distance in impacted:
         asset = assets_by_id.get(impacted_id)
