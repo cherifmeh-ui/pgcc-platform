@@ -67,3 +67,15 @@ Contrats et pièces justificatives, évaluations versionnées, accès tiers et r
 - Les versions publiées sont définies côté serveur; la création charge une copie profonde de la version autorisée et la conserve en instantané dans l'évaluation.
 - Une version inconnue est rejetée. Cela empêche un utilisateur de modifier les pondérations ou les questions afin de manipuler le score.
 - Toute évolution du référentiel doit publier une nouvelle version; les évaluations historiques conservent leur propre instantané.
+
+## Tranche 4 — Relations Fournisseurs ↔ Cartographie
+
+- Table d'association dédiée `supplier_asset_links`, sans détourner le graphe technique `asset_relationships`.
+- Typologie métier : héberge, maintient, administre, accède, fournit, autre.
+- Qualification des accès : aucun, standard, privilégié; indicateur séparé d'accès aux données.
+- Périmètre de prestation, date de prochaine revue et statut conservés sur le lien.
+- Consultation réservée aux rôles Admin/Auditor; création et terminaison réservées à Admin.
+- Les relations sont terminées logiquement, jamais supprimées physiquement; l'historique est conservé.
+- Les actifs retirés/décommissionnés et fournisseurs archivés ne peuvent pas recevoir de nouveau lien.
+- Les deux clés étrangères utilisent RESTRICT afin d'éviter les suppressions en cascade sur les référentiels.
+- Migration additive `0015_supplier_asset_links`; aucun changement des tables Cartographie ou des modules historiques.
