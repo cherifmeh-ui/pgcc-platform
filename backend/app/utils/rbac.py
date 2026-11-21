@@ -67,6 +67,8 @@ PERMISSIONS: dict[str, dict[str, list[str]]] = {
     "assets": {
         "read": [Role.ADMIN.value, Role.EXECUTIVE.value, Role.AUDITOR.value],
         "read_contacts": [Role.ADMIN.value, Role.AUDITOR.value],
+        "read_contracts": [Role.ADMIN.value, Role.AUDITOR.value],
+        "manage_contracts": [Role.ADMIN.value],
         "create": [Role.ADMIN.value],
         "update": [Role.ADMIN.value],
         "delete": [Role.ADMIN.value],
