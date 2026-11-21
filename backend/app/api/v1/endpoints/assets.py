@@ -1,0 +1,309 @@
+"""Asset inventory and dependency graph API."""
+from datetime import datetime, timezone
+from typing import Literal
+from uuid import UUID
+
+from fastapi import APIRouter, Depends, HTTPException, Query, Request, status
+from pydantic import BaseModel, Field
+from sqlalchemy import select
+from sqlalchemy.ext.asyncio import AsyncSession
+
+from app.api.deps import require_permission
+from app.core.database import get_db
+from app.models.asset import Asset, AssetRelationship
+from app.models.application import Application
+from app.models.user import User
+from app.services.security_logger import log_action
+
+router = APIRouter(prefix="/assets", tags=["Cartographie des actifs"])
+
+AssetType = Literal[
+    "process", "information", "application", "hardware", "software",
+    "infrastructure", "network", "service", "cloud_resource", "facility", "other",
+]
+Level = Literal["Faible", "Moyenne", "Élevée", "Critique"]
+Lifecycle = Literal["Identifié", "Actif", "En maintenance", "En projet", "Retiré", "Décommissionné"]
+RelationshipType = Literal[
+    "depends_on", "hosts", "connects_to", "stores", "processes", "supports",
+    "contains", "communicates_with", "supplied_by", "other",
+]
+
+
+class AssetFields(BaseModel):
+    reference: str = Field(min_length=1, max_length=50)
+    name: str = Field(min_length=1, max_length=200)
+    description: str | None = None
+    asset_type: AssetType = "other"
+    application_id: UUID | None = None
+    owner: str | None = Field(default=None, max_length=150)
+    custodian: str | None = Field(default=None, max_length=150)
+    direction: str | None = Field(default=None, max_length=100)
+    location: str | None = Field(default=None, max_length=200)
+    lifecycle_status: Lifecycle = "Identifié"
+    criticality: Level = "Moyenne"
+    confidentiality: Level | None = None
+    integrity: Level | None = None
+    availability: Level | None = None
+    classification: str | None = Field(default=None, max_length=100)
+    hostname: str | None = Field(default=None, max_length=255)
+    ip_address: str | None = Field(default=None, max_length=45)
+    fqdn: str | None = Field(default=None, max_length=255)
+    operating_system: str | None = Field(default=None, max_length=150)
+    version: str | None = Field(default=None, max_length=100)
+    manufacturer: str | None = Field(default=None, max_length=150)
+    model: str | None = Field(default=None, max_length=150)
+    serial_number: str | None = Field(default=None, max_length=150)
+    discovery_source: str | None = Field(default=None, max_length=100)
+    source_reference: str | None = Field(default=None, max_length=255)
+    last_inventory_date: datetime | None = None
+    end_of_support_date: datetime | None = None
+    comment: str | None = None
+
+
+class AssetCreate(AssetFields):
+    pass
+
+
+class AssetUpdate(BaseModel):
+    reference: str | None = Field(default=None, min_length=1, max_length=50)
+    name: str | None = Field(default=None, min_length=1, max_length=200)
+    description: str | None = None
+    asset_type: AssetType | None = None
+    application_id: UUID | None = None
+    owner: str | None = Field(default=None, max_length=150)
+    custodian: str | None = Field(default=None, max_length=150)
+    direction: str | None = Field(default=None, max_length=100)
+    location: str | None = Field(default=None, max_length=200)
+    lifecycle_status: Lifecycle | None = None
+    criticality: Level | None = None
+    confidentiality: Level | None = None
+    integrity: Level | None = None
+    availability: Level | None = None
+    classification: str | None = Field(default=None, max_length=100)
+    hostname: str | None = Field(default=None, max_length=255)
+    ip_address: str | None = Field(default=None, max_length=45)
+    fqdn: str | None = Field(default=None, max_length=255)
+    operating_system: str | None = Field(default=None, max_length=150)
+    version: str | None = Field(default=None, max_length=100)
+    manufacturer: str | None = Field(default=None, max_length=150)
+    model: str | None = Field(default=None, max_length=150)
+    serial_number: str | None = Field(default=None, max_length=150)
+    discovery_source: str | None = Field(default=None, max_length=100)
+    source_reference: str | None = Field(default=None, max_length=255)
+    last_inventory_date: datetime | None = None
+    end_of_support_date: datetime | None = None
+    comment: str | None = None
+
+
+class AssetResponse(AssetFields):
+    id: UUID
+    created_at: datetime
+    updated_at: datetime
+    retired_at: datetime | None
+
+    class Config:
+        from_attributes = True
+
+
+class RelationshipCreate(BaseModel):
+    target_asset_id: UUID
+    relationship_type: RelationshipType
+    description: str | None = Field(default=None, max_length=500)
+    criticality: Level | None = None
+
+
+class RelationshipResponse(BaseModel):
+    id: UUID
+    source_asset_id: UUID
+    target_asset_id: UUID
+    relationship_type: RelationshipType
+    description: str | None
+    criticality: Level | None
+    created_at: datetime
+    created_by: str | None
+
+    class Config:
+        from_attributes = True
+
+
+async def _ensure_application_exists(application_id: UUID | None, db: AsyncSession) -> None:
+    if application_id is None:
+        return
+    result = await db.execute(select(Application.id).where(Application.id == application_id))
+    if result.scalar_one_or_none() is None:
+        raise HTTPException(status_code=422, detail="Application associée introuvable")
+
+
+@router.get("/", response_model=list[AssetResponse])
+async def list_assets(
+    q: str | None = Query(default=None, max_length=100),
+    asset_type: AssetType | None = None,
+    criticality: Level | None = None,
+    lifecycle_status: Lifecycle | None = None,
+    direction: str | None = Query(default=None, max_length=100),
+    include_retired: bool = False,
+    limit: int = Query(default=100, ge=1, le=500),
+    offset: int = Query(default=0, ge=0),
+    db: AsyncSession = Depends(get_db),
+    current_user: User = require_permission("assets", "read"),
+):
+    stmt = select(Asset)
+    if not include_retired:
+        stmt = stmt.where(Asset.retired_at.is_(None))
+    if q:
+        pattern = f"%{q.strip()}%"
+        stmt = stmt.where(Asset.name.ilike(pattern) | Asset.reference.ilike(pattern) | Asset.hostname.ilike(pattern))
+    if asset_type:
+        stmt = stmt.where(Asset.asset_type == asset_type)
+    if criticality:
+        stmt = stmt.where(Asset.criticality == criticality)
+    if lifecycle_status:
+        stmt = stmt.where(Asset.lifecycle_status == lifecycle_status)
+    if direction:
+        stmt = stmt.where(Asset.direction == direction)
+    stmt = stmt.order_by(Asset.name.asc()).limit(limit).offset(offset)
+    result = await db.execute(stmt)
+    return result.scalars().all()
+
+
+@router.post("/", response_model=AssetResponse, status_code=status.HTTP_201_CREATED)
+async def create_asset(
+    data: AssetCreate,
+    request: Request,
+    db: AsyncSession = Depends(get_db),
+    current_user: User = require_permission("assets", "create"),
+):
+    await _ensure_application_exists(data.application_id, db)
+    asset = Asset(**data.model_dump())
+    db.add(asset)
+    try:
+        await db.commit()
+    except Exception:
+        await db.rollback()
+        raise HTTPException(status_code=409, detail="Référence d'actif déjà utilisée ou contrainte invalide")
+    await db.refresh(asset)
+    await log_action(
+        user_email=current_user.email, action="CREATE", resource="assets",
+        resource_id=str(asset.id), details=f"Asset created: {asset.reference}",
+        event_type="ASSET", request=request,
+    )
+    return asset
+
+
+@router.get("/{asset_id}", response_model=AssetResponse)
+async def get_asset(
+    asset_id: UUID,
+    db: AsyncSession = Depends(get_db),
+    current_user: User = require_permission("assets", "read"),
+):
+    result = await db.execute(select(Asset).where(Asset.id == asset_id))
+    asset = result.scalar_one_or_none()
+    if asset is None:
+        raise HTTPException(status_code=404, detail="Actif introuvable")
+    return asset
+
+
+@router.patch("/{asset_id}", response_model=AssetResponse)
+async def update_asset(
+    asset_id: UUID,
+    data: AssetUpdate,
+    request: Request,
+    db: AsyncSession = Depends(get_db),
+    current_user: User = require_permission("assets", "update"),
+):
+    result = await db.execute(select(Asset).where(Asset.id == asset_id))
+    asset = result.scalar_one_or_none()
+    if asset is None:
+        raise HTTPException(status_code=404, detail="Actif introuvable")
+    values = data.model_dump(exclude_unset=True)
+    await _ensure_application_exists(values.get("application_id"), db)
+    for key, value in values.items():
+        setattr(asset, key, value)
+    try:
+        await db.commit()
+    except Exception:
+        await db.rollback()
+        raise HTTPException(status_code=409, detail="Référence d'actif déjà utilisée ou contrainte invalide")
+    await db.refresh(asset)
+    await log_action(
+        user_email=current_user.email, action="UPDATE", resource="assets",
+        resource_id=str(asset.id), details=f"Asset updated: {asset.reference}",
+        event_type="ASSET", request=request,
+    )
+    return asset
+
+
+@router.delete("/{asset_id}", status_code=status.HTTP_204_NO_CONTENT)
+async def retire_asset(
+    asset_id: UUID,
+    request: Request,
+    db: AsyncSession = Depends(get_db),
+    current_user: User = require_permission("assets", "delete"),
+):
+    result = await db.execute(select(Asset).where(Asset.id == asset_id))
+    asset = result.scalar_one_or_none()
+    if asset is None:
+        raise HTTPException(status_code=404, detail="Actif introuvable")
+    if asset.retired_at is None:
+        asset.retired_at = datetime.now(timezone.utc)
+        asset.lifecycle_status = "Retiré"
+        await db.commit()
+        await log_action(
+            user_email=current_user.email, action="RETIRE", resource="assets",
+            resource_id=str(asset.id), details=f"Asset retired: {asset.reference}",
+            event_type="ASSET", request=request,
+        )
+
+
+@router.get("/{asset_id}/relationships", response_model=list[RelationshipResponse])
+async def list_asset_relationships(
+    asset_id: UUID,
+    db: AsyncSession = Depends(get_db),
+    current_user: User = require_permission("assets", "read"),
+):
+    result = await db.execute(select(Asset.id).where(Asset.id == asset_id))
+    if result.scalar_one_or_none() is None:
+        raise HTTPException(status_code=404, detail="Actif introuvable")
+    stmt = select(AssetRelationship).where(
+        (AssetRelationship.source_asset_id == asset_id)
+        | (AssetRelationship.target_asset_id == asset_id)
+    ).order_by(AssetRelationship.created_at.desc())
+    result = await db.execute(stmt)
+    return result.scalars().all()
+
+
+@router.post("/{asset_id}/relationships", response_model=RelationshipResponse, status_code=status.HTTP_201_CREATED)
+async def create_asset_relationship(
+    asset_id: UUID,
+    data: RelationshipCreate,
+    request: Request,
+    db: AsyncSession = Depends(get_db),
+    current_user: User = require_permission("assets", "update"),
+):
+    if asset_id == data.target_asset_id:
+        raise HTTPException(status_code=422, detail="Un actif ne peut pas dépendre de lui-même")
+    result = await db.execute(select(Asset.id).where(Asset.id.in_([asset_id, data.target_asset_id]))
+    )
+    if len(result.scalars().all()) != 2:
+        raise HTTPException(status_code=404, detail="Actif source ou cible introuvable")
+    relationship = AssetRelationship(
+        source_asset_id=asset_id,
+        target_asset_id=data.target_asset_id,
+        relationship_type=data.relationship_type,
+        description=data.description,
+        criticality=data.criticality,
+        created_by=current_user.email,
+    )
+    db.add(relationship)
+    try:
+        await db.commit()
+    except Exception:
+        await db.rollback()
+        raise HTTPException(status_code=409, detail="Relation déjà existante ou contrainte invalide")
+    await db.refresh(relationship)
+    await log_action(
+        user_email=current_user.email, action="CREATE_RELATIONSHIP", resource="asset_relationships",
+        resource_id=str(relationship.id), details=f"Asset relationship created: {asset_id} -> {data.target_asset_id}",
+        event_type="ASSET", request=request,
+    )
+    return relationship
