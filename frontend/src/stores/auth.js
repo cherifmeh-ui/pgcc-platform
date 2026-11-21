@@ -101,7 +101,12 @@ export const useAuthStore = defineStore('auth', {
 
     logout() {
       this.$reset();
-      localStorage.clear();
+      [
+        'pgcc_access_token',
+        'pgcc_refresh_token',
+        'pgcc_user_role',
+        'pgcc_permissions',
+      ].forEach((key) => localStorage.removeItem(key));
       window.location.href = '/login';
     },
   },
