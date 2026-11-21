@@ -70,6 +70,9 @@ def _create_token(
         "jti": uuid.uuid4().hex,
     }
     if extra_claims:
+        reserved_claims = {"sub", "type", "iat", "exp", "jti"}
+        if reserved_claims.intersection(extra_claims):
+            raise ValueError("Extra claims cannot override reserved JWT claims.")
         payload.update(extra_claims)
     return jwt.encode(payload, get_signing_key(), algorithm=settings.JWT_ALGORITHM)
 
