@@ -18,7 +18,7 @@ class ComplianceMatrixRow(BaseModel):
     ref_code: str
     title: str
     domain: str
-    status: str # "Couvert", "Partiel", "Non Couvert"
+    status: str # "Déclaré couvert", "À vérifier", "Non évalué"
     linked_risks_count: int
     last_update: str | None
     
@@ -90,12 +90,12 @@ async def get_compliance_matrix(
                 status = "À vérifier"
                 partial += 1
             else:
-                status = "Non Couvert"
+                status = "Non évalué"
                 uncovered += 1
                 
             rows.append(ComplianceMatrixRow(
                 ref_code=c.ref_code, title=c.title, domain=c.domain,
-                status=status, linked_risks_count=found_links, last_update=now_str
+                status=status, linked_risks_count=found_links, last_update=None
             ))
             
         total = len(rows)
