@@ -97,3 +97,16 @@ Added `backend/tests/test_asset_risk_integration_api.py` to cover:
 - 404 for an unknown risk.
 
 The permission test file also asserts the relevant role permissions. CI results for the new tests are pending.
+
+
+## Extension — exposition des dépendances fournisseurs dans l'analyse d'impact
+
+L'analyse d'impact transitive des actifs expose désormais, lorsque le profil possède `suppliers:read_assets` :
+
+- Les fournisseurs directement liés à l'actif analysé.
+- Les fournisseurs associés aux actifs dépendants impactés.
+- Le nombre de fournisseurs distincts et de relations actives.
+- Le nombre de relations avec accès privilégié et accès aux données.
+- Le type de relation et la prochaine échéance de revue.
+
+La requête ne retourne que les relations non terminées. Les liens sont présentés en complément des risques liés; ils ne modifient ni le calcul de criticité, ni le score de risque, ni les décisions d'approbation. Les profils sans permission fournisseur ne reçoivent pas ces données. Les contrôles RBAC sont appliqués côté serveur.
