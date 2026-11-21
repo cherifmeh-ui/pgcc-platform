@@ -219,3 +219,33 @@ def test_supplier_access_review_routes_are_registered():
     from app.api.v1.endpoints.suppliers import list_supplier_access_reviews, review_supplier_access
     assert callable(list_supplier_access_reviews)
     assert callable(review_supplier_access)
+
+
+def test_supplier_risk_link_schema_validates_context_and_type():
+    from app.api.v1.endpoints.suppliers import SupplierRiskLinkCreate
+    from uuid import uuid4
+    valid = SupplierRiskLinkCreate(
+        risk_id=uuid4(), relationship_type="Dépendance opérationnelle",
+        relationship_context="Le fournisseur assure l'exploitation du système critique",
+    )
+    assert valid.relationship_type == "Dépendance opérationnelle"
+    with pytest.raises(ValidationError):
+        SupplierRiskLinkCreate(
+            risk_id=uuid4(), relationship_type="Dépendance opérationnelle",
+            relationship_context="   ",
+        )
+
+
+def test_supplier_risk_link_model_and_cross_module_permissions():
+    from app.models.supplier import SupplierRiskLink
+    assert SupplierRiskLink.__tablename__ == "supplier_risk_links"
+    assert role_has_permission("admin", "suppliers", "manage_risks")
+    assert not role_has_permission("auditor", "suppliers", "manage_risks")
+    assert role_has_permission("admin", "risks", "update")
+    assert not role_has_permission("auditor", "risks", "update")
+
+
+def test_supplier_risk_link_routes_are_registered():
+    from app.api.v1.endpoints.suppliers import list_supplier_risk_links, link_supplier_to_risk
+    assert callable(list_supplier_risk_links)
+    assert callable(link_supplier_to_risk)
