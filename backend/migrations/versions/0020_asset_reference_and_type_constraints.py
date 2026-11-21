@@ -57,6 +57,16 @@ def upgrade() -> None:
 
 
 def downgrade() -> None:
+    # Do not downgrade while cloud_resource records exist; the older check rejects them.
+    op.execute("""
+        DO $
+        BEGIN
+            IF EXISTS (SELECT 1 FROM assets WHERE asset_type = 'cloud_resource') THEN
+                RAISE EXCEPTION
+                    'Cannot downgrade asset type constraint while cloud_resource assets exist; migrate those records first';
+            END IF;
+        END $;
+    """)
     op.drop_constraint("ck_assets_asset_type", "assets", type_="check")
     op.create_check_constraint(
         "ck_assets_asset_type",
