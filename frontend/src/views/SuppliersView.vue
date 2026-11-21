@@ -9,7 +9,7 @@
     </div>
     <p v-if="error" class="error">{{error}}</p>
     <div class="table-wrap"><table><thead><tr><th>Code</th><th>Fournisseur</th><th>Service / Direction</th><th>Criticité</th><th>Statut</th><th>Contacts</th><th>Actions</th></tr></thead>
-      <tbody><tr v-for="s in suppliers" :key="s.id"><td><b>{{s.code}}</b></td><td>{{s.legal_name}}<small>{{s.trade_name}}</small><small>{{s.country}}</small></td><td>{{s.service_category || '—'}}<small>{{s.direction || '—'}}</small></td><td><span :class="['level',levelClass(s.criticality)]">{{s.criticality}}</span></td><td>{{s.status}}<small v-if="s.archived_at">Archivé</small></td><td><button class="secondary" @click="openContacts(s)">Contacts</button></td><td><button v-if="canUpdate && !s.archived_at" class="secondary" @click="edit(s)">Modifier</button> <button v-if="canArchive && !s.archived_at" class="danger" @click="archive(s)">Archiver</button></td></tr>
+      <tbody><tr v-for="s in suppliers" :key="s.id"><td><b>{{s.code}}</b></td><td>{{s.legal_name}}<small>{{s.trade_name}}</small><small>{{s.country}}</small></td><td>{{s.service_category || '—'}}<small>{{s.direction || '—'}}</small></td><td><span :class="['level',levelClass(s.criticality)]">{{s.criticality}}</span></td><td>{{s.status}}<small v-if="s.archived_at">Archivé</small></td><td><button v-if="canReadContacts" class="secondary" @click="openContacts(s)">Contacts</button><span v-else>—</span></td><td><button v-if="canUpdate && !s.archived_at" class="secondary" @click="edit(s)">Modifier</button> <button v-if="canArchive && !s.archived_at" class="danger" @click="archive(s)">Archiver</button></td></tr>
       <tr v-if="loading"><td colspan="7" class="empty">Chargement…</td></tr><tr v-else-if="!suppliers.length"><td colspan="7" class="empty">Aucun fournisseur.</td></tr></tbody></table></div>
     <nav class="pagination"><button class="secondary" :disabled="offset===0" @click="previous">Précédent</button><span>{{offset+1}}–{{offset+suppliers.length}}</span><button class="secondary" :disabled="suppliers.length<limit" @click="next">Suivant</button><select v-model.number="limit" @change="offset=0;load()"><option :value="25">25 / page</option><option :value="50">50 / page</option><option :value="100">100 / page</option></select></nav>
     <div v-if="formOpen" class="overlay" @click.self="formOpen=false"><form class="modal" @submit.prevent="save">
@@ -38,6 +38,7 @@ const canCreate=computed(()=>auth.canAccessModule('suppliers','create'));
 const canUpdate=computed(()=>auth.canAccessModule('suppliers','update'));
 const canArchive=computed(()=>auth.canAccessModule('suppliers','archive'));
 const canManageContacts=computed(()=>auth.canAccessModule('suppliers','manage_contacts'));
+const canReadContacts=computed(()=>auth.canAccessModule('suppliers','read_contacts'));
 const levels=['Faible','Moyenne','Élevée','Critique'];
 const statuses=['À qualifier','En évaluation','Approuvé','Approuvé sous conditions','Suspendu','Terminé'];
 const contactTypes=['Commercial','Technique','Sécurité','Contractuel','Autre'];
