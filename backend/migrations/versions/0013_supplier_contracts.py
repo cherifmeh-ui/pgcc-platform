@@ -5,7 +5,6 @@ Revises: 0012_supplier_register
 """
 from alembic import op
 import sqlalchemy as sa
-import sqlalchemy as sa
 from sqlalchemy.dialects import postgresql
 
 revision = "0013_supplier_contracts"
