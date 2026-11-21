@@ -989,6 +989,12 @@ async def unlink_asset_from_risk(
 ):
     if not role_has_permission((current_user.role or "").lower(), "risks", "update"):
         raise HTTPException(status_code=403, detail="Accès refusé : permission risks:update requise.")
+    asset_result = await db.execute(select(Asset.id).where(Asset.id == asset_id))
+    if asset_result.scalar_one_or_none() is None:
+        raise HTTPException(status_code=404, detail="Actif introuvable")
+    risk_result = await db.execute(select(Risk.id).where(Risk.id == risk_id))
+    if risk_result.scalar_one_or_none() is None:
+        raise HTTPException(status_code=404, detail="Risque introuvable")
     result = await db.execute(select(AssetRiskLink).where(AssetRiskLink.asset_id == asset_id, AssetRiskLink.risk_id == risk_id))
     link = result.scalar_one_or_none()
     if link is None:
