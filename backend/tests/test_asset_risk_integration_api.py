@@ -74,3 +74,30 @@ async def test_risk_asset_listing_returns_404_when_risk_does_not_exist():
         )
     assert exc.value.status_code == 404
     assert db.execute.await_count == 1
+
+
+@pytest.mark.asyncio
+async def test_asset_risk_link_creation_requires_risk_update_permission():
+    from app.api.v1.endpoints.assets import AssetRiskLinkCreate, link_asset_to_risk
+    db = AsyncMock()
+    with pytest.raises(HTTPException) as exc:
+        await link_asset_to_risk(
+            asset_id=ASSET_ID, data=AssetRiskLinkCreate(risk_id=RISK_ID),
+            request=MagicMock(), db=db,
+            current_user=MagicMock(role="auditor", email="auditor@example.test"),
+        )
+    assert exc.value.status_code == 403
+    db.execute.assert_not_awaited()
+
+
+@pytest.mark.asyncio
+async def test_asset_risk_unlink_requires_risk_update_permission():
+    from app.api.v1.endpoints.assets import unlink_asset_from_risk
+    db = AsyncMock()
+    with pytest.raises(HTTPException) as exc:
+        await unlink_asset_from_risk(
+            asset_id=ASSET_ID, risk_id=RISK_ID, request=MagicMock(), db=db,
+            current_user=MagicMock(role="auditor", email="auditor@example.test"),
+        )
+    assert exc.value.status_code == 403
+    db.execute.assert_not_awaited()
