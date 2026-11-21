@@ -186,3 +186,5 @@ The initial code-level review found that DOCX extraction joined paragraphs/table
 - Migration `0020_asset_reference_and_type_constraints` now checks for normalized duplicate references, creates a unique index on `lower(btrim(reference))`, prohibits blank references at DB level, and aligns the allowed asset types.
 - The SQLAlchemy model now matches these constraints and a schema test protects the normalized index and nonblank constraint.
 - **Important:** migration 0020 fails safely if existing normalized duplicates are found. Resolve these records through a reviewed data-cleanup process before upgrading; do not automatically rewrite inventory references.
+
+- Migration 0020 downgrade also fails safely if `cloud_resource` assets exist, because the previous check constraint did not permit that type. The records must be migrated deliberately before downgrade.
