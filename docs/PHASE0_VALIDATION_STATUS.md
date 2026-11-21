@@ -28,7 +28,7 @@ penetration-test report, or runtime integration validation.
 
 ## Required before merge
 
-- [x] Check latest CI status against current head SHA `60cd208` (Backend checks succeeded).
+- [ ] Check latest CI status against current head SHA `b5acda0` (runs pending).
 - [ ] Run a clean Docker build.
 - [ ] Start the stack against a fresh PostgreSQL database.
 - [ ] Validate Alembic baseline strategy against both fresh and existing databases.
@@ -105,3 +105,13 @@ Repository/static hardening is substantially progressed, but the remaining gates
 - API response interceptor excludes `/auth/logout` from automatic refresh handling to prevent logout requests triggering refresh recursion.
 - **Deployment note:** refresh tokens issued before the persisted-session migration will not have session rows and will be rejected by the new refresh endpoint. Plan a forced re-authentication on rollout; do not attempt insecure fallback to stateless refresh.
 - Latest code HEAD: `af1d52a093b0a28c5ca741252d4287b23483a848`; CI for this exact HEAD is pending.
+
+
+### Current checkpoint — 2026-11-21 (refresh-session hardening)
+
+- HEAD: `b5acda0f2476220a6ffce32457873c85990063db`.
+- CI success observed on `f732ebc` (Backend checks); runs for later commits `dd980f8`, `d601d6f`, `44739ee`, `4f7c6a0`, and current HEAD are pending/in progress.
+- Password change now revokes all existing active refresh sessions before issuing the new session.
+- Refresh-policy denial now revokes active sessions before returning the denial.
+- Frontend refresh-queue bug fixed: undefined `reject` reference removed from the queued request promise.
+- Current implementation still requires runtime PostgreSQL integration tests, frontend build, and review of cross-tab refresh behavior.
