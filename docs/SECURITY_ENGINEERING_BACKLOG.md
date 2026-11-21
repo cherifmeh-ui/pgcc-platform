@@ -127,3 +127,11 @@ Status: active engineering review. This is a static review backlog, not a securi
 - Implement a persistent session/token-family model before claiming rotation or reuse detection. Store only a cryptographic hash of refresh tokens (or token identifiers), enforce one-time rotation transactionally, revoke the token family on reuse, and provide revocation on password change, account disable, role change, and logout.
 - Do not add a logout endpoint that only deletes client-side tokens and imply server-side revocation; it must revoke the server-side session.
 - Existing password_changed_at invalidates tokens issued before the password change; preserve this behavior and test timezone/iat boundary conditions.
+
+
+## Frontend session storage review (2026-11-21)
+
+- Access and refresh JWTs are persisted in browser localStorage (`pgcc_access_token`, `pgcc_refresh_token`). Any successful script injection/XSS can read and exfiltrate them. This confirms the existing backlog item to migrate to HttpOnly, Secure, SameSite cookies with CSRF protection and a short access-token lifetime.
+- Frontend refresh queue serializes concurrent 401 requests, but the backend currently does not persist refresh-token rotation; queued retry behavior does not provide theft/reuse detection or revocation.
+- Client logout only removes local storage; it cannot revoke an already issued token server-side. Implement server-backed session revocation as part of the session model, not as a client-only logout.
+- Avoid persisting role/permission values as authoritative security decisions. Backend RBAC must remain the enforcement point; client-side permission data is UI-only.
