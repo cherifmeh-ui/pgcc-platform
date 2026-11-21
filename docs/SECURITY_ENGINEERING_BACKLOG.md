@@ -1,3 +1,11 @@
+## Action effectiveness verification (implemented)
+- Completed actions can now receive an effectiveness verification record.
+- Verification outcome: Effective, Ineffective, or Follow-up required.
+- Verification requires observations and may reference a source document.
+- Only completed actions can be verified; the API rejects verification before completion.
+- Verification history is retained and audit-logged.
+- Follow-up: if outcome is Ineffective or Follow-up required, create or link a new corrective action; add an explicit reopen/recurrence workflow.
+
 # PGCC Platform — Security & Engineering Backlog
 
 Status: active engineering review. This is a static review backlog, not a security certification.
