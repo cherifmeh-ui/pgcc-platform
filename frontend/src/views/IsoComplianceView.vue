@@ -26,6 +26,10 @@
           <strong>{{ matrixData?.average_maturity ?? '—' }}/5</strong>
           <span>Maturité moyenne</span>
         </div>
+        <div class="compliance-kpi-card">
+          <strong>{{ matrixData?.maturity_score ?? '—' }}%</strong>
+          <span>Score de maturité évaluée</span>
+        </div>
       </div>
     </div>
 
