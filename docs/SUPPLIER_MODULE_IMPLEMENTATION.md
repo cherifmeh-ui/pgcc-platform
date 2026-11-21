@@ -90,3 +90,19 @@ Contrats et pièces justificatives, évaluations versionnées, accès tiers et r
 - Les autorisations `read_assets` et `manage_assets` restent dans le périmètre RBAC `suppliers`; elles ne sont pas dupliquées dans le module `assets`.
 - La gestion et la terminaison logique restent réservées à Admin; les profils Auditor peuvent consulter; Executive ne reçoit pas l'accès détaillé aux liens.
 - Les écrans existants de Cartographie, fournisseurs, risques et dépendances sont conservés; les nouvelles sections sont conditionnées par les permissions dédiées.
+
+
+### Tranche 6 — Cycle de vie des autorisations d'accès fournisseurs
+
+Une relation fournisseur–actif ne constitue pas une autorisation. Le modèle `supplier_access_requests` porte une décision d'accès interne distincte, nominative et limitée dans le temps.
+
+- Demande interne : justification, périmètre, niveau Standard/Privilégié, accès aux données, dates de début/fin et prochaine revue.
+- Éligibilité : fournisseur approuvé ou approuvé sous conditions, relation fournisseur–actif active, actif non retiré/décommissionné et demande non rétroactive.
+- Décision : approbation ou refus avec commentaire obligatoire; le demandeur ne peut pas approuver sa propre demande.
+- Révocation : réservée à Admin, motif obligatoire, auteur et horodatage conservés.
+- Expiration : clôture explicite par Admin après la date de fin; l'identité et la date de décision initiale sont conservées.
+- Unicité : index PostgreSQL partiel garantissant au plus une demande/autorisation ouverte par relation fournisseur–actif, y compris en cas de concurrence.
+- Consultation : Admin et Auditor; demande, décision, révocation et expiration réservées à Admin.
+- Journalisation : création, décision, révocation et expiration sont inscrites dans le journal de sécurité.
+- L'autorisation est une preuve de gouvernance; elle ne provisionne ni ne désactive techniquement un compte dans les systèmes cibles. La révocation doit être suivie de l'action technique correspondante et de sa vérification.
+- Les dates de revue sont enregistrées; les rappels automatiques et la synchronisation avec IAM/PAM restent des étapes ultérieures.
