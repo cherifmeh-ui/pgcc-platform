@@ -131,3 +131,17 @@ Une relation fournisseur–actif ne constitue pas une autorisation. Le modèle `
 - API : GET/POST `/{supplier_id}/access-requests/{access_request_id}/reviews`.
 - Migration additive `0017_supplier_access_reviews`; aucune modification destructive des données historiques.
 - La revue est une décision de gouvernance. La désactivation ou l'ajustement technique des comptes fournisseurs doit être exécuté et vérifié dans les systèmes cibles.
+
+
+## Tranche 9 — Liaison des dépendances fournisseurs au registre des risques
+
+- Nouvelle association relationnelle `supplier_risk_links` entre un fournisseur et un risque existant.
+- Unicité fournisseur/risque pour éviter les doublons; les actifs restent liés directement au même risque via `asset_risk_links`.
+- Typologie contrôlée : dépendance opérationnelle, hébergement, maintenance, accès aux données, accès privilégié, sous-traitance, autre.
+- Contexte métier obligatoire et traçabilité du créateur.
+- FK RESTRICT vers fournisseur, risque et utilisateur : pas de suppression en cascade de données de gouvernance.
+- API GET/POST `/{supplier_id}/risks`.
+- Contrôle croisé des permissions : lecture fournisseur + lecture risque; création/gestion réservée à Admin avec `suppliers:manage_risks` et `risks:update`.
+- Association non destructive : aucune suppression de risque ni de fournisseur via ce lien.
+- Migration additive `0018_supplier_risk_links`.
+- Le score du risque existant n'est pas recalculé automatiquement à partir du score fournisseur : toute réévaluation demeure une décision d'analyse de risque documentée.
