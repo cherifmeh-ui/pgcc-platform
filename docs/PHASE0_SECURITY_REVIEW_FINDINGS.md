@@ -83,3 +83,9 @@ Do not close Phase 0 until evidence is attached for:
 - PostgreSQL image uses the floating `ankane/pgvector:latest` tag; pin a tested version/digest for reproducibility.
 - Backend and frontend are development-oriented: hot-reload mounts, `ENVIRONMENT: development`, frontend `npm install` on startup, and direct published ports. A production profile should use immutable builds, lockfile-driven install, non-root runtime, secrets management, reverse proxy/TLS, restrictive network exposure, and health checks for backend/frontend.
 - No Docker Compose runtime test has been executed in this review.
+
+
+## Refresh session schema alignment
+
+- Migration 0021 defines a database-side default for `created_at` (`now()`). The ORM model previously only had a Python-side default; it has now been aligned with `server_default=func.now()` so direct SQL inserts and ORM metadata agree.
+- Added a model test asserting the server default exists. PostgreSQL integration migration/test is pending CI.
