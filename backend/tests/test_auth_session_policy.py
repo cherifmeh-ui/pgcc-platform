@@ -64,3 +64,15 @@ def test_refresh_allowed_for_privileged_role_with_mfa():
         password_changed_at=None,
         token_issued_at=101,
     ) is None
+
+
+def test_refresh_denied_when_issued_at_claim_missing():
+    assert refresh_denial_reason(
+        is_active=True,
+        is_locked=False,
+        must_change_password=False,
+        role="viewer",
+        mfa_enabled=False,
+        password_changed_at=None,
+        token_issued_at=None,
+    ) == "Refresh token invalide."
