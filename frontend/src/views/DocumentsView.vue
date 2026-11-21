@@ -314,10 +314,22 @@ async function deleteDoc(id) {
   }
 }
 
-function downloadDoc(doc) {
-  // Si tu stockes le blob en base, tu peux générer un lien temporaire ou utiliser fetch
-  // Pour MVP, on affiche juste une info car le téléchargement direct nécessite un endpoint GET spécifique renvoyant StreamResponse
-  alert(`Le téléchargement de "${doc.filename}" sera activé dès que l'endpoint GET /documents/{id}/download sera codé.`);
+async function downloadDoc(doc) {
+  try {
+    const response = await apiClient.get(`/documents/${doc.id}/download`, {
+      responseType: 'blob',
+    });
+    const objectUrl = URL.createObjectURL(response.data);
+    const link = document.createElement('a');
+    link.href = objectUrl;
+    link.download = doc.filename || 'document';
+    document.body.appendChild(link);
+    link.click();
+    link.remove();
+    window.setTimeout(() => URL.revokeObjectURL(objectUrl), 1000);
+  } catch (err) {
+    showMessage(err.response?.data?.detail || "Téléchargement du document impossible.", "error");
+  }
 }
 
 onMounted(loadDocuments);
