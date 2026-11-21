@@ -363,3 +363,10 @@ The initial code-level review found that DOCX extraction joined paragraphs/table
 - The Axios refresh queue had a `.catch(reject)` callback referring to an undefined identifier, which could produce a secondary ReferenceError when a queued request failed.
 - Removed the redundant catch so queued promises correctly propagate the refresh failure.
 - CI/build validation for the fix is pending.
+
+
+### 28. Frontend logout store reset order
+
+- Auth store previously reset Pinia state before clearing localStorage; its state initializer could therefore reload the stale tokens into memory.
+- Logout now clears persisted credential keys first, then resets the store, preventing credential resurrection in memory.
+- Current-head frontend CI/build validation remains pending.
