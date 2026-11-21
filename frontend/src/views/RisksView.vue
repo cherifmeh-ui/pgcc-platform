@@ -191,6 +191,7 @@ import AiAssistantPanel from '@/components/AiAssistantPanel.vue';
 import ActionsPanel from '@/components/ActionsPanel.vue'; // ✅ IMPORT CRUCIAL POUR LE PAC
 
 const authStore = useAuthStore();
+const canReadAssets = computed(() => authStore.canAccessModule('assets', 'read'));
 
 // --- État Local UI ---
 const risks = ref([]);
