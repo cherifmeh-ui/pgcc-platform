@@ -266,3 +266,9 @@ The initial code-level review found that DOCX extraction joined paragraphs/table
 - Assessment validation and supplier access-request decisions now lock the target row with `SELECT ... FOR UPDATE` before checking its current lifecycle state.
 - This prevents concurrent validators/approvers from both acting on the same pending record based on stale state.
 - PostgreSQL-backed concurrency tests remain required to prove transaction behavior under simultaneous requests.
+
+### 17. RBAC endpoint/matrix consistency
+
+- Added a regression test that scans backend endpoint source files for literal `require_permission(module, action)` declarations and verifies every pair exists in the centralized `PERMISSIONS` matrix.
+- This catches endpoints using an undeclared module/action that would otherwise fail closed unexpectedly.
+- This is a consistency check, not a complete authorization proof: role-level behavior and routes protected by other mechanisms still require separate tests.
