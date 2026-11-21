@@ -59,6 +59,7 @@
             <td>{{ formatDate(doc.created_at) }}</td>
             <td class="actions-cell">
               <!-- Bouton Télécharger -->
+              <button @click="previewDoc(doc)" class="action-btn" title="Prévisualiser">👁️</button>
               <button @click="downloadDoc(doc)" class="action-btn dl" title="Télécharger">⬇️</button>
               <button v-if="canUpdate && !doc.is_indexed" @click="indexDoc(doc)" :disabled="indexingId === doc.id" class="action-btn" title="Indexer pour l’Assistant IA">{{ indexingId === doc.id ? "⏳" : "🧠" }}</button>
               <!-- Bouton Supprimer -->
@@ -70,6 +71,19 @@
       </table>
     </div>
 
+    <Teleport to="body">
+      <div v-if="previewOpen" class="modal-overlay" @click.self="previewOpen = false">
+        <div class="preview-modal-card">
+          <div class="modal-header">
+            <div><h2>{{ previewData?.title || "Prévisualisation" }}</h2><small>{{ previewData?.filename }} · {{ previewData?.version || "Sans version" }}</small></div>
+            <button @click="previewOpen = false" class="close-btn" aria-label="Fermer">×</button>
+          </div>
+          <div v-if="previewLoading" class="loading-state">Chargement du contenu…</div>
+          <pre v-else class="preview-content">{{ previewData?.preview || "Aucun texte extrait." }}</pre>
+          <p v-if="previewData?.truncated" class="preview-warning">La prévisualisation est limitée à 20 000 caractères.</p>
+        </div>
+      </div>
+    </Teleport>
     <!-- Loading State -->
     <div v-if="loading" class="loading-state card-modern">Chargement de la bibliothèque...</div>
 
@@ -200,6 +214,9 @@ const canCreate = computed(() => authStore.canAccessModule('documents', 'create'
 const canDelete = computed(() => authStore.canAccessModule('documents', 'delete'));
 const canUpdate = computed(() => authStore.canAccessModule('documents', 'update'));
 const indexingId = ref(null);
+const previewOpen = ref(false);
+const previewLoading = ref(false);
+const previewData = ref(null);
 
 // Helpers UI
 function normalizeType(type) {
@@ -331,6 +348,21 @@ async function handleUpload() {
   }
 }
 
+async function previewDoc(doc) {
+  previewOpen.value = true;
+  previewLoading.value = true;
+  previewData.value = null;
+  try {
+    const response = await apiClient.get("/documents/" + doc.id + "/preview");
+    previewData.value = response.data;
+  } catch (err) {
+    previewOpen.value = false;
+    showMessage(err.response?.data?.detail || "Prévisualisation impossible.", "error");
+  } finally {
+    previewLoading.value = false;
+  }
+}
+
 async function indexDoc(doc) {
   indexingId.value = doc.id;
   try {
@@ -438,6 +470,9 @@ h1 { color: #0f172a; font-size: 1.8rem; margin-bottom: 0.25rem; }
 /* Modal Upload Styles */
 .modal-overlay { position: fixed; inset: 0; background: rgba(15, 23, 42, 0.6); backdrop-filter: blur(4px); z-index: 2000; display: flex; justify-content: center; align-items: center; }
 .upload-modal-card { background: white; width: 90%; max-width: 600px; border-radius: 16px; box-shadow: 0 25px 50px -12px rgba(0, 0, 0, 0.25); overflow: hidden; animation: slideUp 0.3s ease-out; }
+ .preview-modal-card { background: white; width: min(92vw, 1000px); max-height: 90vh; border-radius: 16px; overflow: hidden; display: flex; flex-direction: column; box-shadow: 0 25px 50px -12px rgba(0,0,0,.25); }
+.preview-content { overflow: auto; padding: 1.5rem; white-space: pre-wrap; word-break: break-word; font: inherit; line-height: 1.6; color: #334155; }
+.preview-warning { padding: 0 1.5rem 1rem; color: #92400e; }
 @keyframes slideUp { from { transform: translateY(20px); opacity: 0; } to { transform: translateY(0); opacity: 1; } }
 .modal-header { padding: 1.5rem 2rem; border-bottom: 1px solid #f1f5f9; display: flex; justify-content: space-between; align-items: center; background: #f8fafc; }
 .modal-header h2 { margin: 0; font-size: 1.25rem; color: #0f172a; }
