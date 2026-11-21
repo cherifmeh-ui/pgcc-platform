@@ -234,7 +234,6 @@ class SupplierRiskLink(Base):
     __table_args__ = (
         CheckConstraint("relationship_type IN ('Dépendance opérationnelle', 'Hébergement', 'Maintenance', 'Accès aux données', 'Accès privilégié', 'Sous-traitance', 'Autre')", name="ck_supplier_risk_links_type"),
         UniqueConstraint("supplier_id", "risk_id", name="uq_supplier_risk_link"),
-        Index("ix_supplier_risk_links_risk", "risk_id"),
     )
     id = Column(PG_UUID(as_uuid=True), primary_key=True, default=uuid4)
     supplier_id = Column(PG_UUID(as_uuid=True), ForeignKey("suppliers.id", ondelete="RESTRICT"), nullable=False, index=True)
