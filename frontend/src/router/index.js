@@ -7,6 +7,7 @@ import LoginView from '@/views/LoginView.vue';
 import DashboardView from '@/views/DashboardView.vue';
 import RisksView from '@/views/RisksView.vue';
 import AppsView from '@/views/AppsView.vue';
+import AssetsView from '@/views/AssetsView.vue';
 import IsoComplianceView from '@/views/IsoComplianceView.vue';
 import DocumentsView from '@/views/DocumentsView.vue'; // ⬅️ NOUVELLE VUE BIBLIOTHÈQUE
 import NotFoundView from '@/views/NotFoundView.vue';
@@ -49,6 +50,13 @@ const routes = [
         name: 'AppsInventory', 
         component: AppsView, 
         meta: { requiresAuth: true, module: 'apps', action: 'read' } 
+      },
+      
+      { 
+        path: 'assets', 
+        name: 'AssetsInventory', 
+        component: AssetsView, 
+        meta: { requiresAuth: true, module: 'assets', action: 'read' } 
       },
       
       { 
