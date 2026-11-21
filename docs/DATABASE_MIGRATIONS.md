@@ -40,3 +40,7 @@ These checks **do not validate actual PostgreSQL schema creation or upgrade beha
 - backup/restore and recovery rehearsal.
 
 The baseline uses `Base.metadata.create_all()` and is transitional. Before production, replace it with a reviewed, deterministic schema baseline or keep the transitional approach only with documented schema equivalence checks and controlled model imports.
+
+## pgvector initialization
+
+The initial schema uses the PostgreSQL `vector` type for document embeddings. The baseline migration and development startup now execute `CREATE EXTENSION IF NOT EXISTS vector` before creating metadata tables. The database image must include pgvector, and the database role must have permission to create the extension (or it must be provisioned by an administrator). Verify this in the disposable PostgreSQL migration run.
