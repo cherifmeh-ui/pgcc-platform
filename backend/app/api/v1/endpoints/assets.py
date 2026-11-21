@@ -1,5 +1,5 @@
 """Asset inventory and dependency graph API."""
-from datetime import datetime, timezone
+from datetime import datetime, timedelta, timezone
 from typing import Literal
 from uuid import UUID
 
@@ -287,7 +287,7 @@ async def get_asset_inventory_quality(
     missing_direction = sum(not (asset.direction or "").strip() for asset in assets)
     now = datetime.now(timezone.utc)
     overdue_support = sum(asset.end_of_support_date is not None and asset.end_of_support_date < now for asset in assets)
-    support_ending_90_days = sum(asset.end_of_support_date is not None and now <= asset.end_of_support_date <= now + __import__('datetime').timedelta(days=90) for asset in assets)
+    support_ending_90_days = sum(asset.end_of_support_date is not None and now <= asset.end_of_support_date <= now + timedelta(days=90) for asset in assets)
     return {
         "total_active": total,
         "missing_owner": missing_owner,
