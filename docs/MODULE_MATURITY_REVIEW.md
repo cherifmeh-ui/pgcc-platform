@@ -298,3 +298,5 @@ The initial code-level review found that DOCX extraction joined paragraphs/table
 - CI validation of these backend/frontend changes is pending.
 
 - CI caught two implementation/test defects in this workflow (missing test import and Vue form closing tag); both were corrected in follow-up commits. Final combined CI evidence is pending.
+
+- Added endpoint-level unit tests for the forced password-change response after MFA, including the initial enrollment path and one-time recovery-code delivery.
