@@ -135,3 +135,10 @@ Status: active engineering review. This is a static review backlog, not a securi
 - Frontend refresh queue serializes concurrent 401 requests, but the backend currently does not persist refresh-token rotation; queued retry behavior does not provide theft/reuse detection or revocation.
 - Client logout only removes local storage; it cannot revoke an already issued token server-side. Implement server-backed session revocation as part of the session model, not as a client-only logout.
 - Avoid persisting role/permission values as authoritative security decisions. Backend RBAC must remain the enforcement point; client-side permission data is UI-only.
+
+
+## Deployment and public health endpoint review (2026-11-21)
+
+- The public `/health` response reports environment name, AI-enabled state, database connectivity, service phase, and version. Consider separating a minimal liveness endpoint from an authenticated or network-restricted readiness/diagnostics endpoint; public health should expose only the minimum needed by the load balancer.
+- Production CORS must be explicitly configured to the deployed frontend origin(s). The current defaults are localhost development origins; validate deployment configuration rather than relying on defaults.
+- Security headers, trusted-host validation, and reverse-proxy trust configuration remain unimplemented. Do not enable forwarded-header trust globally without a defined trusted proxy boundary.
