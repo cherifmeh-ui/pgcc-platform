@@ -95,6 +95,14 @@ async def create_action(
     if data.status != ActionStatus.TODO:
         raise HTTPException(status_code=422, detail="Une action doit être créée au statut 'À faire'. Les transitions sont réalisées après création.")
 
+    # Validate assigned user if provided.
+    if data.assigned_to:
+        assignee_result = await db.execute(
+            select(User.id).where(User.email == data.assigned_to, User.is_active.is_(True))
+        )
+        if assignee_result.scalar_one_or_none() is None:
+            raise HTTPException(status_code=400, detail="Le responsable doit correspondre à un utilisateur actif.")
+
     # 2. Créer l'action
     action_dict = data.model_dump(exclude={"risk_id"})
     action = ActionItem(**action_dict, risk_id=data.risk_id)
@@ -134,6 +142,13 @@ async def update_action(
             validate_action_transition(action.status, effective_status)
         except ValueError as exc:
             raise HTTPException(status_code=409, detail=str(exc)) from exc
+
+    if "assigned_to" in update_data and update_data["assigned_to"]:
+        assignee_result = await db.execute(
+            select(User.id).where(User.email == update_data["assigned_to"], User.is_active.is_(True))
+        )
+        if assignee_result.scalar_one_or_none() is None:
+            raise HTTPException(status_code=400, detail="Le responsable doit correspondre à un utilisateur actif.")
 
     # Mise à jour partielle (exclude_unset évite d'écraser avec None)
     for key, value in update_data.items():
