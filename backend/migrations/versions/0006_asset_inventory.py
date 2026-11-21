@@ -54,7 +54,7 @@ def upgrade() -> None:
             name="ck_assets_asset_type",
         ),
         sa.CheckConstraint(
-            "criticality IN ('Faible', 'Moyenne', 'Élevée', 'Critique)",
+            "criticality IN ('Faible', 'Moyenne', 'Élevée', 'Critique')",
             name="ck_assets_criticality",
         ),
         sa.CheckConstraint(
