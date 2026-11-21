@@ -260,3 +260,9 @@ The initial code-level review found that DOCX extraction joined paragraphs/table
 - The new assessment-validation regression tests initially failed due to malformed UUID fixture strings (four hyphen-separated groups instead of the canonical five).
 - Corrected the fixtures. This was a test-data defect, not an application defect.
 - A new CI run is required to verify the fix.
+
+### 16. Concurrent TPRM decisions
+
+- Assessment validation and supplier access-request decisions now lock the target row with `SELECT ... FOR UPDATE` before checking its current lifecycle state.
+- This prevents concurrent validators/approvers from both acting on the same pending record based on stale state.
+- PostgreSQL-backed concurrency tests remain required to prove transaction behavior under simultaneous requests.
