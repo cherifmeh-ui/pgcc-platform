@@ -100,8 +100,13 @@ async def upload_document(
     db.add(new_doc)
     await db.commit()
     await db.refresh(new_doc)
+    await log_action(
+        user_email=current_user.email, action="UPLOAD", resource="documents",
+        resource_id=str(new_doc.id), details=f"Document uploaded: {safe_filename}",
+        event_type="DOCUMENT", request=request,
+    )
     
-    # ✅ CONSTRUCTION MANUELLE DE LA RÉPONSE POUR ÉVITER LES BUGS PYDANTIC
+    # CONSTRUCTION MANUELLE DE LA RÉPONSE POUR ÉVITER LES BUGS PYDANTIC
     return {
         "id": str(new_doc.id),
         "title": new_doc.title,
