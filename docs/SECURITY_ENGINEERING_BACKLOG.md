@@ -87,3 +87,12 @@ Status: active engineering review. This is a static review backlog, not a securi
 4. No production credentials in repository or logs.
 5. Do not claim compliance or security certification based solely on automated checks.
 6. Merge only after CI is green and the change is reviewed.
+
+
+## Document and RAG security review (current prototype)
+
+- Document RBAC is currently role-level: all users granted `documents:read` can see the full document listing. There is no document classification or per-document ACL, so sensitive-document segregation is not implemented.
+- The advanced AI context endpoint retrieves up to three documents by PSSI type or substring match on document text. It is not vector-relevance retrieval and may include irrelevant PSSI documents. Retrieved text is framed as untrusted prompt data, but prompt injection cannot be fully prevented by prompting alone.
+- RAG indexing is synchronous and resource-consuming. A hard limit of 2,000 chunks per document is now enforced before embedding generation. Long-running indexing should move to a queue with status tracking, rate limits, and retry controls.
+- Upload validation covers PDF/DOCX signatures and parser/ZIP constraints, but production should additionally use malware scanning, quarantine, storage isolation, and document classification/approval.
+- No download endpoint currently exposes file bytes; if one is added, it must use the same RBAC checks, safe content disposition, and no public/static file path.
