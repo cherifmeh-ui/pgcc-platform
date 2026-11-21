@@ -111,3 +111,10 @@ Status: active engineering review. This is a static review backlog, not a securi
 - No download endpoint currently exposes file bytes; if one is added, it must use the same RBAC checks, safe content disposition, and no public/static file path.
 
 - [x] Document indexing endpoint now returns HTTP 200 because indexing is synchronous in the current implementation; HTTP 202 is reserved for future queued processing.
+
+## Additional review findings (2026-11-21)
+
+- `ActionItem.risk_id` and the `Risk.actions` relationship currently use cascading deletion. The API blocks deleting risks that have actions, but direct database deletion or another code path can still cascade-delete action history. Change this to `RESTRICT`/`NO ACTION` in a dedicated migration after validating existing data; do not change ORM metadata alone.
+- Action assignee validation currently matches active users by email, but `assigned_to` remains a free-text column. Plan a migration to replace or supplement it with a foreign key to `users.id` and retain a display field only if needed.
+- Compliance matrix counters use names `partial_count` and `uncovered_count`, while the underlying statuses are `À vérifier` and `Non évalué`. This is declarative indicator logic, not a verified compliance assessment; rename/clarify counters and add tests before exposing a compliance percentage as a KPI.
+- Document indexing is synchronous. Its endpoint returns HTTP 200; the service still needs a background-job architecture before returning 202.
