@@ -223,3 +223,5 @@ The initial code-level review found that DOCX extraction joined paragraphs/table
 - Additional safeguard: new supplier-asset relationships are blocked when the supplier is `Suspendu` or `Terminé` (HTTP 409). Existing relationships remain available for explicit termination and historical review.
 
 - Supplier-asset link termination now refuses to close a relationship while any associated access request remains `Demandé`, `Approuvé`, or `Suspendu`; the access workflow must be explicitly revoked/closed first. Regression test added.
+
+- Supplier status changes to `Suspendu` or `Terminé` now require active supplier-asset links to be terminated and open access requests/approvals to be revoked or closed first. This prevents status-only suspension from leaving access approvals active; a regression test covers the open-request case.
