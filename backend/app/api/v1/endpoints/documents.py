@@ -259,3 +259,35 @@ async def download_document(
         media_type=doc.mime_type or "application/octet-stream",
         headers={"Content-Disposition": f'attachment; filename="{filename}"'},
     )
+
+
+
+@router.get("/{doc_id}/preview")
+async def preview_document(
+    doc_id: str,
+    db: AsyncSession = Depends(get_db),
+    current_user: User = require_permission("documents", "read"),
+):
+    """Return a bounded preview of extracted document text."""
+    try:
+        uid = uuid.UUID(doc_id)
+    except ValueError:
+        raise HTTPException(status_code=400, detail="ID invalide")
+
+    result = await db.execute(select(Document).where(Document.id == uid))
+    doc = result.scalar_one_or_none()
+    if not doc:
+        raise HTTPException(status_code=404, detail="Document introuvable")
+
+    text_content = doc.content_text or ""
+    preview_limit = 20_000
+    return {
+        "id": str(doc.id),
+        "title": doc.title,
+        "filename": doc.filename,
+        "doc_type": doc.doc_type,
+        "version": doc.version,
+        "author": doc.author,
+        "preview": text_content[:preview_limit],
+        "truncated": len(text_content) > preview_limit,
+    }
