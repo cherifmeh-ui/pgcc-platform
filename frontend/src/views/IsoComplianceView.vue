@@ -222,6 +222,7 @@
                 <button v-if="evidence.verification_status !== 'Verified'" class="secondary-action-btn" @click="verifyEvidence(evidence.id, 'Verified')">Valider</button>
                 <button v-if="evidence.verification_status !== 'Rejected'" class="secondary-action-btn" @click="verifyEvidence(evidence.id, 'Rejected')">Rejeter</button>
                 <button v-if="evidence.verification_status !== 'Pending'" class="secondary-action-btn" @click="verifyEvidence(evidence.id, 'Pending')">Réinitialiser</button>
+                <button class="secondary-action-btn danger" @click="removeEvidence(evidence.id)">Retirer la preuve</button>
               </div>
             </article>
           </section>
@@ -422,6 +423,16 @@ async function verifyEvidence(id, verification_status) {
     evidenceError.value = error.response?.data?.detail || "Impossible de modifier le statut de vérification.";
   }
 }
+async function removeEvidence(evidenceId) {
+  if (!window.confirm('Retirer cette association de preuve du contrôle ISO ? Le document source ne sera pas supprimé.')) return;
+  evidenceError.value = '';
+  try {
+    await apiClient.delete(`/compliance/evidence/${evidenceId}`);
+    await loadEvidence(selectedControl.value.ref_code);
+  } catch (error) {
+    evidenceError.value = error.response?.data?.detail || "Impossible de retirer cette preuve.";
+  }
+}
 async function downloadEvidenceDocument(documentId) {
   try {
     const response = await apiClient.get(`/documents/${documentId}/download`, { responseType: 'blob' });
@@ -609,6 +620,7 @@ onMounted(fetchMatrix);
 .evidence-status.rejected { background:#fee2e2; color:#991b1b; }
 .expired-warning { color:#b91c1c; font-weight:700; }
 .evidence-hash { font-size:.75rem; word-break:break-all; color:#64748b; }
+.evidence-actions .danger { color:#b91c1c; border-color:#fecaca; background:#fff1f2; }
 .evidence-actions { display:flex; gap:.5rem; flex-wrap:wrap; }
 .assessment-modal { max-height:90vh; overflow-y:auto; width:min(760px,95vw); }
 .assessment-form { display:grid; gap:.8rem; }
