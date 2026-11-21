@@ -336,3 +336,14 @@ async def test_supplier_archive_is_blocked_when_open_access_requests_exist():
     assert getattr(exc.value, "status_code", None) == 409
     assert "demandes d'accès" in exc.value.detail
     db.commit.assert_not_awaited()
+
+def test_supplier_asset_link_eligibility_blocks_suspended_and_terminated():
+    from app.api.v1.endpoints.suppliers import _supplier_allows_new_asset_link
+    assert not _supplier_allows_new_asset_link("Suspendu")
+    assert not _supplier_allows_new_asset_link("Terminé")
+
+
+def test_supplier_asset_link_eligibility_allows_other_statuses():
+    from app.api.v1.endpoints.suppliers import _supplier_allows_new_asset_link
+    for status in ("À qualifier", "En évaluation", "Approuvé", "Approuvé sous conditions"):
+        assert _supplier_allows_new_asset_link(status)
