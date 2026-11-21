@@ -20,7 +20,7 @@ def upgrade() -> None:
     # This baseline intentionally delegates table creation to SQLAlchemy metadata
     # so that model definitions remain the single schema source at this stage.
     from app.core.database import Base
-    from app.models import action_item, application, document, document_chunk, entity_link, iso_control, risk, security_log, user  # noqa: F401
+    from app.models import action_item, application, document, document_chunk, entity_link, iso_control, iso_control_assessment, risk, security_log, user  # noqa: F401
 
     bind = op.get_bind()
     Base.metadata.create_all(bind=bind)
