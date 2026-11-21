@@ -41,6 +41,8 @@ async def list_risks(
             status=risk.status,
             treatment_plan=risk.treatment_plan,
             created_at=risk.created_at.isoformat() if risk.created_at else None,
+        updated_at=risk.updated_at.isoformat() if risk.updated_at else None,
+            updated_at=risk.updated_at.isoformat() if risk.updated_at else None,
         )
         for risk in risks
     ]
@@ -96,6 +98,7 @@ async def create_risk(
         status=new_risk.status,
         treatment_plan=new_risk.treatment_plan,
         created_at=new_risk.created_at.isoformat() if new_risk.created_at else None,
+        updated_at=new_risk.updated_at.isoformat() if new_risk.updated_at else None,
     )
 
 
