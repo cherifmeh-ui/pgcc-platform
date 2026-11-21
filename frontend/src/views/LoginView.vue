@@ -124,7 +124,11 @@
           {{ isLoading ? 'Modification...' : 'Changer le mot de passe et continuer' }}
         </button>
         <p v-if="errorMessage" class="error-msg">{{ errorMessage }}</p>
-      </div>
+      </form>
+    </div>
+  </div>
+</template>
+
 <script setup>
 import { ref, onMounted } from 'vue';
 import { useRouter, useRoute } from 'vue-router';
