@@ -157,3 +157,11 @@ Repository/static hardening is substantially progressed, but the remaining gates
 - CI succeeded on `0d09755` after correcting the missing-exp test to expect the HTTP 401 validation response.
 - Runs for current HEAD are in progress.
 - Refresh-session persistence now rejects missing/non-numeric/boolean `exp` claims; regression tests cover these values.
+
+
+### Latest auth concurrency review
+
+- Refresh and password-change paths now lock the user row before session changes; static regression test added.
+- Cross-tab frontend refresh coordination remains an identified residual: tabs may race a single-use refresh token and trigger replay revocation. Documented for resolution before Phase 0 auth closure.
+- Current HEAD: `e48998ca25c9c0d317366e21beb55a479af8ff1`.
+- CI for commits `16627da`, `d040494`, and latest documentation commit is pending/in progress; most recent completed run on `c970fab` succeeded.
