@@ -1,7 +1,6 @@
 """Add traceable, time-bound supplier access requests."""
 from alembic import op
 import sqlalchemy as sa
-import sqlalchemy as sa
 from sqlalchemy.dialects import postgresql
 
 revision = "0016_supplier_access_requests"
@@ -42,12 +41,18 @@ def upgrade() -> None:
             sa.CheckConstraint("review_due_at >= start_date AND review_due_at <= end_date", name="ck_supplier_access_requests_review_window"),
             sa.CheckConstraint("(status = 'Demandé' AND decided_by_id IS NULL AND decided_at IS NULL) OR (status != 'Demandé' AND decided_by_id IS NOT NULL AND decided_at IS NOT NULL)", name="ck_supplier_access_requests_decision_trace"),
         )
-    op.create_index("ix_supplier_access_requests_supplier_id", "supplier_access_requests", ["supplier_id"])
-    op.create_index("ix_supplier_access_requests_supplier_asset_link_id", "supplier_access_requests", ["supplier_asset_link_id"])
-    op.create_index("ix_supplier_access_requests_asset_id", "supplier_access_requests", ["asset_id"])
-    op.create_index("ix_supplier_access_requests_supplier_status", "supplier_access_requests", ["supplier_id", "status", "end_date"])
-    op.create_index("ix_supplier_access_requests_asset_status", "supplier_access_requests", ["asset_id", "status", "end_date"])
-    op.create_index("uq_supplier_access_requests_open_link", "supplier_access_requests", ["supplier_asset_link_id"], unique=True, postgresql_where=sa.text("status IN ('Demandé', 'Approuvé', 'Suspendu')"))
+    if "ix_supplier_access_requests_supplier_id" not in {item["name"] for item in sa.inspect(op.get_bind()).get_indexes("supplier_access_requests")}:
+        op.create_index("ix_supplier_access_requests_supplier_id", "supplier_access_requests", ["supplier_id"])
+    if "ix_supplier_access_requests_supplier_asset_link_id" not in {item["name"] for item in sa.inspect(op.get_bind()).get_indexes("supplier_access_requests")}:
+        op.create_index("ix_supplier_access_requests_supplier_asset_link_id", "supplier_access_requests", ["supplier_asset_link_id"])
+    if "ix_supplier_access_requests_asset_id" not in {item["name"] for item in sa.inspect(op.get_bind()).get_indexes("supplier_access_requests")}:
+        op.create_index("ix_supplier_access_requests_asset_id", "supplier_access_requests", ["asset_id"])
+    if "ix_supplier_access_requests_supplier_status" not in {item["name"] for item in sa.inspect(op.get_bind()).get_indexes("supplier_access_requests")}:
+        op.create_index("ix_supplier_access_requests_supplier_status", "supplier_access_requests", ["supplier_id", "status", "end_date"])
+    if "ix_supplier_access_requests_asset_status" not in {item["name"] for item in sa.inspect(op.get_bind()).get_indexes("supplier_access_requests")}:
+        op.create_index("ix_supplier_access_requests_asset_status", "supplier_access_requests", ["asset_id", "status", "end_date"])
+    if "uq_supplier_access_requests_open_link" not in {item["name"] for item in sa.inspect(op.get_bind()).get_indexes("supplier_access_requests")}:
+        op.create_index("uq_supplier_access_requests_open_link", "supplier_access_requests", ["supplier_asset_link_id"], unique=True, postgresql_where=sa.text("status IN ('Demandé', 'Approuvé', 'Suspendu')"))
 
 
 def downgrade() -> None:
