@@ -300,3 +300,11 @@ The initial code-level review found that DOCX extraction joined paragraphs/table
 - CI caught two implementation/test defects in this workflow (missing test import and Vue form closing tag); both were corrected in follow-up commits. Final combined CI evidence is pending.
 
 - Added endpoint-level unit tests for the forced password-change response after MFA, including the initial enrollment path and one-time recovery-code delivery.
+
+
+### 4. RBAC input normalization
+
+- The permission evaluator now normalizes role, module, and action strings (trim + lowercase) before lookup.
+- Unknown roles/modules/actions remain denied by default.
+- Added focused tests for normalization and explicit deny-by-default behavior.
+- Remaining work: endpoint-level authorization tests for all sensitive routes and ensure no endpoint bypasses the shared dependency.
