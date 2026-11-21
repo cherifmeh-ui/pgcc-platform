@@ -1,9 +1,11 @@
 """Asset inventory and dependency graph API."""
 from datetime import datetime, timedelta, timezone
+import csv
+import io
 from typing import Literal
 from uuid import UUID
 
-from fastapi import APIRouter, Depends, HTTPException, Query, Request, status
+from fastapi import APIRouter, Depends, HTTPException, Query, Request, UploadFile, File, status
 from pydantic import BaseModel, Field
 from sqlalchemy import select
 from sqlalchemy.orm import aliased
@@ -195,6 +197,74 @@ async def _ensure_application_exists(application_id: UUID | None, db: AsyncSessi
     result = await db.execute(select(Application.id).where(Application.id == application_id))
     if result.scalar_one_or_none() is None:
         raise HTTPException(status_code=422, detail="Application associée introuvable")
+
+
+@router.post("/import/preview")
+async def preview_asset_csv_import(
+    file: UploadFile = File(...),
+    db: AsyncSession = Depends(get_db),
+    current_user: User = require_permission("assets", "create"),
+):
+    """Validate a CSV inventory without writing to the database."""
+    if not file.filename or not file.filename.lower().endswith(".csv"):
+        raise HTTPException(status_code=415, detail="Veuillez fournir un fichier CSV")
+    raw = await file.read(1_048_577)
+    if len(raw) > 1_048_576:
+        raise HTTPException(status_code=413, detail="Fichier CSV limité à 1 Mo")
+    try:
+        decoded = raw.decode("utf-8-sig")
+    except UnicodeDecodeError:
+        raise HTTPException(status_code=400, detail="Le fichier doit être encodé en UTF-8")
+    reader = csv.DictReader(io.StringIO(decoded))
+    if not reader.fieldnames:
+        raise HTTPException(status_code=400, detail="CSV vide ou en-tête manquant")
+    allowed = set(AssetFields.model_fields)
+    unknown = [name for name in reader.fieldnames if name and name.strip() not in allowed]
+    if unknown:
+        raise HTTPException(status_code=422, detail=f"Colonnes inconnues : {', '.join(unknown)}")
+    rows = []
+    errors = []
+    seen_refs, seen_hostnames, seen_serials = set(), set(), set()
+    for row_number, raw_row in enumerate(reader, start=2):
+        values = {key.strip(): (value.strip() if isinstance(value, str) else value) for key, value in raw_row.items() if key}
+        if not any(values.values()):
+            continue
+        try:
+            asset = AssetCreate.model_validate(values)
+            normalized = asset.model_dump(mode="json")
+            ref = asset.reference.casefold()
+            hostname = (asset.hostname or "").casefold()
+            serial = (asset.serial_number or "").casefold()
+            if ref in seen_refs:
+                raise ValueError("Référence dupliquée dans le fichier")
+            if hostname and hostname in seen_hostnames:
+                raise ValueError("Hostname dupliqué dans le fichier")
+            if serial and serial in seen_serials:
+                raise ValueError("Numéro de série dupliqué dans le fichier")
+            seen_refs.add(ref)
+            if hostname: seen_hostnames.add(hostname)
+            if serial: seen_serials.add(serial)
+            rows.append({"row": row_number, "data": normalized})
+        except Exception as exc:
+            errors.append({"row": row_number, "error": str(exc)})
+    if rows:
+        refs = [row["data"]["reference"] for row in rows]
+        hostnames = [row["data"]["hostname"] for row in rows if row["data"].get("hostname")]
+        serials = [row["data"]["serial_number"] for row in rows if row["data"].get("serial_number")]
+        existing_result = await db.execute(select(Asset).where(
+            (Asset.reference.in_(refs)) | (Asset.hostname.in_(hostnames)) | (Asset.serial_number.in_(serials))
+        ))
+        existing = existing_result.scalars().all()
+        for row in rows:
+            data = row["data"]
+            conflicts = []
+            for asset in existing:
+                if asset.reference.casefold() == data["reference"].casefold(): conflicts.append("référence déjà existante")
+                if data.get("hostname") and asset.hostname and asset.hostname.casefold() == data["hostname"].casefold(): conflicts.append("hostname déjà existant")
+                if data.get("serial_number") and asset.serial_number and asset.serial_number.casefold() == data["serial_number"].casefold(): conflicts.append("numéro de série déjà existant")
+            if conflicts:
+                errors.append({"row": row["row"], "error": "; ".join(sorted(set(conflicts)))})
+    return {"filename": file.filename, "rows_valid": len(rows) - sum(1 for e in errors if any(r["row"] == e["row"] for r in rows)), "rows_parsed": len(rows), "errors": errors, "preview": rows[:20], "can_import": len(rows) > 0 and not errors}
 
 
 @router.get("/graph")
