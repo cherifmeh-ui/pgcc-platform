@@ -168,3 +168,25 @@ def test_refresh_session_model_is_registered_in_development_create_all():
     main = MIGRATIONS_DIR.parent.parent / "app" / "main.py"
     source = main.read_text(encoding="utf-8")
     assert "refresh_token_session" in source
+
+
+def test_refresh_replay_revocation_is_committed_before_rejection():
+    endpoint = MIGRATIONS_DIR.parent.parent / "app" / "api" / "v1" / "endpoints" / "auth.py"
+    source = endpoint.read_text(encoding="utf-8")
+    refresh = source.split('@router.post("/refresh"', 1)[1].split('@router.post("/logout"', 1)[0]
+    replay = refresh.split("if session.revoked_at is not None:", 1)[1]
+    revocation = replay.split("raise HTTPException", 1)[0]
+    assert "update(RefreshTokenSession)" in revocation
+    assert "revoked_at=now" in revocation
+    assert "await db.commit()" in revocation
+    # Commit must precede the rejection, otherwise the revocation would be rolled back.
+    assert revocation.index("await db.commit()") < replay.index("raise HTTPException")
+
+
+def test_refresh_rotation_locks_user_before_refresh_session():
+    endpoint = MIGRATIONS_DIR.parent.parent / "app" / "api" / "v1" / "endpoints" / "auth.py"
+    source = endpoint.read_text(encoding="utf-8")
+    refresh = source.split('@router.post("/refresh"', 1)[1].split('@router.post("/logout"', 1)[0]
+    user_lock = refresh.index("select(User).where(User.email == email).with_for_update()")
+    session_lock = refresh.index("select(RefreshTokenSession).where(RefreshTokenSession.token_jti_hash == token_hash).with_for_update()")
+    assert user_lock < session_lock
