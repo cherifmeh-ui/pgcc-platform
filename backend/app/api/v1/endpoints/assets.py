@@ -9,6 +9,7 @@ from fastapi import APIRouter, Depends, HTTPException, Query, Request, UploadFil
 from fastapi.responses import Response
 from pydantic import BaseModel, Field, field_validator
 from sqlalchemy import select, func
+from sqlalchemy.exc import IntegrityError
 from sqlalchemy.orm import aliased
 from sqlalchemy.ext.asyncio import AsyncSession
 
@@ -226,6 +227,11 @@ def _relationship_assets_are_active(asset_rows: list[tuple[UUID, datetime | None
         retired_at is None and lifecycle_status not in {"Retiré", "Décommissionné"}
         for _, retired_at, lifecycle_status in asset_rows
     )
+
+
+def _asset_allows_risk_link(lifecycle_status: str, retired_at: datetime | None) -> bool:
+    """Only active, non-retired assets may be newly linked to risks."""
+    return lifecycle_status not in {"Retiré", "Décommissionné"} and retired_at is None
 
 
 async def _ensure_application_exists(application_id: UUID | None, db: AsyncSession) -> None:
@@ -955,8 +961,8 @@ async def link_asset_to_risk(
     asset = asset_result.scalar_one_or_none()
     if asset is None:
         raise HTTPException(status_code=404, detail="Actif introuvable")
-    if asset.retired_at is not None:
-        raise HTTPException(status_code=409, detail="Impossible d'associer un risque à un actif retiré")
+    if not _asset_allows_risk_link(asset.lifecycle_status, asset.retired_at):
+        raise HTTPException(status_code=409, detail="Impossible d'associer un risque à un actif retiré ou décommissionné")
     risk_result = await db.execute(select(Risk).where(Risk.id == data.risk_id))
     risk = risk_result.scalar_one_or_none()
     if risk is None:
@@ -965,7 +971,7 @@ async def link_asset_to_risk(
     db.add(link)
     try:
         await db.commit()
-    except Exception:
+    except IntegrityError:
         await db.rollback()
         raise HTTPException(status_code=409, detail="Association actif/risque déjà existante ou contrainte invalide")
     await db.refresh(link)
