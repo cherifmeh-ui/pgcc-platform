@@ -44,6 +44,8 @@ Le projet suit une architecture moderne, scalable et conteneurisée.
 
 La référence d'architecture pour les évolutions futures est documentée dans :
 
+- [Master Roadmap PGCC — 9 phases](docs/MASTER_ROADMAP.md)
+- [Revue initiale de maturité des modules](docs/MODULE_MATURITY_REVIEW.md)
 - [Architecture cible](docs/ARCHITECTURE_TARGET.md)
 - [Modèle de données cible](docs/TARGET_DATA_MODEL.md)
 - [Interactions entre modules](docs/MODULE_INTERACTIONS.md)
