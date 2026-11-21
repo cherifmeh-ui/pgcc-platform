@@ -29,7 +29,7 @@
               
               <input type="date" v-model="newAction.due_date" />
               
-              <input v-model="newAction.assigned_to" placeholder="Responsable (ex: DI)" />
+              <select v-model="newAction.assigned_to"><option value="">Non assignée</option><option v-for="user in assignees" :key="user.id" :value="user.email">{{ user.full_name }}{{ user.department ? " — " + user.department : "" }}</option></select>
             </div>
             
             <button @click="addAction" :disabled="saving" class="btn-primary">
@@ -94,7 +94,7 @@ const emit = defineEmits(['close']);
 // État Local
 const loading = ref(false);
 const saving = ref(false);
-const actions = ref([]);
+const actions = ref([]);\nconst assignees = ref([]);
 
 // Formulaire création
 const newAction = reactive({
@@ -112,8 +112,18 @@ const filteredActions = computed(() =>
 
 // Charger les actions quand le panel s'ouvre ou que le riskId change
 watch([() => props.isOpen, () => props.riskId], ([open, id]) => {
-  if (open && id) loadActions(id);
+  if (open && id) { loadActions(id); loadAssignees(); }
 }, { immediate: true });
+
+async function loadAssignees() {
+  try {
+    const { data } = await apiClient.get("/actions/assignees");
+    assignees.value = Array.isArray(data) ? data : [];
+  } catch (err) {
+    console.error("Erreur chargement responsables des actions:", err);
+    assignees.value = [];
+  }
+}
 
 async function loadActions(riskId) {
   loading.value = true;
