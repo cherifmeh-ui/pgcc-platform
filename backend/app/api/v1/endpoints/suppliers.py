@@ -10,7 +10,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.api.deps import require_permission
 from app.core.database import get_db
-from app.models.supplier import Supplier, SupplierContact, SupplierContract, SupplierAssessment, SupplierAssetLink
+from app.models.supplier import Supplier, SupplierContact, SupplierContract, SupplierAssessment, SupplierAssetLink, SupplierAccessRequest
 from app.models.asset import Asset
 from app.models.document import Document
 from app.models.user import User
@@ -231,6 +231,93 @@ class SupplierAssetLinkCreate(BaseModel):
     review_due_at: date | None = None
 
 
+
+class SupplierAccessRequestCreate(BaseModel):
+    supplier_asset_link_id: UUID
+    access_level: Literal["Standard", "Privilégié"]
+    data_access: bool = False
+    justification: str = Field(min_length=10, max_length=2000)
+    scope: str = Field(min_length=3, max_length=1000)
+    start_date: date
+    end_date: date
+    review_due_at: date
+
+    @field_validator("justification", "scope")
+    @classmethod
+    def normalize_access_text(cls, value: str) -> str:
+        value = value.strip()
+        if len(value) < 3:
+            raise ValueError("Le motif et le périmètre doivent être renseignés")
+        return value
+
+    @field_validator("end_date")
+    @classmethod
+    def validate_access_dates(cls, value: date, info):
+        start = info.data.get("start_date")
+        if start and value < start:
+            raise ValueError("La date de fin doit être postérieure ou égale à la date de début")
+        return value
+
+    @field_validator("review_due_at")
+    @classmethod
+    def validate_review_date(cls, value: date, info):
+        start, end = info.data.get("start_date"), info.data.get("end_date")
+        if start and end and not start <= value <= end:
+            raise ValueError("La revue doit être comprise dans la période d'accès")
+        return value
+
+
+class SupplierAccessDecision(BaseModel):
+    decision: Literal["Approuvé", "Refusé"]
+    comment: str = Field(min_length=5, max_length=2000)
+
+    @field_validator("comment")
+    @classmethod
+    def normalize_decision_comment(cls, value: str) -> str:
+        value = value.strip()
+        if len(value) < 5:
+            raise ValueError("Un commentaire de décision est obligatoire")
+        return value
+
+
+class SupplierAccessRevocation(BaseModel):
+    reason: str = Field(min_length=5, max_length=1000)
+
+    @field_validator("reason")
+    @classmethod
+    def normalize_revocation_reason(cls, value: str) -> str:
+        value = value.strip()
+        if len(value) < 5:
+            raise ValueError("Le motif de révocation est obligatoire")
+        return value
+
+
+class SupplierAccessRequestResponse(BaseModel):
+    model_config = ConfigDict(from_attributes=True)
+    id: UUID
+    supplier_id: UUID
+    supplier_asset_link_id: UUID
+    asset_id: UUID
+    access_level: str
+    data_access: bool
+    justification: str
+    scope: str
+    start_date: date
+    end_date: date
+    review_due_at: date
+    status: str
+    requested_by_id: UUID
+    requested_at: datetime
+    decided_by_id: UUID | None
+    decided_at: datetime | None
+    decision_comment: str | None
+    revoked_by_id: UUID | None
+    revoked_at: datetime | None
+    revocation_reason: str | None
+    created_at: datetime
+    updated_at: datetime
+
+
 class AssetSupplierLinkResponse(BaseModel):
     model_config = ConfigDict(from_attributes=True)
     id: UUID
@@ -294,6 +381,122 @@ async def list_asset_suppliers(
         }
         for link, code, name in result.all()
     ]
+
+
+
+@router.get("/{supplier_id}/access-requests", response_model=list[SupplierAccessRequestResponse])
+async def list_supplier_access_requests(
+    supplier_id: UUID,
+    include_closed: bool = True,
+    db: AsyncSession = Depends(get_db),
+    current_user: User = require_permission("suppliers", "read_access_requests"),
+):
+    supplier_result = await db.execute(select(Supplier.id).where(Supplier.id == supplier_id))
+    if supplier_result.scalar_one_or_none() is None:
+        raise HTTPException(status_code=404, detail="Fournisseur introuvable")
+    stmt = select(SupplierAccessRequest).where(SupplierAccessRequest.supplier_id == supplier_id)
+    if not include_closed:
+        stmt = stmt.where(SupplierAccessRequest.status.in_(["Demandé", "Approuvé", "Suspendu"]))
+    result = await db.execute(stmt.order_by(SupplierAccessRequest.requested_at.desc()))
+    return result.scalars().all()
+
+
+@router.post("/{supplier_id}/access-requests", response_model=SupplierAccessRequestResponse, status_code=status.HTTP_201_CREATED)
+async def create_supplier_access_request(
+    supplier_id: UUID,
+    data: SupplierAccessRequestCreate,
+    request: Request,
+    db: AsyncSession = Depends(get_db),
+    current_user: User = require_permission("suppliers", "request_access"),
+):
+    supplier_result = await db.execute(select(Supplier).where(Supplier.id == supplier_id, Supplier.archived_at.is_(None)))
+    if supplier_result.scalar_one_or_none() is None:
+        raise HTTPException(status_code=404, detail="Fournisseur introuvable ou archivé")
+    link_result = await db.execute(select(SupplierAssetLink).where(
+        SupplierAssetLink.id == data.supplier_asset_link_id,
+        SupplierAssetLink.supplier_id == supplier_id,
+        SupplierAssetLink.status == "Actif",
+    ))
+    link = link_result.scalar_one_or_none()
+    if link is None:
+        raise HTTPException(status_code=404, detail="Relation fournisseur-actif active introuvable")
+    asset_result = await db.execute(select(Asset).where(Asset.id == link.asset_id))
+    asset = asset_result.scalar_one_or_none()
+    if asset is None or asset.lifecycle_status in ("Retiré", "Décommissionné"):
+        raise HTTPException(status_code=422, detail="L'actif n'est pas éligible à une nouvelle autorisation")
+    duplicate = await db.execute(select(SupplierAccessRequest.id).where(
+        SupplierAccessRequest.supplier_asset_link_id == link.id,
+        SupplierAccessRequest.status.in_(["Demandé", "Approuvé", "Suspendu"]),
+    ))
+    if duplicate.scalar_one_or_none() is not None:
+        raise HTTPException(status_code=409, detail="Une demande ou autorisation non clôturée existe déjà pour cette relation")
+    access_request = SupplierAccessRequest(
+        supplier_id=supplier_id, supplier_asset_link_id=link.id, asset_id=link.asset_id,
+        requested_by_id=current_user.id, **data.model_dump(exclude={"supplier_asset_link_id"}),
+    )
+    db.add(access_request)
+    await db.commit()
+    await db.refresh(access_request)
+    await log_action(user_email=current_user.email, action="CREATE_SUPPLIER_ACCESS_REQUEST", resource="supplier_access_requests", resource_id=str(access_request.id), details=f"Access requested for supplier {supplier_id}, asset {link.asset_id}", event_type="SUPPLIER", request=request)
+    return access_request
+
+
+@router.post("/{supplier_id}/access-requests/{access_request_id}/decision", response_model=SupplierAccessRequestResponse)
+async def decide_supplier_access_request(
+    supplier_id: UUID,
+    access_request_id: UUID,
+    data: SupplierAccessDecision,
+    request: Request,
+    db: AsyncSession = Depends(get_db),
+    current_user: User = require_permission("suppliers", "decide_access"),
+):
+    result = await db.execute(select(SupplierAccessRequest).where(
+        SupplierAccessRequest.id == access_request_id,
+        SupplierAccessRequest.supplier_id == supplier_id,
+    ))
+    access_request = result.scalar_one_or_none()
+    if access_request is None:
+        raise HTTPException(status_code=404, detail="Demande d'accès introuvable")
+    if access_request.status != "Demandé":
+        raise HTTPException(status_code=409, detail="Cette demande a déjà été traitée")
+    if access_request.requested_by_id == current_user.id:
+        raise HTTPException(status_code=403, detail="Le demandeur ne peut pas approuver sa propre demande")
+    access_request.status = data.decision
+    access_request.decided_by_id = current_user.id
+    access_request.decided_at = datetime.now(timezone.utc)
+    access_request.decision_comment = data.comment
+    await db.commit()
+    await db.refresh(access_request)
+    await log_action(user_email=current_user.email, action=f"SUPPLIER_ACCESS_{data.decision.upper()}", resource="supplier_access_requests", resource_id=str(access_request.id), details=f"Decision for supplier access request {access_request.id}: {data.decision}", event_type="SUPPLIER", request=request)
+    return access_request
+
+
+@router.post("/{supplier_id}/access-requests/{access_request_id}/revoke", response_model=SupplierAccessRequestResponse)
+async def revoke_supplier_access_request(
+    supplier_id: UUID,
+    access_request_id: UUID,
+    data: SupplierAccessRevocation,
+    request: Request,
+    db: AsyncSession = Depends(get_db),
+    current_user: User = require_permission("suppliers", "revoke_access"),
+):
+    result = await db.execute(select(SupplierAccessRequest).where(
+        SupplierAccessRequest.id == access_request_id,
+        SupplierAccessRequest.supplier_id == supplier_id,
+    ))
+    access_request = result.scalar_one_or_none()
+    if access_request is None:
+        raise HTTPException(status_code=404, detail="Demande d'accès introuvable")
+    if access_request.status not in ("Approuvé", "Suspendu"):
+        raise HTTPException(status_code=409, detail="Seule une autorisation approuvée ou suspendue peut être révoquée")
+    access_request.status = "Révoqué"
+    access_request.revoked_by_id = current_user.id
+    access_request.revoked_at = datetime.now(timezone.utc)
+    access_request.revocation_reason = data.reason
+    await db.commit()
+    await db.refresh(access_request)
+    await log_action(user_email=current_user.email, action="REVOKE_SUPPLIER_ACCESS", resource="supplier_access_requests", resource_id=str(access_request.id), details=f"Supplier access revoked: {data.reason}", event_type="SUPPLIER", request=request)
+    return access_request
 
 
 @router.get("/{supplier_id}/assets", response_model=list[SupplierAssetLinkResponse])
