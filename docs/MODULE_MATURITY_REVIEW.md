@@ -405,3 +405,9 @@ The initial code-level review found that DOCX extraction joined paragraphs/table
 - The development `Base.metadata.create_all()` lifecycle did not import `RefreshTokenSession`, so the new table could be omitted from fresh development schemas.
 - Registered the model in the development startup import and added a static regression check.
 - Production schema remains migration-managed; this does not replace PostgreSQL/Alembic runtime validation.
+
+
+### 34. Refresh-session expiry timestamp range
+
+- Numeric JWT `exp` values can still be outside Python's datetime range. Persistence now maps `OverflowError`, `OSError`, and `ValueError` during timestamp conversion to an invalid-refresh-token response.
+- Added regression tests for extreme positive and negative numeric expiry values.
