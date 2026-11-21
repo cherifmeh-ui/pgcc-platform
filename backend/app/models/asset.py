@@ -2,7 +2,7 @@
 from uuid import uuid4
 
 from sqlalchemy import (
-    CheckConstraint, Column, DateTime, ForeignKey, Index, String, Text, UniqueConstraint, func,
+    CheckConstraint, Column, DateTime, ForeignKey, Index, String, Text, UniqueConstraint, func, text,
 )
 from sqlalchemy.dialects.postgresql import UUID as PG_UUID
 
@@ -41,7 +41,7 @@ class Asset(Base):
             name="ck_assets_availability",
         ),
         UniqueConstraint("reference", name="uq_assets_reference"),
-        Index("uq_assets_reference_ci", func.lower("reference"), unique=True),
+        Index("uq_assets_reference_ci", text("lower(reference)"), unique=True),
     )
 
     id = Column(PG_UUID(as_uuid=True), primary_key=True, default=uuid4)
