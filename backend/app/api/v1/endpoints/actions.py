@@ -70,7 +70,6 @@ class ActionResponse(ActionBase):
     id: UUID
     risk_id: UUID
     iso_control_id: Optional[int] = None
-    iso_control_ref: Optional[str] = None
     iso_assessment_id: Optional[UUID] = None
     created_at: datetime
     updated_at: datetime
@@ -171,7 +170,7 @@ async def create_action(
             raise HTTPException(status_code=400, detail="Le responsable doit correspondre à un utilisateur actif.")
 
     # 2. Créer l'action
-    action_dict = data.model_dump(exclude={"risk_id"})
+    action_dict = data.model_dump(exclude={"risk_id", "iso_control_ref"})
     action = ActionItem(**action_dict, risk_id=data.risk_id)
     db.add(action)
     await db.commit()
@@ -210,6 +209,10 @@ async def update_action(
         except ValueError as exc:
             raise HTTPException(status_code=409, detail=str(exc)) from exc
 
+    # Explicitly clearing ISO traceability clears both linked fields.
+    if "iso_control_ref" in update_data and not update_data["iso_control_ref"]:
+        update_data["iso_control_id"] = None
+        update_data["iso_assessment_id"] = None
     # Resolve the human-readable ISO control reference.
     if update_data.get("iso_control_ref"):
         control_result = await db.execute(select(IsoControl).where(IsoControl.ref_code == update_data["iso_control_ref"]))
@@ -243,6 +246,7 @@ async def update_action(
             raise HTTPException(status_code=400, detail="Le responsable doit correspondre à un utilisateur actif.")
 
     # Mise à jour partielle (exclude_unset évite d'écraser avec None)
+    update_data.pop("iso_control_ref", None)
     for key, value in update_data.items():
         setattr(action, key, value)
         
