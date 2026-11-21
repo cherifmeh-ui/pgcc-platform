@@ -167,3 +167,39 @@ class SupplierAssetLink(Base):
     created_by_id = Column(PG_UUID(as_uuid=True), ForeignKey("users.id", ondelete="RESTRICT"), nullable=False)
     created_at = Column(DateTime(timezone=True), server_default=func.now(), nullable=False)
     updated_at = Column(DateTime(timezone=True), server_default=func.now(), onupdate=func.now(), nullable=False)
+
+
+class SupplierAccessRequest(Base):
+    """Time-bound internal authorization decision for a supplier's access to an asset."""
+    __tablename__ = "supplier_access_requests"
+    __table_args__ = (
+        CheckConstraint("access_level IN ('Standard', 'Privilégié')", name="ck_supplier_access_requests_level"),
+        CheckConstraint("status IN ('Demandé', 'Approuvé', 'Refusé', 'Suspendu', 'Révoqué', 'Expiré')", name="ck_supplier_access_requests_status"),
+        CheckConstraint("end_date >= start_date", name="ck_supplier_access_requests_dates"),
+        CheckConstraint("review_due_at >= start_date AND review_due_at <= end_date", name="ck_supplier_access_requests_review_window"),
+        CheckConstraint("(status = 'Demandé' AND decided_by_id IS NULL AND decided_at IS NULL) OR (status != 'Demandé' AND decided_by_id IS NOT NULL AND decided_at IS NOT NULL)", name="ck_supplier_access_requests_decision_trace"),
+        Index("ix_supplier_access_requests_supplier_status", "supplier_id", "status", "end_date"),
+        Index("ix_supplier_access_requests_asset_status", "asset_id", "status", "end_date"),
+    )
+    id = Column(PG_UUID(as_uuid=True), primary_key=True, default=uuid4)
+    supplier_id = Column(PG_UUID(as_uuid=True), ForeignKey("suppliers.id", ondelete="RESTRICT"), nullable=False, index=True)
+    supplier_asset_link_id = Column(PG_UUID(as_uuid=True), ForeignKey("supplier_asset_links.id", ondelete="RESTRICT"), nullable=False, index=True)
+    asset_id = Column(PG_UUID(as_uuid=True), ForeignKey("assets.id", ondelete="RESTRICT"), nullable=False, index=True)
+    access_level = Column(String(20), nullable=False)
+    data_access = Column(Boolean, nullable=False, default=False, server_default="false")
+    justification = Column(Text, nullable=False)
+    scope = Column(String(1000), nullable=False)
+    start_date = Column(Date, nullable=False)
+    end_date = Column(Date, nullable=False)
+    review_due_at = Column(Date, nullable=False)
+    status = Column(String(20), nullable=False, default="Demandé", server_default="Demandé")
+    requested_by_id = Column(PG_UUID(as_uuid=True), ForeignKey("users.id", ondelete="RESTRICT"), nullable=False)
+    requested_at = Column(DateTime(timezone=True), server_default=func.now(), nullable=False)
+    decided_by_id = Column(PG_UUID(as_uuid=True), ForeignKey("users.id", ondelete="RESTRICT"), nullable=True)
+    decided_at = Column(DateTime(timezone=True), nullable=True)
+    decision_comment = Column(String(2000), nullable=True)
+    revoked_by_id = Column(PG_UUID(as_uuid=True), ForeignKey("users.id", ondelete="RESTRICT"), nullable=True)
+    revoked_at = Column(DateTime(timezone=True), nullable=True)
+    revocation_reason = Column(String(1000), nullable=True)
+    created_at = Column(DateTime(timezone=True), server_default=func.now(), nullable=False)
+    updated_at = Column(DateTime(timezone=True), server_default=func.now(), onupdate=func.now(), nullable=False)
