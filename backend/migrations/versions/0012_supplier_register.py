@@ -5,7 +5,6 @@ Revises: 0011_asset_reference_case_insensitive
 """
 from alembic import op
 import sqlalchemy as sa
-import sqlalchemy as sa
 from sqlalchemy.dialects import postgresql
 
 revision = "0012_supplier_register"
