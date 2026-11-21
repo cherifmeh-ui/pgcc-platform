@@ -13,6 +13,7 @@ from app.models.action_item import ActionItem
 from app.models.user import User
 from app.schemas.risk import RiskCreate, RiskResponse, RiskUpdate
 from app.services.security_logger import log_action
+from app.services.risk_scoring import calculate_risk_level
 
 router = APIRouter(prefix="/risks", tags=["Risques SI"])
 
@@ -61,11 +62,11 @@ async def create_risk(
 
     data = risk_data.model_dump()
     if data.get("owner_id") is not None:
-        owner_result = await db.execute(select(User.id).where(User.id == data["owner_id"]))
+        owner_result = await db.execute(select(User.id).where(User.id == data["owner_id"], User.is_active.is_(True)))
         if owner_result.scalar_one_or_none() is None:
-            raise HTTPException(status_code=400, detail="Le propriétaire du risque n'existe pas.")
+            raise HTTPException(status_code=400, detail="Le propriétaire du risque n'existe pas ou son compte est inactif.")
     # CALCUL BACKEND DU NIVEAU DE RISQUE (source de vérité)
-    data["risk_level"] = data["impact"] * data["likelihood"]
+    data["risk_level"] = calculate_risk_level(data["impact"], data["likelihood"])
 
     new_risk = Risk(**data)
     db.add(new_risk)
@@ -127,7 +128,7 @@ async def update_risk(
         )
 
     if "owner_id" in update_data and update_data["owner_id"] is not None:
-        owner_result = await db.execute(select(User.id).where(User.id == update_data["owner_id"]))
+        owner_result = await db.execute(select(User.id).where(User.id == update_data["owner_id"], User.is_active.is_(True)))
         if owner_result.scalar_one_or_none() is None:
             raise HTTPException(status_code=400, detail="Le propriétaire du risque n'existe pas.")
 
@@ -135,7 +136,7 @@ async def update_risk(
     if "impact" in update_data or "likelihood" in update_data:
         risk.impact = update_data.pop("impact", risk.impact)
         risk.likelihood = update_data.pop("likelihood", risk.likelihood)
-        risk.risk_level = risk.impact * risk.likelihood
+        risk.risk_level = calculate_risk_level(risk.impact, risk.likelihood)
 
     for field, value in update_data.items():
         setattr(risk, field, value)
