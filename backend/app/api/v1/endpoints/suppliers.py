@@ -901,9 +901,7 @@ async def get_supplier_risk_overview(
         return build_supplier_risk_overview([], [], [], [], [])
 
     risk_rows = await db.execute(
-        select(
-            SupplierRiskLink.risk_id, Risk.risk_level, Risk.status,
-        )
+        select(SupplierRiskLink.risk_id, Risk.risk_level, Risk.status)
         .join(Risk, Risk.id == SupplierRiskLink.risk_id)
         .where(SupplierRiskLink.supplier_id.in_(active_supplier_ids))
     )
@@ -917,7 +915,11 @@ async def get_supplier_risk_overview(
             SupplierAssessment.supplier_id, SupplierAssessment.status,
             SupplierAssessment.next_review_at, SupplierAssessment.created_at,
         )
-        .where(SupplierAssessment.supplier_id.in_(active_supplier_ids))
+        .where(
+            SupplierAssessment.supplier_id.in_(active_supplier_ids),
+            SupplierAssessment.status == "Validée",
+        )
+        .order_by(SupplierAssessment.created_at.desc())
     )
     assessments = [
         {"supplier_id": row.supplier_id, "status": row.status,
@@ -941,10 +943,31 @@ async def get_supplier_risk_overview(
     ]
 
     contract_rows = await db.execute(
-        select(SupplierContract.status, SupplierContract.end_date)
+        select(
+            SupplierContract.status, SupplierContract.end_date,
+            SupplierContract.clause_confidentiality,
+            SupplierContract.clause_incident_notification,
+            SupplierContract.clause_audit_right,
+            SupplierContract.clause_business_continuity,
+            SupplierContract.clause_reversibility,
+            SupplierContract.clause_data_location,
+            SupplierContract.clause_subcontracting,
+            SupplierContract.clause_data_return_destruction,
+        )
         .where(SupplierContract.supplier_id.in_(active_supplier_ids))
     )
-    contracts = [{"status": row.status, "end_date": row.end_date} for row in contract_rows.all()]
+    contracts = [
+        {"status": row.status, "end_date": row.end_date,
+         "clause_confidentiality": row.clause_confidentiality,
+         "clause_incident_notification": row.clause_incident_notification,
+         "clause_audit_right": row.clause_audit_right,
+         "clause_business_continuity": row.clause_business_continuity,
+         "clause_reversibility": row.clause_reversibility,
+         "clause_data_location": row.clause_data_location,
+         "clause_subcontracting": row.clause_subcontracting,
+         "clause_data_return_destruction": row.clause_data_return_destruction}
+        for row in contract_rows.all()
+    ]
 
     return build_supplier_risk_overview(
         suppliers, supplier_risks, assessments, access_requests, contracts
