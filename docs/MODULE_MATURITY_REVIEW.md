@@ -239,3 +239,10 @@ The initial code-level review found that DOCX extraction joined paragraphs/table
 - **Remaining validation:** PostgreSQL constraint behavior, transaction rollback and route permission tests still need integration validation.
 
 - API regression tests now exercise both rejected asset-risk link creation cases: retired lifecycle status and a non-null retirement marker, including assertions that no association is persisted.
+
+### 13. Migration review: PostgreSQL downgrade guard
+
+- A syntax defect was found in migration `0020_asset_reference_and_type_constraints.py`: its PL/pgSQL anonymous block used an invalid dollar-quote delimiter.
+- Corrected the block to standard `DO $$ ... END $$;` syntax.
+- Added a static regression test to ensure the malformed delimiter does not return.
+- This is a static verification only. A PostgreSQL-backed Alembic upgrade/downgrade run remains required before the migration chain is considered production validated.
