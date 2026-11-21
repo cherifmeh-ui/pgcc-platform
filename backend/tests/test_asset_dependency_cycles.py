@@ -43,7 +43,6 @@ async def test_dependency_cycle_detection_handles_existing_cycle_safely():
 
 def test_relationship_requires_both_assets_to_be_active():
     assert _relationship_assets_are_active([(A, None), (B, None)]) is True
-    assert _relationship_assets_are_active([(A, None), (B, None)]) is True
 
 
 def test_relationship_rejects_retired_asset_endpoint():
