@@ -19,7 +19,7 @@ class Settings(BaseSettings):
     ENVIRONMENT: str = Field(default="development")
     DEBUG: bool = False
 
-    # --- Base de donnees (obligatoire des la Phase 1) ---
+    # --- Database ---
     DATABASE_URL: str = Field(default="")
 
     # --- JWT ---
@@ -37,14 +37,14 @@ class Settings(BaseSettings):
     MFA_ISSUER_NAME: str = "CTF PGCC"
     MFA_VALID_WINDOW: int = 1
 
-    # --- Protection anti brute-force ---
+    # --- Brute-force protection ---
     LOGIN_MAX_ATTEMPTS: int = 5
     LOGIN_LOCK_MINUTES: int = 15
 
     # --- CORS ---
     CORS_ORIGINS: str = "http://localhost:5173,http://localhost:3000"
 
-    # --- IA (feature flags, actives en Phase 6) ---
+    # --- AI ---
     AI_ENABLED: bool = False
     AI_PROVIDER: str = "none"  # none | ollama
     OLLAMA_BASE_URL: str = "http://host.docker.internal:11434"
@@ -115,8 +115,5 @@ def get_settings() -> Settings:
 
 settings = get_settings()
 
-print(
-    f"✅ CONFIG PGCC CHARGÉE | ENV={settings.ENVIRONMENT} | "
-    f"DB={settings.masked_database_url()} | JWT={settings.JWT_ALGORITHM} | "
-    f"IA={'activée (' + settings.AI_PROVIDER + ')' if settings.AI_ENABLED else 'désactivée'}"
-)
+# Avoid logging configuration values during module import. Import-time output can
+# leak database host/user details into container logs and complicate test runs.
