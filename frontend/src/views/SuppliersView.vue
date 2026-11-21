@@ -9,7 +9,7 @@
     </div>
     <p v-if="error" class="error">{{error}}</p>
     <div class="table-wrap"><table><thead><tr><th>Code</th><th>Fournisseur</th><th>Service / Direction</th><th>Criticité</th><th>Statut</th><th>Contacts</th><th>Actions</th></tr></thead>
-      <tbody><tr v-for="s in suppliers" :key="s.id"><td><b>{{s.code}}</b></td><td>{{s.legal_name}}<small>{{s.trade_name}}</small><small>{{s.country}}</small></td><td>{{s.service_category || '—'}}<small>{{s.direction || '—'}}</small></td><td><span :class="['level',levelClass(s.criticality)]">{{s.criticality}}</span></td><td>{{s.status}}<small v-if="s.archived_at">Archivé</small></td><td><button v-if="canReadContacts" class="secondary" @click="openContacts(s)">Contacts</button><span v-else>—</span><button v-if="canReadContracts" class="secondary" @click="openContracts(s)">Contrats</button><button v-if="canReadAssessments" class="secondary" @click="openAssessments(s)">Évaluations SSI</button></td><td><button v-if="canUpdate && !s.archived_at" class="secondary" @click="edit(s)">Modifier</button> <button v-if="canArchive && !s.archived_at" class="danger" @click="archive(s)">Archiver</button></td></tr>
+      <tbody><tr v-for="s in suppliers" :key="s.id"><td><b>{{s.code}}</b></td><td>{{s.legal_name}}<small>{{s.trade_name}}</small><small>{{s.country}}</small></td><td>{{s.service_category || '—'}}<small>{{s.direction || '—'}}</small></td><td><span :class="['level',levelClass(s.criticality)]">{{s.criticality}}</span></td><td>{{s.status}}<small v-if="s.archived_at">Archivé</small></td><td><button v-if="canReadContacts" class="secondary" @click="openContacts(s)">Contacts</button><span v-else>—</span><button v-if="canReadContracts" class="secondary" @click="openContracts(s)">Contrats</button><button v-if="canReadAssessments" class="secondary" @click="openAssessments(s)">Évaluations SSI</button><button v-if="canReadAssets" class="secondary" @click="openSupplierAssets(s)">Actifs liés</button></td><td><button v-if="canUpdate && !s.archived_at" class="secondary" @click="edit(s)">Modifier</button> <button v-if="canArchive && !s.archived_at" class="danger" @click="archive(s)">Archiver</button></td></tr>
       <tr v-if="loading"><td colspan="7" class="empty">Chargement…</td></tr><tr v-else-if="!suppliers.length"><td colspan="7" class="empty">Aucun fournisseur.</td></tr></tbody></table></div>
     <nav class="pagination"><button class="secondary" :disabled="offset===0" @click="previous">Précédent</button><span>{{offset+1}}–{{offset+suppliers.length}}</span><button class="secondary" :disabled="suppliers.length<limit" @click="next">Suivant</button><select v-model.number="limit" @change="offset=0;load()"><option :value="25">25 / page</option><option :value="50">50 / page</option><option :value="100">100 / page</option></select></nav>
     <div v-if="formOpen" class="overlay" @click.self="formOpen=false"><form class="modal" @submit.prevent="save">
@@ -76,6 +76,20 @@
       </div>
       <div class="modal-actions"><button class="secondary" @click="assessmentSupplier=null">Fermer</button></div>
     </div></div>
+    <div v-if="assetSupplier" class="overlay" @click.self="assetSupplier=null"><div class="modal"><h2>Actifs liés — {{assetSupplier.legal_name}}</h2>
+      <p v-if="assetLinkError" class="error">{{assetLinkError}}</p>
+      <div class="table-wrap"><table><thead><tr><th>Actif</th><th>Relation</th><th>Accès</th><th>Données</th><th>Statut</th><th>Revue</th><th v-if="canManageAssets">Action</th></tr></thead><tbody>
+        <tr v-for="link in supplierAssetLinks" :key="link.id"><td>{{assetLabel(link.asset_id)}}</td><td>{{link.relationship_type}}</td><td>{{link.access_level}}</td><td>{{link.data_access?'Oui':'Non'}}</td><td>{{link.status}}</td><td>{{link.review_due_at||'—'}}</td><td v-if="canManageAssets"><button v-if="link.status!=='Terminé'" class="danger" @click="terminateAssetLink(link)">Terminer</button></td></tr>
+        <tr v-if="!supplierAssetLinks.length"><td :colspan="canManageAssets?7:6" class="empty">Aucun actif lié.</td></tr></tbody></table></div>
+      <form v-if="canManageAssets && !assetSupplier.archived_at" @submit.prevent="createAssetLink"><h3>Associer un actif</h3><div class="grid">
+        <label>Actif *<select v-model="assetLinkForm.asset_id" required><option value="">Sélectionner un actif</option><option v-for="a in selectableAssets" :key="a.id" :value="a.id">{{a.reference}} — {{a.name}}</option></select></label>
+        <label>Relation *<select v-model="assetLinkForm.relationship_type"><option v-for="x in assetRelationshipTypes" :key="x">{{x}}</option></select></label>
+        <label>Niveau d’accès<select v-model="assetLinkForm.access_level"><option>Aucun</option><option>Standard</option><option>Privilégié</option></select></label>
+        <label class="check"><input v-model="assetLinkForm.data_access" type="checkbox"> Accès aux données</label>
+        <label>Prochaine revue<input v-model="assetLinkForm.review_due_at" type="date"></label>
+      </div><label>Périmètre<textarea v-model="assetLinkForm.scope" maxlength="1000"></textarea></label><button :disabled="saving || !selectableAssets.length">Associer l’actif</button></form>
+      <div class="modal-actions"><button class="secondary" @click="assetSupplier=null">Fermer</button></div>
+    </div></div>
     <div v-if="contactSupplier" class="overlay" @click.self="contactSupplier=null"><div class="modal"><h2>Contacts — {{contactSupplier.legal_name}}</h2>
       <ul><li v-for="c in contacts" :key="c.id">{{c.full_name}} — {{c.role || c.contact_type}} — {{c.email || 'Email non renseigné'}} <button v-if="canManageContacts && c.is_active" class="secondary" @click="deactivate(c)">Désactiver</button></li><li v-if="!contacts.length">Aucun contact actif.</li></ul>
       <form v-if="canManageContacts && !contactSupplier.archived_at" @submit.prevent="addContact"><h3>Ajouter un contact</h3><div class="grid"><label>Nom complet *<input v-model="contactForm.full_name" required></label><label>Fonction<input v-model="contactForm.role"></label><label>Email<input v-model="contactForm.email" type="email"></label><label>Téléphone<input v-model="contactForm.phone"></label><label>Type<select v-model="contactForm.contact_type"><option v-for="v in contactTypes" :key="v">{{v}}</option></select></label></div><p v-if="contactError" class="error">{{contactError}}</p><button :disabled="saving">Ajouter</button></form><div class="modal-actions"><button class="secondary" @click="contactSupplier=null">Fermer</button></div>
@@ -96,6 +110,8 @@ const canReadContracts=computed(()=>auth.canAccessModule('suppliers','read_contr
 const canManageContracts=computed(()=>auth.canAccessModule('suppliers','manage_contracts'));
 const canReadDocuments=computed(()=>auth.canAccessModule('documents','read'));
 const canReadAssessments=computed(()=>auth.canAccessModule('suppliers','read_assessments'));
+const canReadAssets=computed(()=>auth.canAccessModule('suppliers','read_assets'));
+const canManageAssets=computed(()=>auth.canAccessModule('suppliers','manage_assets'));
 const canAssess=computed(()=>auth.canAccessModule('suppliers','assess'));
 const canValidate=computed(()=>auth.canAccessModule('suppliers','validate_assessment'));
 const levels=['Faible','Moyenne','Élevée','Critique'];
@@ -103,7 +119,7 @@ const statuses=['À qualifier','En évaluation','Approuvé','Approuvé sous cond
 const contactTypes=['Commercial','Technique','Sécurité','Contractuel','Autre'];
 const suppliers=ref([]),contacts=ref([]),contracts=ref([]),documents=ref([]),assessments=ref([]),loading=ref(false),saving=ref(false),error=ref(''),formError=ref(''),contactError=ref(''),contractError=ref(''),contractFormError=ref('');
 const search=ref(''),criticality=ref(''),status=ref(''),includeArchived=ref(false),limit=ref(25),offset=ref(0);
-const formOpen=ref(false),editing=ref(null),contactSupplier=ref(null),contractSupplier=ref(null),assessmentSupplier=ref(null),activeAssessment=ref(null),validationAssessment=ref(null);
+const formOpen=ref(false),editing=ref(null),assetSupplier=ref(null),supplierAssetLinks=ref([]),selectableAssets=ref([]),assetLinkError=ref(''),contactSupplier=ref(null),contractSupplier=ref(null),assessmentSupplier=ref(null),activeAssessment=ref(null),validationAssessment=ref(null);
 const assessmentError=ref(''),assessmentFormError=ref('');
 const answerMap=reactive({});
 const validationForm=reactive({decision:'Approuvé sous conditions',validation_comment:'',next_review_at:''});
@@ -114,6 +130,8 @@ const clauseFields=[{key:'clause_confidentiality',label:'Confidentialité'},{key
 const blankContract=()=>({reference:'',title:'',contract_type:'Service',description:'',start_date:'',end_date:null,notice_period_days:90,auto_renew:false,status:'Brouillon',internal_owner_id:null,document_id:null,clause_confidentiality:false,clause_incident_notification:false,clause_audit_right:false,clause_business_continuity:false,clause_reversibility:false,clause_data_location:false,clause_subcontracting:false,clause_data_return_destruction:false});
 const contractForm=reactive(blankContract());
 const blank=()=>({code:'',legal_name:'',trade_name:'',country:'',service_category:'',description:'',business_owner_id:null,direction:'',criticality:'Moyenne',dependency_level:'Moyenne',data_categories:'',hosting_location:'',uses_subprocessors:false,status:'À qualifier'});
+const assetRelationshipTypes=['Héberge','Maintient','Administre','Accède','Fournit','Autre'];
+const assetLinkForm=reactive({asset_id:'',relationship_type:'Maintient',access_level:'Aucun',data_access:false,scope:'',review_due_at:''});
 const form=reactive(blank()),contactForm=reactive({full_name:'',role:'',email:'',phone:'',contact_type:'Autre'});
 let timer;
 function scheduleLoad(){clearTimeout(timer);timer=setTimeout(()=>{offset.value=0;load()},300)}
@@ -123,6 +141,10 @@ function edit(s){editing.value=s;Object.assign(form,blank(),s);formOpen.value=tr
 async function save(){saving.value=true;formError.value='';try{if(editing.value)await apiClient.patch('/suppliers/'+editing.value.id,form);else await apiClient.post('/suppliers/',form);formOpen.value=false;await load()}catch(e){formError.value=e.response?.data?.detail||'Enregistrement impossible.'}finally{saving.value=false}}
 async function archive(s){if(!confirm('Archiver '+s.code+' ? Les données historiques seront conservées.'))return;try{await apiClient.post('/suppliers/'+s.id+'/archive');await load()}catch(e){error.value=e.response?.data?.detail||'Archivage impossible.'}}
 
+async function openSupplierAssets(s){assetSupplier.value=s;supplierAssetLinks.value=[];assetLinkError.value='';Object.assign(assetLinkForm,{asset_id:'',relationship_type:'Maintient',access_level:'Aucun',data_access:false,scope:'',review_due_at:''});try{const [links,assets]=await Promise.all([apiClient.get('/suppliers/'+s.id+'/assets'),canManageAssets.value?apiClient.get('/assets/'):Promise.resolve({data:[]})]);supplierAssetLinks.value=links.data;selectableAssets.value=assets.data.filter(a=>!['Retiré','Décommissionné'].includes(a.lifecycle_status))}catch(e){assetLinkError.value=e.response?.data?.detail||'Chargement des actifs liés impossible.'}}
+function assetLabel(id){const a=selectableAssets.value.find(x=>x.id===id);return a?a.reference+' — '+a.name:id}
+async function createAssetLink(){saving.value=true;assetLinkError.value='';try{const payload={...assetLinkForm,review_due_at:assetLinkForm.review_due_at||null};await apiClient.post('/suppliers/'+assetSupplier.value.id+'/assets',payload);await openSupplierAssets(assetSupplier.value)}catch(e){assetLinkError.value=e.response?.data?.detail||'Association impossible.'}finally{saving.value=false}}
+async function terminateAssetLink(link){if(!confirm('Terminer cette relation ? Son historique sera conservé.'))return;saving.value=true;try{await apiClient.post('/suppliers/'+assetSupplier.value.id+'/assets/'+link.id+'/terminate');await openSupplierAssets(assetSupplier.value)}catch(e){assetLinkError.value=e.response?.data?.detail||'Terminaison impossible.'}finally{saving.value=false}}
 async function openAssessments(s){assessmentSupplier.value=s;assessments.value=[];activeAssessment.value=null;validationAssessment.value=null;assessmentError.value='';assessmentFormError.value='';try{const {data}=await apiClient.get('/suppliers/'+s.id+'/assessments');assessments.value=data}catch(e){assessmentError.value=e.response?.data?.detail||'Chargement des évaluations impossible.'}}
 async function createAssessment(){saving.value=true;assessmentFormError.value='';try{const {data}=await apiClient.post('/suppliers/'+assessmentSupplier.value.id+'/assessments',{assessment_type:'Initiale',scope:'Évaluation générale de sécurité du fournisseur et de la prestation fournie à la CTF.',questionnaire_version:'CTF-TPRM-1.0'});await openAssessments(assessmentSupplier.value);selectAssessment(data)}catch(e){assessmentFormError.value=e.response?.data?.detail||'Création de l’évaluation impossible.'}finally{saving.value=false}}
 function selectAssessment(a){activeAssessment.value=a;validationAssessment.value=null;assessmentFormError.value='';for(const q of a.questionnaire_snapshot){const existing=a.answers.find(x=>x.question_id===q.id);answerMap[q.id]={score:existing?.score??0,comment:existing?.comment??''}}}
