@@ -15,6 +15,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from app.api.deps import require_permission
 from app.core.database import get_db
 from app.models.asset import Asset, AssetRelationship, AssetRiskLink
+from app.models.supplier import Supplier, SupplierAssetLink
 from app.models.risk import Risk
 from app.models.application import Application
 from app.models.user import User
@@ -687,10 +688,47 @@ async def get_asset_impact(
         )
     )
     impacted = _compute_asset_impact(asset_id, rel_result.all())
+    impacted_ids = [item[0] for item in impacted]
+    supplier_links_by_asset: dict[UUID, list[dict]] = {}
+    supplier_summary = {"total_suppliers": 0, "active_relationships": 0, "privileged_access": 0, "data_access": 0}
+    supplier_access_available = role_has_permission((current_user.role or "").lower(), "suppliers", "read_assets")
+    if supplier_access_available:
+        relevant_asset_ids = [asset_id, *impacted_ids]
+        supplier_result = await db.execute(
+            select(
+                SupplierAssetLink.asset_id, Supplier.id, Supplier.code, Supplier.legal_name,
+                SupplierAssetLink.relationship_type, SupplierAssetLink.access_level,
+                SupplierAssetLink.data_access, SupplierAssetLink.status, SupplierAssetLink.review_due_at,
+            )
+            .join(Supplier, Supplier.id == SupplierAssetLink.supplier_id)
+            .where(
+                SupplierAssetLink.asset_id.in_(relevant_asset_ids),
+                SupplierAssetLink.status != "Terminé",
+            )
+        )
+        unique_suppliers: set[UUID] = set()
+        for asset_link_id, supplier_id, supplier_code, supplier_name, relationship, access_level, data_access, link_status, review_due_at in supplier_result.all():
+            supplier_links_by_asset.setdefault(asset_link_id, []).append({
+                "supplier_id": supplier_id, "supplier_code": supplier_code,
+                "supplier_name": supplier_name, "relationship_type": relationship,
+                "access_level": access_level, "data_access": data_access,
+                "status": link_status, "review_due_at": review_due_at,
+            })
+            unique_suppliers.add(supplier_id)
+            supplier_summary["active_relationships"] += 1
+            if access_level == "Privilégié":
+                supplier_summary["privileged_access"] += 1
+            if data_access:
+                supplier_summary["data_access"] += 1
+        supplier_summary["total_suppliers"] = len(unique_suppliers)
+    source_suppliers = supplier_links_by_asset.get(asset_id, [])
     if not impacted:
         empty_summary = {"total": 0, "unacceptable": 0, "critical": 0, "high": 0, "moderate": 0, "low": 0, "by_status": {}}
-        return {"source": {"id": source.id, "reference": source.reference, "name": source.name}, "impacted_assets": [], "total_impacted": 0, "risk_summary": empty_summary}
-    impacted_ids = [item[0] for item in impacted]
+        return {
+            "source": {"id": source.id, "reference": source.reference, "name": source.name, "linked_suppliers": source_suppliers},
+            "impacted_assets": [], "total_impacted": 0, "risk_summary": empty_summary,
+            "supplier_summary": supplier_summary, "supplier_access_available": supplier_access_available,
+        }
     asset_result = await db.execute(select(Asset).where(Asset.id.in_(impacted_ids)))
     assets_by_id = {asset.id: asset for asset in asset_result.scalars().all()}
     risks_by_asset: dict[UUID, list[dict]] = {}
@@ -726,8 +764,13 @@ async def get_asset_impact(
             "lifecycle_status": asset.lifecycle_status, "owner": asset.owner,
             "direction": asset.direction, "application_id": asset.application_id,
             "dependency_distance": distance, "linked_risks": risks_by_asset.get(asset.id, []),
+            "linked_suppliers": supplier_links_by_asset.get(asset.id, []),
         })
-    return {"source": {"id": source.id, "reference": source.reference, "name": source.name}, "impacted_assets": results, "total_impacted": len(results), "risk_summary": risk_summary}
+    return {
+        "source": {"id": source.id, "reference": source.reference, "name": source.name, "linked_suppliers": source_suppliers},
+        "impacted_assets": results, "total_impacted": len(results), "risk_summary": risk_summary,
+        "supplier_summary": supplier_summary, "supplier_access_available": supplier_access_available,
+    }
 
 
 @router.get("/{asset_id}/relationships", response_model=list[RelationshipResponse])
