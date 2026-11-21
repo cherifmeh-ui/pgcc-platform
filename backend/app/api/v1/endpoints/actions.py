@@ -13,6 +13,7 @@ from app.models.action_item import ActionItem, ActionStatus, Priority
 from app.models.risk import Risk
 from app.models.user import User
 from app.services.security_logger import log_action
+from app.services.action_lifecycle import validate_action_transition
 
 router = APIRouter(prefix="/actions", tags=["Plans d'Action"])
 
@@ -128,8 +129,11 @@ async def update_action(
     effective_description = update_data.get("description", action.description)
     if effective_status == ActionStatus.DONE and not (effective_description or "").strip():
         raise HTTPException(status_code=422, detail="La clôture d'une action exige une description documentant la réalisation. Une preuve formelle sera ajoutée au workflow GRC.")
-    if action.status == ActionStatus.DONE and effective_status != ActionStatus.DONE:
-        raise HTTPException(status_code=409, detail="Une action terminée ne peut pas être réouverte par cette API. Utilisez un workflow de réouverture audité.")
+    if effective_status != action.status:
+        try:
+            validate_action_transition(action.status, effective_status)
+        except ValueError as exc:
+            raise HTTPException(status_code=409, detail=str(exc)) from exc
 
     # Mise à jour partielle (exclude_unset évite d'écraser avec None)
     for key, value in update_data.items():
