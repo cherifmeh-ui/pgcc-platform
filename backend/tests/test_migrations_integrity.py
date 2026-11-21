@@ -107,3 +107,24 @@ def test_supplier_risk_snapshot_month_is_unique_in_model_and_migration() -> None
     assert constraint in model_source
     assert "snapshot_month" in migration_source
     assert "snapshot_month" in model_source
+
+
+def test_refresh_token_sessions_migration_is_linked_and_revocable():
+    migration = MIGRATIONS_DIR / "0021_refresh_token_sessions.py"
+    source = migration.read_text(encoding="utf-8")
+    assert 'revision = "0021_refresh_token_sessions"' in source
+    assert 'down_revision = "0020_asset_reference_and_type_constraints"' in source
+    assert "token_jti_hash" in source
+    assert "revoked_at" in source
+    assert "replaced_by_jti_hash" in source
+    assert "expires_at" in source
+    assert "ondelete=\"CASCADE\"" in source
+
+
+def test_refresh_endpoint_uses_persisted_session_and_replay_revocation():
+    endpoint = MIGRATIONS_DIR.parent.parent / "app" / "api" / "v1" / "endpoints" / "auth.py"
+    source = endpoint.read_text(encoding="utf-8")
+    assert "RefreshTokenSession" in source
+    assert "with_for_update()" in source
+    assert "reused" in source.lower() or "Réutilisation" in source
+    assert "@router.post(\"/logout\"" in source
