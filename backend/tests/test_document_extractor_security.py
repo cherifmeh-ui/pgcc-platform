@@ -34,7 +34,7 @@ def test_pdf_extraction_is_truncated_at_character_limit(monkeypatch):
     text = document_extractor._extract_pdf_limited(b"%PDF-")
     assert len(text) <= 800
     assert "tronqué à la limite de sécurité" in text
-    assert "\\n\\n" in text
+    assert "\n\n" in text
 
 
 
@@ -77,4 +77,4 @@ def test_docx_extraction_includes_table_cells(monkeypatch):
 
     assert "Policy paragraph" in extracted
     assert "Control A | Implemented" in extracted
-    assert "Policy paragraph\\n\\nControl A | Implemented" in extracted
+    assert "Policy paragraph\n\nControl A | Implemented" in extracted
