@@ -164,7 +164,7 @@
       </div>
     </Teleport>
 
-    <!-- Composant Panneau Assistant IA -->
+    <Teleport to="body"><div v-if="assetsRiskModal" class="modal-overlay" @click.self="assetsRiskModal=null"><div class="modal-content"><h2>Actifs concernés — {{ assetsRiskModal.ref }}</h2><p>{{ assetsRiskModal.title }}</p><ul><li v-for="a in linkedAssets" :key="a.id"><strong>{{ a.reference }} — {{ a.name }}</strong> <span>({{ a.asset_type }} · {{ a.criticality }} · {{ a.lifecycle_status }})</span><p v-if="a.relationship_context">{{ a.relationship_context }}</p></li><li v-if="linkedAssets.length===0">Aucun actif associé à ce risque.</li></ul><button @click="assetsRiskModal=null">Fermer</button></div></div></Teleport>\n\n    <!-- Composant Panneau Assistant IA -->
     <AiAssistantPanel
       :is-open="showAiPanel"
       :risk-data="selectedRiskForAi"
@@ -192,7 +192,7 @@ import ActionsPanel from '@/components/ActionsPanel.vue'; // ✅ IMPORT CRUCIAL 
 const authStore = useAuthStore();
 
 // --- État Local UI ---
-const risks = ref([]);
+const risks = ref([]);\nconst assetsRiskModal=ref(null),linkedAssets=ref([]);
 const riskOwners = ref([]);
 const loading = ref(true);
 const showModal = ref(false);
@@ -408,7 +408,7 @@ function openAiAssistant(risk) {
 }
 
 // --- Action Plan d'Action (UNE SEULE FOIS !) ---
-function openActionsPanel(risk) {
+async function showRiskAssets(risk){assetsRiskModal.value=risk;linkedAssets.value=[];try{const {data}=await apiClient.get('/risks/'+risk.id+'/assets');linkedAssets.value=data}catch(e){alert(e.response?.data?.detail||'Erreur chargement actifs liés')}}\n\nfunction openActionsPanel(risk) {
   selectedRiskIdForActions.value = risk.id;
   selectedRiskTitleForActions.value = risk.title;
   showActionsPanel.value = true;
