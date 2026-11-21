@@ -1,5 +1,6 @@
 # backend/app/api/v1/endpoints/auth.py
 from datetime import datetime, timedelta, timezone
+import hashlib
 from typing import Optional
 
 import jwt
@@ -28,6 +29,7 @@ from app.core.security import (
     verify_password,
 )
 from app.models.user import User
+from app.models.refresh_token_session import RefreshTokenSession
 from app.services.security_logger import log_action
 from app.services.auth_session_policy import refresh_denial_reason
 
@@ -83,6 +85,21 @@ class TokenPairResponse(BaseModel):
 
 def _now():
     return datetime.now(timezone.utc)
+
+
+def _refresh_jti_hash(token_data: dict) -> str:
+    jti = token_data.get("jti")
+    if not isinstance(jti, str) or not jti:
+        raise HTTPException(status_code=401, detail="Refresh token invalide.")
+    return hashlib.sha256(jti.encode("utf-8")).hexdigest()
+
+
+async def _persist_refresh_session(db: AsyncSession, user: User, token: str) -> str:
+    token_data = decode_token(token, expected_type="refresh")
+    token_hash = _refresh_jti_hash(token_data)
+    expires_at = datetime.fromtimestamp(token_data["exp"], tz=timezone.utc)
+    db.add(RefreshTokenSession(user_id=user.id, token_jti_hash=token_hash, expires_at=expires_at))
+    return token_hash
 
 
 @router.post("/login", response_model=PreAuthTokenResponse)
@@ -341,6 +358,8 @@ async def confirm_mfa(
 
     access_token = create_access_token(subject=user.email, role=user.role)
     refresh_token = create_refresh_token(subject=user.email)
+    await _persist_refresh_session(db, user, refresh_token)
+    await db.commit()
 
     await log_action(
         user_email=user.email,
@@ -407,6 +426,7 @@ async def change_password(
 
     access_token = create_access_token(subject=user.email, role=user.role)
     refresh_token = create_refresh_token(subject=user.email)
+    await _persist_refresh_session(db, user, refresh_token)
 
     await db.commit()
 
@@ -437,16 +457,11 @@ async def refresh_tokens(
     payload: RefreshRequest,
     db: AsyncSession = Depends(get_db),
 ):
-    """
-    Échange un refresh_token valide contre un nouvel access_token + refresh_token.
-    """
+    """Rotate a persisted refresh session exactly once; reject replay."""
     try:
         data = decode_token(payload.refresh_token, expected_type="refresh")
     except Exception:
-        raise HTTPException(
-            status_code=status.HTTP_401_UNAUTHORIZED,
-            detail="Refresh token invalide ou expiré.",
-        )
+        raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="Refresh token invalide ou expiré.")
 
     email = data.get("sub")
     if not email:
@@ -454,7 +469,6 @@ async def refresh_tokens(
 
     result = await db.execute(select(User).where(User.email == email))
     user = result.scalar_one_or_none()
-
     if not user:
         raise HTTPException(status_code=401, detail="Utilisateur non trouvé.")
 
@@ -468,25 +482,37 @@ async def refresh_tokens(
         token_issued_at=data.get("iat"),
     )
     if denial_reason:
-        denial_status = (
-            status.HTTP_423_LOCKED if user.is_locked
-            else status.HTTP_403_FORBIDDEN if not user.is_active or user.must_change_password
-            else status.HTTP_401_UNAUTHORIZED
-        )
+        denial_status = status.HTTP_423_LOCKED if user.is_locked else status.HTTP_403_FORBIDDEN if not user.is_active or user.must_change_password else status.HTTP_401_UNAUTHORIZED
         raise HTTPException(status_code=denial_status, detail=denial_reason)
 
-    # Régénérer les tokens
+    token_hash = _refresh_jti_hash(data)
+    session_result = await db.execute(
+        select(RefreshTokenSession).where(RefreshTokenSession.token_jti_hash == token_hash).with_for_update()
+    )
+    session = session_result.scalar_one_or_none()
+    now = _now()
+    if session is None or session.user_id != user.id or session.expires_at <= now:
+        raise HTTPException(status_code=401, detail="Session refresh invalide ou expirée.")
+    if session.revoked_at is not None:
+        # Reuse of a revoked token revokes the user's active refresh sessions.
+        await db.execute(
+            update(RefreshTokenSession)
+            .where(RefreshTokenSession.user_id == user.id, RefreshTokenSession.revoked_at.is_(None))
+            .values(revoked_at=now)
+        )
+        await db.commit()
+        raise HTTPException(status_code=401, detail="Réutilisation d'un refresh token détectée. Sessions révoquées.")
+
     access_token = create_access_token(subject=user.email, role=user.role)
     refresh_token = create_refresh_token(subject=user.email)
+    new_hash = await _persist_refresh_session(db, user, refresh_token)
+    session.revoked_at = now
+    session.replaced_by_jti_hash = new_hash
+    await db.commit()
 
     return TokenPairResponse(
         access_token=access_token,
         refresh_token=refresh_token,
-        user={
-            "email": user.email,
-            "full_name": user.full_name,
-            "role": user.role,
-            "must_change_password": user.must_change_password,
-            "mfa_enabled": user.mfa_enabled,
-        }
+        user={"email": user.email, "full_name": user.full_name, "role": user.role,
+              "must_change_password": user.must_change_password, "mfa_enabled": user.mfa_enabled},
     )
