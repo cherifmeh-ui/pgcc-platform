@@ -1,5 +1,6 @@
 # backend/app/api/v1/endpoints/documents.py
 from fastapi import APIRouter, Depends, HTTPException, UploadFile, File, Form, Request
+from fastapi.responses import Response
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy import select
 from pydantic import BaseModel
@@ -224,3 +225,31 @@ async def trigger_indexation(
         return {"message": f"Indexation réussie pour '{doc.title}'.", "status": "indexed"}
     else:
         raise HTTPException(status_code=500, detail="Échec partiel ou complet de l'indexation.")
+
+
+@router.get("/{doc_id}/download")
+async def download_document(
+    doc_id: str,
+    db: AsyncSession = Depends(get_db),
+    current_user: User = require_permission("documents", "read"),
+):
+    """Download the original file after enforcing document-read permission."""
+    try:
+        uid = uuid.UUID(doc_id)
+    except ValueError:
+        raise HTTPException(status_code=400, detail="ID invalide")
+
+    result = await db.execute(select(Document).where(Document.id == uid))
+    doc = result.scalar_one_or_none()
+    if not doc:
+        raise HTTPException(status_code=404, detail="Document introuvable")
+    if not doc.file_data:
+        raise HTTPException(status_code=404, detail="Fichier original indisponible.")
+
+    # Filenames are sanitized at upload; quote defensively for HTTP headers.
+    filename = (doc.filename or "document").replace('"', "_").replace("\\r", "").replace("\\n", "")
+    return Response(
+        content=doc.file_data,
+        media_type=doc.mime_type or "application/octet-stream",
+        headers={"Content-Disposition": f'attachment; filename="{filename}"'},
+    )
