@@ -240,7 +240,11 @@ async def confirm_mfa(
     if not email:
         raise HTTPException(status_code=401, detail="Jeton invalide.")
 
-    result = await db.execute(select(User).where(User.email == email))
+    # Lock the user row during MFA verification so a recovery code cannot be
+    # consumed concurrently by two requests (one-time-use guarantee).
+    result = await db.execute(
+        select(User).where(User.email == email).with_for_update()
+    )
     user = result.scalar_one_or_none()
 
     if not user:
