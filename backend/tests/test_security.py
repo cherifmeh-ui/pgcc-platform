@@ -11,6 +11,7 @@ import pytest
 from app.core.security import (
     create_access_token,
     create_pre_auth_token,
+    create_change_password_token,
     decode_token,
     consume_backup_code,
     hash_password,
