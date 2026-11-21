@@ -97,7 +97,10 @@ def _refresh_jti_hash(token_data: dict) -> str:
 async def _persist_refresh_session(db: AsyncSession, user: User, token: str) -> str:
     token_data = decode_token(token, expected_type="refresh")
     token_hash = _refresh_jti_hash(token_data)
-    expires_at = datetime.fromtimestamp(token_data["exp"], tz=timezone.utc)
+    expires_epoch = token_data.get("exp")
+    if not isinstance(expires_epoch, (int, float)):
+        raise HTTPException(status_code=401, detail="Refresh token invalide.")
+    expires_at = datetime.fromtimestamp(expires_epoch, tz=timezone.utc)
     db.add(RefreshTokenSession(user_id=user.id, token_jti_hash=token_hash, expires_at=expires_at))
     return token_hash
 
