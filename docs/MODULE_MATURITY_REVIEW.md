@@ -246,3 +246,9 @@ The initial code-level review found that DOCX extraction joined paragraphs/table
 - Corrected the block to standard `DO $$ ... END $$;` syntax.
 - Added a static regression test to ensure the malformed delimiter does not return.
 - This is a static verification only. A PostgreSQL-backed Alembic upgrade/downgrade run remains required before the migration chain is considered production validated.
+
+### 14. Supplier model/migration parity
+
+- Added static checks confirming the partial unique index for open supplier access requests (`uq_supplier_access_requests_open_link`) is declared consistently in the model and migration, including its status predicate.
+- Added parity checks for the unique monthly supplier-risk snapshot constraint.
+- These checks protect against ORM metadata drift; PostgreSQL migration tests are still required for actual database behavior.
