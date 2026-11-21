@@ -78,3 +78,12 @@ Le workflow GitHub Actions `Backend checks` (compilation Python, tests unitaires
 ## Détection des cycles dans les dépendances
 
 L'API refuse désormais une nouvelle relation `depends_on` lorsqu'elle créerait un cycle dans le graphe de dépendances. Le contrôle parcourt les relations existantes et vérifie si la cible atteint déjà la source. Les autres types de relations restent libres de représenter des liens bidirectionnels ou non hiérarchiques. Des tests unitaires couvrent le cycle détecté, une branche sans cycle et un graphe préexistant cyclique.
+
+
+## Analyse d'impact transitive — première version
+
+L'endpoint `GET /assets/{asset_id}/impact` retourne l'actif source, les actifs qui en dépendent transitivement, leur distance dans le graphe, les informations d'identification/criticité et les risques explicitement liés à chaque actif impacté. L'analyse s'appuie uniquement sur les relations `depends_on`; les autres types de relations ne sont pas interprétés comme une dépendance directionnelle.
+
+L'interface Cartographie expose une action **Impact** sur chaque actif et affiche les résultats, la distance et les risques associés. La fonction de parcours utilise un ensemble visité pour éviter les doublons et terminer même si des cycles préexistants sont rencontrés.
+
+Tests unitaires ajoutés : chaîne de dépendances, actif non lié, chemins multiples et cycle préexistant.
