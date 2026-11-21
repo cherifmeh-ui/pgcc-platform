@@ -224,6 +224,7 @@ async def preview_asset_csv_import(
         raise HTTPException(status_code=422, detail=f"Colonnes inconnues : {', '.join(unknown)}")
     rows = []
     errors = []
+    invalid_row_numbers = set()
     seen_refs, seen_hostnames, seen_serials = set(), set(), set()
     for row_number, raw_row in enumerate(reader, start=2):
         values = {key.strip(): (value.strip() if isinstance(value, str) else value) for key, value in raw_row.items() if key}
@@ -247,6 +248,7 @@ async def preview_asset_csv_import(
             rows.append({"row": row_number, "data": normalized})
         except Exception as exc:
             errors.append({"row": row_number, "error": str(exc)})
+            invalid_row_numbers.add(row_number)
     if rows:
         refs = [row["data"]["reference"] for row in rows]
         hostnames = [row["data"]["hostname"] for row in rows if row["data"].get("hostname")]
@@ -264,7 +266,8 @@ async def preview_asset_csv_import(
                 if data.get("serial_number") and asset.serial_number and asset.serial_number.casefold() == data["serial_number"].casefold(): conflicts.append("numéro de série déjà existant")
             if conflicts:
                 errors.append({"row": row["row"], "error": "; ".join(sorted(set(conflicts)))})
-    return {"filename": file.filename, "rows_valid": len(rows) - sum(1 for e in errors if any(r["row"] == e["row"] for r in rows)), "rows_parsed": len(rows), "errors": errors, "preview": rows[:20], "validated_rows": rows, "can_import": len(rows) > 0 and not errors}
+                invalid_row_numbers.add(row["row"])
+    return {"filename": file.filename, "rows_valid": len(rows) - len(invalid_row_numbers), "rows_parsed": len(rows), "errors": errors, "preview": rows[:20], "validated_rows": rows, "can_import": len(rows) > 0 and not errors}
 
 
 @router.post("/import/confirm", status_code=status.HTTP_201_CREATED)
