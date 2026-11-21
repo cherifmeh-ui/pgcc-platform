@@ -297,3 +297,20 @@ def test_supplier_assessment_and_relationship_migrations_guard_baseline_overlap(
         assert f'has_table("{table}")' in upgrade, filename
         assert f'has_table("{table}")' in downgrade, filename
         assert "get_indexes(" in upgrade, filename
+
+
+def test_asset_constraint_migration_guards_existing_objects():
+    source = (MIGRATIONS_DIR / "0020_asset_reference_and_type_constraints.py").read_text(encoding="utf-8")
+    assert "get_indexes(\"assets\")" in source
+    assert "get_check_constraints(\"assets\")" in source
+    assert "ck_assets_reference_nonblank" in source
+    assert "uq_assets_reference_ci" in source
+
+
+def test_refresh_token_session_migration_guards_baseline_overlap():
+    source = (MIGRATIONS_DIR / "0021_refresh_token_sessions.py").read_text(encoding="utf-8")
+    upgrade = source.split("def upgrade() -> None:", 1)[1].split("def downgrade() -> None:", 1)[0]
+    downgrade = source.split("def downgrade() -> None:", 1)[1]
+    assert 'has_table("refresh_token_sessions")' in upgrade
+    assert "get_indexes(\"refresh_token_sessions\")" in upgrade
+    assert 'has_table("refresh_token_sessions")' in downgrade
