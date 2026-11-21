@@ -339,6 +339,9 @@ async function saveAssessment() {
     const { data } = await apiClient.post(`/compliance/controls/${encodeURIComponent(selectedControl.value.ref_code)}/assessments`, payload);
     assessmentHistory.value = [data, ...assessmentHistory.value];
     assessmentForm.value = { applicability: 'Applicable', implementation_status: 'Non démarré', maturity_level: 0, justification: '', gap_description: '' };
+    // Refresh matrix KPIs and latest assessment badges without closing the modal.
+    const matrixResponse = await apiClient.get('/compliance/matrix');
+    matrixData.value = matrixResponse.data;
   } catch (error) {
     assessmentError.value = error.response?.data?.detail || "Échec de l'enregistrement de l'évaluation.";
   } finally {
