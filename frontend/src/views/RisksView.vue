@@ -68,7 +68,7 @@
               <!-- Bouton Assistant IA -->
               <button @click="openAiAssistant(risk)" class="action-btn ai" title="Assistant IA">✨</button>
               
-              <!-- Bouton Plan d'Action (Phase 8.5) -->
+              <button v-if="canReadAssets" @click="showRiskAssets(risk)" class="action-btn" title="Actifs concernés">🖥️</button>\n              <!-- Bouton Plan d'Action (Phase 8.5) -->
               <button 
                 @click="openActionsPanel(risk)" 
                 class="action-btn pac" 
