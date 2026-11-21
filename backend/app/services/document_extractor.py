@@ -85,9 +85,9 @@ def _extract_docx_safe(data: bytes) -> str:
     if not parts:
         raise ValueError("Document Word vide ou illisible.")
 
-    extracted = "\\n\\n".join(parts)
+    extracted = "\n\n".join(parts)
     if len(extracted) > DocumentExtractor.MAX_EXTRACTED_CHARS:
-        extracted = extracted[:DocumentExtractor.MAX_EXTRACTED_CHARS] + "\\n\\n[NOTE : Texte tronqué à la limite de sécurité.]"
+        extracted = extracted[:DocumentExtractor.MAX_EXTRACTED_CHARS] + "\n\n[NOTE : Texte tronqué à la limite de sécurité.]"
     return extracted
 
 def _validate_docx_archive(data: bytes, max_entries: int = 1000, max_uncompressed: int = 50 * 1024 * 1024) -> None:
