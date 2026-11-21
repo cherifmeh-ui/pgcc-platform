@@ -96,3 +96,12 @@ Repository/static hardening is substantially progressed, but the remaining gates
 - Refresh-session records store a SHA-256 hash of `jti`, never the raw JWT.
 - Initial refresh-session records are persisted after MFA login and mandatory password-change completion.
 - **Pending validation:** current-head CI, PostgreSQL migration/runtime tests, concurrent refresh tests, frontend logout integration, and revoke-all/session management.
+
+
+### Frontend logout integration
+
+- Frontend auth store now calls `/auth/logout` with its refresh token before clearing local credentials.
+- Local logout remains guaranteed if server revocation fails (error logged, local credentials cleared).
+- API response interceptor excludes `/auth/logout` from automatic refresh handling to prevent logout requests triggering refresh recursion.
+- **Deployment note:** refresh tokens issued before the persisted-session migration will not have session rows and will be rejected by the new refresh endpoint. Plan a forced re-authentication on rollout; do not attempt insecure fallback to stateless refresh.
+- Latest code HEAD: `af1d52a093b0a28c5ca741252d4287b23483a848`; CI for this exact HEAD is pending.
