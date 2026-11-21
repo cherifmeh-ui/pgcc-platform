@@ -2,8 +2,10 @@
 from fastapi import APIRouter, Depends, HTTPException
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy import select
-from pydantic import BaseModel
+from pydantic import BaseModel, Field, field_validator
 from typing import List, Dict, Any
+from datetime import datetime
+from uuid import UUID
 
 from app.api.deps import require_permission
 from app.core.database import get_db
@@ -11,8 +13,49 @@ from app.models.iso_control import IsoControl
 from app.models.risk import Risk
 from app.models.action_item import ActionItem, ActionStatus
 from app.models.user import User
+from app.models.iso_control_assessment import IsoControlAssessment
 
 router = APIRouter(prefix="/compliance", tags=["Conformité ISO"])
+
+class AssessmentCreate(BaseModel):
+    applicability: str
+    implementation_status: str
+    maturity_level: int = Field(ge=0, le=5)
+    justification: str = Field(min_length=1, max_length=10000)
+    gap_description: str | None = Field(default=None, max_length=10000)
+
+    @field_validator("applicability")
+    @classmethod
+    def validate_applicability(cls, value: str) -> str:
+        if value not in {"Applicable", "Non applicable"}:
+            raise ValueError("Applicabilité invalide.")
+        return value
+
+    @field_validator("implementation_status")
+    @classmethod
+    def validate_status(cls, value: str) -> str:
+        if value not in {"Non démarré", "En cours", "Implémenté", "Partiellement implémenté"}:
+            raise ValueError("Statut d'implémentation invalide.")
+        return value
+
+    @field_validator("justification")
+    @classmethod
+    def validate_justification(cls, value: str) -> str:
+        value = value.strip()
+        if not value:
+            raise ValueError("Une justification est obligatoire.")
+        return value
+
+class AssessmentResponse(BaseModel):
+    id: UUID
+    control_id: int
+    assessed_by_id: UUID
+    applicability: str
+    implementation_status: str
+    maturity_level: int
+    justification: str
+    gap_description: str | None
+    assessed_at: datetime
 
 class ComplianceMatrixRow(BaseModel):
     ref_code: str
@@ -30,6 +73,50 @@ class MatrixResponse(BaseModel):
     overall_score: float # % global
     rows: List[ComplianceMatrixRow]
     methodology: str
+
+@router.get("/controls/{ref_code}/assessments", response_model=List[AssessmentResponse])
+async def list_control_assessments(
+    ref_code: str,
+    db: AsyncSession = Depends(get_db),
+    current_user: User = require_permission("iso27002", "read"),
+):
+    control_result = await db.execute(select(IsoControl).where(IsoControl.ref_code == ref_code))
+    control = control_result.scalar_one_or_none()
+    if control is None:
+        raise HTTPException(status_code=404, detail="Contrôle ISO introuvable.")
+    result = await db.execute(
+        select(IsoControlAssessment)
+        .where(IsoControlAssessment.control_id == control.id)
+        .order_by(IsoControlAssessment.assessed_at.desc())
+    )
+    return result.scalars().all()
+
+
+@router.post("/controls/{ref_code}/assessments", response_model=AssessmentResponse, status_code=201)
+async def create_control_assessment(
+    ref_code: str,
+    payload: AssessmentCreate,
+    db: AsyncSession = Depends(get_db),
+    current_user: User = require_permission("iso27002", "update"),
+):
+    control_result = await db.execute(select(IsoControl).where(IsoControl.ref_code == ref_code))
+    control = control_result.scalar_one_or_none()
+    if control is None:
+        raise HTTPException(status_code=404, detail="Contrôle ISO introuvable.")
+    assessment = IsoControlAssessment(
+        control_id=control.id,
+        assessed_by_id=current_user.id,
+        applicability=payload.applicability,
+        implementation_status=payload.implementation_status,
+        maturity_level=payload.maturity_level,
+        justification=payload.justification,
+        gap_description=payload.gap_description.strip() if payload.gap_description else None,
+    )
+    db.add(assessment)
+    await db.commit()
+    await db.refresh(assessment)
+    return assessment
+
 
 @router.get("/matrix", response_model=MatrixResponse)
 async def get_compliance_matrix(
