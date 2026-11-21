@@ -13,7 +13,6 @@ depends_on = None
 
 
 def upgrade() -> None:
-    # Fail with a clear diagnostic rather than silently changing existing values.
     op.execute("""
         DO $$
         DECLARE duplicate_refs TEXT;
@@ -34,8 +33,8 @@ def upgrade() -> None:
             END IF;
         END $$;
     """)
-    if "uq_assets_reference_ci" in {item["name"] for item in sa.inspect(op.get_bind()).get_indexes("assets")}:
-        if "uq_assets_reference_ci" in {item["name"] for item in sa.inspect(op.get_bind()).get_indexes("assets")}:
+    indexes = {item["name"] for item in sa.inspect(op.get_bind()).get_indexes("assets")}
+    if "uq_assets_reference_ci" in indexes:
         op.drop_index("uq_assets_reference_ci", table_name="assets")
     op.create_index(
         "uq_assets_reference_ci",
@@ -43,14 +42,15 @@ def upgrade() -> None:
         [sa.text("lower(btrim(reference))")],
         unique=True,
     )
-    if "ck_assets_reference_nonblank" not in {item["name"] for item in sa.inspect(op.get_bind()).get_check_constraints("assets")}:
+
+    checks = {item["name"] for item in sa.inspect(op.get_bind()).get_check_constraints("assets")}
+    if "ck_assets_reference_nonblank" not in checks:
         op.create_check_constraint(
             "ck_assets_reference_nonblank",
             "assets",
             "btrim(reference) <> ''",
         )
-    if "ck_assets_asset_type" in {item["name"] for item in sa.inspect(op.get_bind()).get_check_constraints("assets")}:
-        if "ck_assets_asset_type" in {item["name"] for item in sa.inspect(op.get_bind()).get_check_constraints("assets")}:
+    if "ck_assets_asset_type" in checks:
         op.drop_constraint("ck_assets_asset_type", "assets", type_="check")
     op.create_check_constraint(
         "ck_assets_asset_type",
@@ -62,7 +62,6 @@ def upgrade() -> None:
 
 
 def downgrade() -> None:
-    # Do not downgrade while cloud_resource records exist; the older check rejects them.
     op.execute("""
         DO $pgcc$
         BEGIN
@@ -72,16 +71,21 @@ def downgrade() -> None:
             END IF;
         END $pgcc$;
     """)
-    op.drop_constraint("ck_assets_asset_type", "assets", type_="check")
+    checks = {item["name"] for item in sa.inspect(op.get_bind()).get_check_constraints("assets")}
+    if "ck_assets_asset_type" in checks:
+        op.drop_constraint("ck_assets_asset_type", "assets", type_="check")
     op.create_check_constraint(
         "ck_assets_asset_type",
         "assets",
         "asset_type IN ('process', 'information', 'application', 'hardware', "
         "'software', 'infrastructure', 'network', 'service', 'facility', 'other')",
     )
-    if "ck_assets_reference_nonblank" in {item["name"] for item in sa.inspect(op.get_bind()).get_check_constraints("assets")}:
+    checks = {item["name"] for item in sa.inspect(op.get_bind()).get_check_constraints("assets")}
+    if "ck_assets_reference_nonblank" in checks:
         op.drop_constraint("ck_assets_reference_nonblank", "assets", type_="check")
-    op.drop_index("uq_assets_reference_ci", table_name="assets")
+    indexes = {item["name"] for item in sa.inspect(op.get_bind()).get_indexes("assets")}
+    if "uq_assets_reference_ci" in indexes:
+        op.drop_index("uq_assets_reference_ci", table_name="assets")
     op.create_index(
         "uq_assets_reference_ci",
         "assets",
