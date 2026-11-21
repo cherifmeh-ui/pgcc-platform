@@ -78,7 +78,7 @@
     </div></div>
     <div v-if="assetSupplier" class="overlay" @click.self="assetSupplier=null"><div class="modal"><h2>Actifs liés — {{assetSupplier.legal_name}}</h2>
       <p v-if="assetLinkError" class="error">{{assetLinkError}}</p>
-      <div class="table-wrap"><table><thead><tr><th>Actif</th><th>Relation</th><th>Accès</th><th>Données</th><th>Statut</th><th>Revue</th><th v-if="canManageAssets">Action</th></tr></thead><tbody>
+      <div class="table-wrap"><table><thead><tr><th>Actif</th><th>Relation</th><th>Niveau déclaré</th><th>Données déclarées</th><th>Statut</th><th>Revue</th><th v-if="canManageAssets">Action</th></tr></thead><tbody>
         <tr v-for="link in supplierAssetLinks" :key="link.id"><td>{{link.asset_reference ? `${link.asset_reference} — ${link.asset_name}` : assetLabel(link.asset_id)}}</td><td>{{link.relationship_type}}</td><td>{{link.access_level}}</td><td>{{link.data_access?'Oui':'Non'}}</td><td>{{link.status}}</td><td>{{link.review_due_at||'—'}}</td><td v-if="canManageAssets"><button v-if="link.status!=='Terminé'" class="danger" @click="terminateAssetLink(link)">Terminer</button></td></tr>
         <tr v-if="!supplierAssetLinks.length"><td :colspan="canManageAssets?7:6" class="empty">Aucun actif lié.</td></tr></tbody></table></div>
       <section v-if="canReadAccess" class="assessment-editor"><h3>Autorisations d’accès aux actifs</h3>
