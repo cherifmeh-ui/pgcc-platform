@@ -3,9 +3,9 @@ from uuid import uuid4
 
 from sqlalchemy import (
     Boolean, CheckConstraint, Column, Date, DateTime, ForeignKey, Index, Integer,
-    String, Text, UniqueConstraint, func, text,
+    String, Text, UniqueConstraint, Numeric, func, text,
 )
-from sqlalchemy.dialects.postgresql import UUID as PG_UUID
+from sqlalchemy.dialects.postgresql import UUID as PG_UUID, JSONB
 
 from app.core.database import Base
 
@@ -111,5 +111,35 @@ class SupplierContract(Base):
     clause_data_location = Column(Boolean, nullable=False, default=False, server_default="false")
     clause_subcontracting = Column(Boolean, nullable=False, default=False, server_default="false")
     clause_data_return_destruction = Column(Boolean, nullable=False, default=False, server_default="false")
+    created_at = Column(DateTime(timezone=True), server_default=func.now(), nullable=False)
+    updated_at = Column(DateTime(timezone=True), server_default=func.now(), onupdate=func.now(), nullable=False)
+
+class SupplierAssessment(Base):
+    """Immutable, versioned supplier security assessment after submission."""
+    __tablename__ = "supplier_assessments"
+    __table_args__ = (
+        CheckConstraint("assessment_type IN ('Initiale', 'Périodique', 'Renouvellement', 'Incident', 'Changement majeur')", name="ck_supplier_assessments_type"),
+        CheckConstraint("status IN ('Brouillon', 'À valider', 'Validée', 'Clôturée')", name="ck_supplier_assessments_status"),
+        CheckConstraint("risk_level IS NULL OR risk_level IN ('Faible', 'Moyen', 'Élevé', 'Critique')", name="ck_supplier_assessments_risk"),
+        CheckConstraint("score IS NULL OR (score >= 0 AND score <= 100)", name="ck_supplier_assessments_score"),
+        CheckConstraint("(status = 'Brouillon' AND submitted_at IS NULL AND validated_at IS NULL) OR (status = 'À valider' AND submitted_at IS NOT NULL AND validated_at IS NULL) OR (status IN ('Validée', 'Clôturée') AND submitted_at IS NOT NULL AND validated_at IS NOT NULL)", name="ck_supplier_assessments_lifecycle"),
+        Index("ix_supplier_assessments_supplier_status", "supplier_id", "status", "created_at"),
+    )
+    id = Column(PG_UUID(as_uuid=True), primary_key=True, default=uuid4)
+    supplier_id = Column(PG_UUID(as_uuid=True), ForeignKey("suppliers.id", ondelete="RESTRICT"), nullable=False, index=True)
+    assessment_type = Column(String(30), nullable=False, default="Initiale")
+    scope = Column(Text, nullable=False)
+    questionnaire_version = Column(String(50), nullable=False)
+    questionnaire_snapshot = Column(JSONB, nullable=False)
+    answers = Column(JSONB, nullable=False, default=list, server_default=text("'[]'::jsonb"))
+    status = Column(String(20), nullable=False, default="Brouillon", server_default="Brouillon")
+    score = Column(Numeric(5, 2), nullable=True)
+    risk_level = Column(String(20), nullable=True)
+    decision = Column(String(30), nullable=True)
+    assessed_by_id = Column(PG_UUID(as_uuid=True), ForeignKey("users.id", ondelete="RESTRICT"), nullable=False, index=True)
+    validated_by_id = Column(PG_UUID(as_uuid=True), ForeignKey("users.id", ondelete="RESTRICT"), nullable=True, index=True)
+    next_review_at = Column(Date, nullable=True)
+    submitted_at = Column(DateTime(timezone=True), nullable=True)
+    validated_at = Column(DateTime(timezone=True), nullable=True)
     created_at = Column(DateTime(timezone=True), server_default=func.now(), nullable=False)
     updated_at = Column(DateTime(timezone=True), server_default=func.now(), onupdate=func.now(), nullable=False)
