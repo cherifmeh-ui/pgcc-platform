@@ -99,7 +99,16 @@ export const useAuthStore = defineStore('auth', {
       }
     },
 
-    logout() {
+    async logout() {
+      const refreshToken = this.refreshToken || localStorage.getItem('pgcc_refresh_token');
+      if (refreshToken) {
+        try {
+          await apiClient.post('/auth/logout', { refresh_token: refreshToken });
+        } catch (err) {
+          // Local logout must succeed even if server revocation is unavailable.
+          console.warn('Révocation serveur de la session impossible:', err);
+        }
+      }
       this.$reset();
       [
         'pgcc_access_token',
