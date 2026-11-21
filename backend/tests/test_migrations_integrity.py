@@ -128,3 +128,10 @@ def test_refresh_endpoint_uses_persisted_session_and_replay_revocation():
     assert "with_for_update()" in source
     assert "reused" in source.lower() or "Réutilisation" in source
     assert "@router.post(\"/logout\"" in source
+
+
+def test_refresh_token_hash_has_unique_constraint_without_redundant_index():
+    migration = MIGRATIONS_DIR / "0021_refresh_token_sessions.py"
+    source = migration.read_text(encoding="utf-8")
+    assert 'sa.UniqueConstraint("token_jti_hash", name="uq_refresh_token_sessions_jti_hash")' in source
+    assert 'op.create_index("ix_refresh_token_sessions_token_jti_hash"' not in source
