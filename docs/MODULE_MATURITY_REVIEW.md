@@ -178,3 +178,11 @@ The initial code-level review found that DOCX extraction joined paragraphs/table
 - **Correction applied:** `0001_initial.py` and development startup now execute `CREATE EXTENSION IF NOT EXISTS vector` before metadata creation. A static regression assertion was added.
 - **Remaining validation:** disposable PostgreSQL run must confirm the image contains pgvector and the DB role has extension-creation rights. Existing stamped databases require inspection; the baseline will not run again automatically.
 
+
+## Asset inventory integrity review — correction applied
+
+- The API normalizes asset references by trimming whitespace, but the previous database unique index only compared `lower(reference)`; legacy rows with leading/trailing whitespace could bypass normalized uniqueness.
+- Asset type validation in the model included `cloud_resource`, but migration `0006` did not. This would create model/schema drift and reject this type on a migrated database.
+- Migration `0020_asset_reference_and_type_constraints` now checks for normalized duplicate references, creates a unique index on `lower(btrim(reference))`, prohibits blank references at DB level, and aligns the allowed asset types.
+- The SQLAlchemy model now matches these constraints and a schema test protects the normalized index and nonblank constraint.
+- **Important:** migration 0020 fails safely if existing normalized duplicates are found. Resolve these records through a reviewed data-cleanup process before upgrading; do not automatically rewrite inventory references.
