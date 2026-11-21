@@ -89,3 +89,11 @@ Do not close Phase 0 until evidence is attached for:
 
 - Migration 0021 defines a database-side default for `created_at` (`now()`). The ORM model previously only had a Python-side default; it has now been aligned with `server_default=func.now()` so direct SQL inserts and ORM metadata agree.
 - Added a model test asserting the server default exists. PostgreSQL integration migration/test is pending CI.
+
+
+## Migration review — revision 0020 downgrade index mismatch
+
+- Found a mismatch in revision `0020`: upgrade creates a unique index on `lower(btrim(reference))`, while downgrade recreated the earlier index on `lower(reference)`. This would leave schema behavior different from the prior revision after downgrade.
+- Corrected downgrade to restore the exact pre-0020 index expression `lower(reference)`, preserving upgrade/downgrade symmetry.
+- Added a static regression test asserting both index expressions and the guarded downgrade for cloud_resource values.
+- Runtime PostgreSQL migration/downgrade validation is still required.
