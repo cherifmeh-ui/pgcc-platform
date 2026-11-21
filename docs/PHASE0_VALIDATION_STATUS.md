@@ -284,3 +284,11 @@ Repository/static hardening is substantially progressed, but the remaining gates
 - Downgrades check table existence before dropping the revision's table.
 - Added static regression coverage across revisions 0014–0019.
 - Runtime PostgreSQL CI is pending.
+
+
+### Migration review 0020–0021
+
+- Revision 0020 was rewritten after inspection to guard existing normalized-reference indexes and check constraints. It still rejects duplicate normalized references before enforcing uniqueness and protects downgrade from cloud_resource values.
+- Revision 0021 refresh-token session table/index creation and downgrade now check baseline overlap.
+- Added static regression checks for revisions 0020–0021.
+- Runtime upgrade/downgrade PostgreSQL CI remains the acceptance gate; the baseline overlap guards do not prove exact schema equivalence.
