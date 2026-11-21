@@ -25,13 +25,14 @@ Résultat attendu:
 - une seule tête de migration;
 - historique sans révision manquante;
 - upgrade terminé sans erreur;
-- `alembic current` indique `0019_supplier_risk_snapshots`.
+- `alembic current` indique `0021_refresh_token_sessions`.
 
 Inspecter ensuite le schéma réel:
 - tables et colonnes;
 - PK/FK, contraintes CHECK, uniques;
 - index;
 - extension pgvector et types vectoriels;
+- table `refresh_token_sessions`, unique JTI hash, FK utilisateur, index utilisateur/expiration et index de sessions actives;
 - table `alembic_version`;
 - concordance avec les modèles SQLAlchemy.
 
