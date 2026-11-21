@@ -98,7 +98,7 @@
         </thead>
         <tbody>
           <tr v-if="filteredRows.length === 0">
-            <td colspan="6" class="empty-filter-state">Aucun contrôle ne correspond aux filtres sélectionnés.</td>
+            <td colspan="7" class="empty-filter-state">Aucun contrôle ne correspond aux filtres sélectionnés.</td>
           </tr>
           <tr v-for="row in filteredRows" :key="row.ref_code" class="table-row-hover">
             <td><code class="ref-code">{{ row.ref_code }}</code></td>
