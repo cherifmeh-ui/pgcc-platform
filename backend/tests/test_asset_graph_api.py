@@ -20,8 +20,8 @@ async def test_graph_returns_active_assets_and_relationships():
     ]
     relation_result = MagicMock()
     relation_result.scalars.return_value.all.return_value = [
-        MagicMock(id="REL-1", source_asset_id=B, target_asset_id=A, relationship_type="depends_on", description="Application hébergée"),
-        MagicMock(id="REL-2", source_asset_id=B, target_asset_id=UUID("00000000-0000-0000-000000000003"), relationship_type="connects_to", description=None),
+        MagicMock(id=UUID("00000000-0000-0000-000000000004"), source_asset_id=B, target_asset_id=A, relationship_type="depends_on", description="Application hébergée"),
+        MagicMock(id=UUID("00000000-0000-0000-000000000005"), source_asset_id=B, target_asset_id=UUID("00000000-0000-0000-000000000003"), relationship_type="connects_to", description=None),
     ]
     db.execute.side_effect = [asset_result, relation_result]
 
