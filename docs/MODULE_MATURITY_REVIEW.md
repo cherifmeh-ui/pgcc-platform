@@ -342,3 +342,10 @@ The initial code-level review found that DOCX extraction joined paragraphs/table
 - Added logout endpoint to revoke the presented refresh session.
 - Initial login after MFA enrollment and mandatory-password-change completion persist refresh sessions.
 - Remaining: PostgreSQL concurrency integration tests, frontend logout integration, cookie/CSRF architecture decision, revoke-all endpoint, migration runtime validation.
+
+
+### 25. Refresh-session index review
+
+- Removed the redundant standalone index on `token_jti_hash`; its unique constraint already creates an index supporting exact-token lookup.
+- Retained the compound active-session index and user/expiry indexes.
+- Added a static migration regression check to guard against reintroducing the duplicate index.
