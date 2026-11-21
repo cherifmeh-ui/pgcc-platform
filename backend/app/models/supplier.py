@@ -2,7 +2,7 @@
 from uuid import uuid4
 
 from sqlalchemy import (
-    Boolean, CheckConstraint, Column, DateTime, ForeignKey, Index,
+    Boolean, CheckConstraint, Column, Date, DateTime, ForeignKey, Index, Integer,
     String, Text, UniqueConstraint, func, text,
 )
 from sqlalchemy.dialects.postgresql import UUID as PG_UUID
