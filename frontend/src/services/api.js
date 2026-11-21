@@ -48,7 +48,7 @@ apiClient.interceptors.response.use(
     }
 
     // Éviter boucle infinie sur /auth/refresh lui-même
-    if (originalRequest._retry || originalRequest.url.includes('/auth/refresh')) {
+    if (originalRequest._retry || originalRequest.url.includes('/auth/refresh') || originalRequest.url.includes('/auth/logout')) {
       return Promise.reject(error);
     }
 
