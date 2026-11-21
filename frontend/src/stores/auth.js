@@ -109,13 +109,14 @@ export const useAuthStore = defineStore('auth', {
           console.warn('Révocation serveur de la session impossible:', err);
         }
       }
-      this.$reset();
       [
         'pgcc_access_token',
         'pgcc_refresh_token',
         'pgcc_user_role',
         'pgcc_permissions',
       ].forEach((key) => localStorage.removeItem(key));
+      // Reset after storage cleanup so state() cannot reload stale credentials.
+      this.$reset();
       window.location.href = '/login';
     },
   },
