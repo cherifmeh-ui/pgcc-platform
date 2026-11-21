@@ -149,3 +149,11 @@ Repository/static hardening is substantially progressed, but the remaining gates
 - Added tests for invalid-token logout idempotency (no DB operation) and valid-token revocation path (DB update + commit).
 - Current HEAD: `1796197a8bb409878838c6a29e550779692cff79`.
 - CI status for `d60c9af` is in progress; runs for the current logout tests are queued.
+
+
+### Current checkpoint — expiry claim validation
+
+- Current HEAD: `90a702429ea9684a5f03309114baae935e909d85`.
+- CI succeeded on `0d09755` after correcting the missing-exp test to expect the HTTP 401 validation response.
+- Runs for current HEAD are in progress.
+- Refresh-session persistence now rejects missing/non-numeric/boolean `exp` claims; regression tests cover these values.
