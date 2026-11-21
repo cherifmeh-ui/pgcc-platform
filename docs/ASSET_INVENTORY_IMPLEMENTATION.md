@@ -151,3 +151,5 @@ Tests unitaires ajoutés : chaîne de dépendances, actif non lié, chemins mult
 - Les endpoints historiques GET /assets/ et leurs paramètres limit/offset sont conservés pour compatibilité.
 - L'interface utilise la pagination serveur, les filtres avancés et l'export CSV.
 - L'analyse d'impact expose une synthèse des risques distincts par niveau et statut, uniquement si le rôle dispose de risks:read; les risques sont dédupliqués dans les totaux lorsqu'ils concernent plusieurs actifs.
+
+- Les classes de synthèse des risques réutilisent exactement les seuils du registre existant : 1–4 Faible, 5–9 Modéré, 10–14 Élevé, 15–19 Critique, 20–25 Inacceptable.
