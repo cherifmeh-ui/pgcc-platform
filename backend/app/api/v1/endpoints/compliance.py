@@ -64,13 +64,20 @@ class ComplianceMatrixRow(BaseModel):
     status: str # "Déclaré couvert", "À vérifier", "Non évalué"
     linked_risks_count: int
     last_update: str | None
+    latest_assessment_status: str | None = None
+    latest_assessment_maturity: int | None = None
+    latest_assessment_applicability: str | None = None
+    latest_assessed_at: datetime | None = None
     
 class MatrixResponse(BaseModel):
     total_controls: int
     covered_count: int
     partial_count: int
     uncovered_count: int
-    overall_score: float # % global
+    overall_score: float # % declarative manual coverage
+    evaluated_count: int
+    applicable_count: int
+    average_maturity: float | None
     rows: List[ComplianceMatrixRow]
     methodology: str
 
@@ -130,7 +137,7 @@ async def get_compliance_matrix(
         controls = ctrl_query.scalars().all()
         
         if not controls:
-             return MatrixResponse(total_controls=0, covered_count=0, partial_count=0, uncovered_count=0, overall_score=0.0, rows=[], methodology="Score déclaratif : seuls les contrôles marqués manuellement sont comptés comme couverts; les liens textuels sont des indicateurs à vérifier.")
+             return MatrixResponse(total_controls=0, covered_count=0, partial_count=0, uncovered_count=0, overall_score=0.0, evaluated_count=0, applicable_count=0, average_maturity=None, rows=[], methodology="Score déclaratif : seuls les contrôles marqués manuellement sont comptés comme couverts; les liens textuels sont des indicateurs à vérifier.")
 
         # 2. Fetch relevant risks/actions to determine coverage
         risk_query = await db.execute(select(Risk))
@@ -138,14 +145,35 @@ async def get_compliance_matrix(
         
         action_query = await db.execute(select(ActionItem).where(ActionItem.status == ActionStatus.DONE))
         done_actions = action_query.scalars().all()
-        
+
+        assessment_query = await db.execute(
+            select(IsoControlAssessment).order_by(IsoControlAssessment.assessed_at.desc())
+        )
+        latest_assessments = {}
+        for assessment in assessment_query.scalars().all():
+            latest_assessments.setdefault(assessment.control_id, assessment)
+
         rows = []
         covered = 0
         partial = 0
         uncovered = 0
-        
-        
+        evaluated_count = 0
+        applicable_count = 0
+        maturity_values = []
+
         for c in controls:
+            latest = latest_assessments.get(c.id)
+            if latest:
+                evaluated_count += 1
+                if latest.applicability == "Applicable":
+                    applicable_count += 1
+                    maturity_values.append(latest.maturity_level)
+            assessment_fields = {
+                "latest_assessment_status": latest.implementation_status if latest else None,
+                "latest_assessment_maturity": latest.maturity_level if latest else None,
+                "latest_assessment_applicability": latest.applicability if latest else None,
+                "latest_assessed_at": latest.assessed_at if latest else None,
+            }
             ref = c.ref_code.lower().strip() # e.g., "a.8.9"
             found_links = 0
             has_done_action = False
@@ -156,7 +184,8 @@ async def get_compliance_matrix(
                 covered += 1
                 rows.append(ComplianceMatrixRow(
                     ref_code=c.ref_code, title=c.title, domain=c.domain,
-                    status=status, linked_risks_count=0, last_update=None
+                    status=status, linked_risks_count=0, last_update=None,
+                    **assessment_fields
                 ))
                 continue
                 
@@ -182,7 +211,8 @@ async def get_compliance_matrix(
                 
             rows.append(ComplianceMatrixRow(
                 ref_code=c.ref_code, title=c.title, domain=c.domain,
-                status=status, linked_risks_count=found_links, last_update=None
+                status=status, linked_risks_count=found_links, last_update=None,
+                **assessment_fields
             ))
             
         total = len(rows)
@@ -194,6 +224,9 @@ async def get_compliance_matrix(
             partial_count=partial,
             uncovered_count=uncovered,
             overall_score=score,
+            evaluated_count=evaluated_count,
+            applicable_count=applicable_count,
+            average_maturity=round(sum(maturity_values) / len(maturity_values), 2) if maturity_values else None,
             rows=rows,
             methodology="Score déclaratif : seuls les contrôles marqués manuellement sont comptés comme couverts; les liens textuels sont des indicateurs à vérifier."
         )
