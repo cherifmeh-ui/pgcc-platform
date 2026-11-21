@@ -52,3 +52,9 @@ def test_asset_risk_link_has_unique_pair_and_explicit_foreign_keys():
     assert any(c.name == "uq_asset_risk_link" for c in AssetRiskLink.__table__.constraints)
     foreign_keys = {fk.target_fullname for fk in AssetRiskLink.__table__.foreign_keys}
     assert foreign_keys == {"assets.id", "risks.id"}
+
+
+def test_asset_application_link_is_many_to_one():
+    assert not any(c.name == "uq_assets_application_id" for c in Asset.__table__.constraints)
+    fk = next(fk for fk in Asset.__table__.foreign_keys if fk.parent.name == "application_id")
+    assert fk.target_fullname == "applications.id"
