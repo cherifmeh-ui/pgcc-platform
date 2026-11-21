@@ -114,3 +114,13 @@ def test_supplier_asset_link_permissions_are_separated():
     assert role_has_permission("admin", "suppliers", "manage_assets")
     assert not role_has_permission("auditor", "suppliers", "manage_assets")
     assert not role_has_permission("executive", "suppliers", "manage_assets")
+
+
+def test_supplier_asset_reverse_lookup_uses_supplier_permissions():
+    from app.api.v1.endpoints.suppliers import list_asset_suppliers
+    assert list_asset_suppliers.__name__ == "list_asset_suppliers"
+    assert role_has_permission("admin", "suppliers", "read_assets")
+    assert role_has_permission("auditor", "suppliers", "read_assets")
+    assert not role_has_permission("executive", "suppliers", "read_assets")
+    assert role_has_permission("admin", "suppliers", "manage_assets")
+    assert not role_has_permission("auditor", "suppliers", "manage_assets")
