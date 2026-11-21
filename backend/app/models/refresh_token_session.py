@@ -2,7 +2,7 @@
 import uuid
 from datetime import datetime, timezone
 
-from sqlalchemy import Column, DateTime, ForeignKey, String, Index, UniqueConstraint
+from sqlalchemy import Column, DateTime, ForeignKey, String, Index, UniqueConstraint, func
 from sqlalchemy.dialects.postgresql import UUID
 
 from app.core.database import Base
@@ -19,7 +19,7 @@ class RefreshTokenSession(Base):
     user_id = Column(UUID(as_uuid=True), ForeignKey("users.id", ondelete="CASCADE"), nullable=False, index=True)
     token_jti_hash = Column(String(64), nullable=False)
     expires_at = Column(DateTime(timezone=True), nullable=False, index=True)
-    created_at = Column(DateTime(timezone=True), default=utcnow, nullable=False)
+    created_at = Column(DateTime(timezone=True), default=utcnow, server_default=func.now(), nullable=False)
     revoked_at = Column(DateTime(timezone=True), nullable=True)
     replaced_by_jti_hash = Column(String(64), nullable=True)
 
