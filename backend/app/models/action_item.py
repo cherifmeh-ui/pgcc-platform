@@ -1,5 +1,5 @@
 # backend/app/models/action_item.py
-from sqlalchemy import Column, String, ForeignKey, DateTime, Text, Enum as SQLEnum, func
+from sqlalchemy import Column, String, ForeignKey, DateTime, Text, Enum as SQLEnum, func, Integer
 from sqlalchemy.dialects.postgresql import UUID as PG_UUID
 from sqlalchemy.orm import relationship  # ⬅️ IMPORT CRUCIAL AJOUTÉ
 import enum
