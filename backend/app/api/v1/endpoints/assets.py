@@ -264,7 +264,36 @@ async def preview_asset_csv_import(
                 if data.get("serial_number") and asset.serial_number and asset.serial_number.casefold() == data["serial_number"].casefold(): conflicts.append("numéro de série déjà existant")
             if conflicts:
                 errors.append({"row": row["row"], "error": "; ".join(sorted(set(conflicts)))})
-    return {"filename": file.filename, "rows_valid": len(rows) - sum(1 for e in errors if any(r["row"] == e["row"] for r in rows)), "rows_parsed": len(rows), "errors": errors, "preview": rows[:20], "can_import": len(rows) > 0 and not errors}
+    return {"filename": file.filename, "rows_valid": len(rows) - sum(1 for e in errors if any(r["row"] == e["row"] for r in rows)), "rows_parsed": len(rows), "errors": errors, "preview": rows[:20], "validated_rows": rows, "can_import": len(rows) > 0 and not errors}
+
+
+@router.post("/import/confirm", status_code=status.HTTP_201_CREATED)
+async def confirm_asset_csv_import(
+    file: UploadFile = File(...),
+    request: Request = None,
+    db: AsyncSession = Depends(get_db),
+    current_user: User = require_permission("assets", "create"),
+):
+    """Revalidate and import CSV assets atomically; never overwrite existing assets."""
+    preview = await preview_asset_csv_import(file=file, db=db, current_user=current_user)
+    if not preview["can_import"]:
+        raise HTTPException(status_code=422, detail={"message": "Import refusé : corrigez les erreurs de prévalidation.", "errors": preview["errors"]})
+    rows = preview["validated_rows"]
+    for row in rows:
+        await _ensure_application_exists(row["data"].get("application_id"), db)
+    assets = [Asset(**row["data"]) for row in rows]
+    db.add_all(assets)
+    try:
+        await db.commit()
+    except Exception:
+        await db.rollback()
+        raise HTTPException(status_code=409, detail="Import annulé : conflit ou contrainte invalide. Aucun actif n'a été importé.")
+    await log_action(
+        user_email=current_user.email, action="IMPORT", resource="assets",
+        details=f"CSV asset import completed: {len(assets)} assets from {file.filename}",
+        event_type="ASSET", request=request,
+    )
+    return {"imported": len(assets), "message": f"{len(assets)} actifs importés avec succès."}
 
 
 @router.get("/graph")
