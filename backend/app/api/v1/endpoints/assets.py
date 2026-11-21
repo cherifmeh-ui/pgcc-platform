@@ -438,6 +438,32 @@ async def create_asset_relationship(
     return relationship
 
 
+@router.delete("/{asset_id}/relationships/{relationship_id}", status_code=status.HTTP_204_NO_CONTENT)
+async def delete_asset_relationship(
+    asset_id: UUID,
+    relationship_id: UUID,
+    request: Request,
+    db: AsyncSession = Depends(get_db),
+    current_user: User = require_permission("assets", "update"),
+):
+    result = await db.execute(
+        select(AssetRelationship).where(
+            AssetRelationship.id == relationship_id,
+            (AssetRelationship.source_asset_id == asset_id) | (AssetRelationship.target_asset_id == asset_id),
+        )
+    )
+    relationship = result.scalar_one_or_none()
+    if relationship is None:
+        raise HTTPException(status_code=404, detail="Relation introuvable pour cet actif")
+    await db.delete(relationship)
+    await db.commit()
+    await log_action(
+        user_email=current_user.email, action="DELETE_RELATIONSHIP", resource="asset_relationships",
+        resource_id=str(relationship.id), details=f"Asset relationship deleted: {relationship.source_asset_id} -> {relationship.target_asset_id}",
+        event_type="ASSET", request=request,
+    )
+
+
 @router.get("/{asset_id}/risks", response_model=list[AssetRiskLinkResponse])
 async def list_asset_risk_links(
     asset_id: UUID,
