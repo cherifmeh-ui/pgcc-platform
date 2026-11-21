@@ -410,5 +410,7 @@ def test_supplier_access_eligibility_rejects_retired_asset_marker():
 
 def test_supplier_access_eligibility_allows_active_asset():
     from app.api.v1.endpoints.suppliers import _asset_allows_supplier_access
-    assert _asset_allows_supplier_access("En service", None)
+    assert _asset_allows_supplier_access("Identifié", None)
     assert _asset_allows_supplier_access("Actif", None)
+    assert _asset_allows_supplier_access("En maintenance", None)
+    assert _asset_allows_supplier_access("En projet", None)
