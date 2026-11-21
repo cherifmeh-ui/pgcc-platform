@@ -35,3 +35,14 @@
 ## Limites et prochaines étapes
 
 La synthèse est un instantané calculé à la demande. Les dates utilisent la date du serveur applicatif; le fuseau métier devra être fixé explicitement au déploiement. Les dépendances fournisseurs sont également intégrées à l'analyse d'impact des actifs, sous réserve de la permission `suppliers:read_assets`.
+
+
+## Historisation mensuelle
+
+La migration `0019_supplier_risk_snapshots` crée une table d'instantanés immuables, avec une contrainte d'unicité sur le premier jour du mois.
+
+- `POST /api/v1/suppliers/overview/snapshots/capture` : capture l'état courant une fois par mois; permission `suppliers:manage_risks` (RSSI / administrateur).
+- `GET /api/v1/suppliers/overview/snapshots?limit=24` : restitue les instantanés historiques; permissions `suppliers:read` et `risks:read`.
+- Une seconde capture du même mois est refusée avec HTTP 409; les instantanés ne sont pas écrasés.
+- Chaque enregistrement conserve les indicateurs JSON calculés, la date du mois, l'utilisateur ayant capturé et l'horodatage.
+- Cette historisation est déclenchée explicitement par un utilisateur autorisé; elle ne prétend pas être une tâche planifiée automatique.
