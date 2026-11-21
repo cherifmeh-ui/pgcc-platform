@@ -61,3 +61,9 @@ Contrats et pièces justificatives, évaluations versionnées, accès tiers et r
 - Permissions dédiées : Admin pour évaluer et valider; Admin/Auditor en lecture.
 - Migration Alembic 0014_supplier_assessments; aucune modification des tables historiques.
 - La validation reste une décision humaine; le score ne modifie pas automatiquement le statut du fournisseur.
+### Contrôle de confiance du questionnaire
+
+- Le client ne transmet plus la définition ni les pondérations du questionnaire.
+- Les versions publiées sont définies côté serveur; la création charge une copie profonde de la version autorisée et la conserve en instantané dans l'évaluation.
+- Une version inconnue est rejetée. Cela empêche un utilisateur de modifier les pondérations ou les questions afin de manipuler le score.
+- Toute évolution du référentiel doit publier une nouvelle version; les évaluations historiques conservent leur propre instantané.
