@@ -78,6 +78,7 @@ class MatrixResponse(BaseModel):
     evaluated_count: int
     applicable_count: int
     average_maturity: float | None
+    maturity_score: float | None
     rows: List[ComplianceMatrixRow]
     methodology: str
 
@@ -137,7 +138,7 @@ async def get_compliance_matrix(
         controls = ctrl_query.scalars().all()
         
         if not controls:
-             return MatrixResponse(total_controls=0, covered_count=0, partial_count=0, uncovered_count=0, overall_score=0.0, evaluated_count=0, applicable_count=0, average_maturity=None, rows=[], methodology="Score déclaratif : seuls les contrôles marqués manuellement sont comptés comme couverts; les liens textuels sont des indicateurs à vérifier.")
+             return MatrixResponse(total_controls=0, covered_count=0, partial_count=0, uncovered_count=0, overall_score=0.0, evaluated_count=0, applicable_count=0, average_maturity=None, maturity_score=None, rows=[], methodology="Score déclaratif : seuls les contrôles marqués manuellement sont comptés comme couverts; les liens textuels sont des indicateurs à vérifier.")
 
         # 2. Fetch relevant risks/actions to determine coverage
         risk_query = await db.execute(select(Risk))
@@ -217,6 +218,7 @@ async def get_compliance_matrix(
             
         total = len(rows)
         score = round((covered / total * 100), 1) if total > 0 else 0.0
+        maturity_score = round((sum(maturity_values) / (5 * len(maturity_values)) * 100), 1) if maturity_values else None
         
         return MatrixResponse(
             total_controls=total,
@@ -227,6 +229,7 @@ async def get_compliance_matrix(
             evaluated_count=evaluated_count,
             applicable_count=applicable_count,
             average_maturity=round(sum(maturity_values) / len(maturity_values), 2) if maturity_values else None,
+            maturity_score=maturity_score,
             rows=rows,
             methodology="Score déclaratif : seuls les contrôles marqués manuellement sont comptés comme couverts; les liens textuels sont des indicateurs à vérifier."
         )
