@@ -7,7 +7,7 @@
       <p class="subtitle">Vue consolidée des risques SI, applications critiques et conformité CTF.</p>
       
       <div class="actions-row">
-        <button @click="fetchAllRisks" :disabled="loading" class="action-btn secondary">
+        <button @click="refreshDashboard" :disabled="loading" class="action-btn secondary">
           {{ loading ? 'Actualisation...' : '🔄 Actualiser les données' }}
         </button>
         <button @click="generateReport" :disabled="generatingReport" class="action-btn primary">
@@ -284,6 +284,10 @@ async function fetchAllRisks() {
   } finally {
     loading.value = false;
   }
+}
+
+async function refreshDashboard() {
+  await Promise.all([fetchAllRisks(), fetchActionStats()]);
 }
 
 async function fetchActionStats() {
