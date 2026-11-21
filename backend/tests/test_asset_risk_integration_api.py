@@ -176,3 +176,45 @@ async def test_asset_risk_unlink_returns_404_when_risk_missing():
     assert exc.value.status_code == 404
     db.delete.assert_not_awaited()
     db.commit.assert_not_awaited()
+
+@pytest.mark.asyncio
+async def test_asset_risk_link_creation_rejects_retired_asset():
+    from app.api.v1.endpoints.assets import AssetRiskLinkCreate, link_asset_to_risk
+    asset = MagicMock(id=ASSET_ID, retired_at=None, lifecycle_status="Retiré", reference="AST-001")
+    asset_result = MagicMock()
+    asset_result.scalar_one_or_none.return_value = asset
+    db = AsyncMock()
+    db.execute.return_value = asset_result
+    with pytest.raises(HTTPException) as exc:
+        await link_asset_to_risk(
+            asset_id=ASSET_ID, data=AssetRiskLinkCreate(risk_id=RISK_ID),
+            request=MagicMock(), db=db,
+            current_user=MagicMock(role="admin", email="admin@example.test"),
+        )
+    assert exc.value.status_code == 409
+    assert db.execute.await_count == 1
+    db.add.assert_not_called()
+    db.commit.assert_not_awaited()
+
+
+@pytest.mark.asyncio
+async def test_asset_risk_link_creation_rejects_retired_marker():
+    from datetime import datetime, timezone
+    from app.api.v1.endpoints.assets import AssetRiskLinkCreate, link_asset_to_risk
+    asset = MagicMock(
+        id=ASSET_ID, retired_at=datetime(2026, 1, 1, tzinfo=timezone.utc),
+        lifecycle_status="Actif", reference="AST-001",
+    )
+    asset_result = MagicMock()
+    asset_result.scalar_one_or_none.return_value = asset
+    db = AsyncMock()
+    db.execute.return_value = asset_result
+    with pytest.raises(HTTPException) as exc:
+        await link_asset_to_risk(
+            asset_id=ASSET_ID, data=AssetRiskLinkCreate(risk_id=RISK_ID),
+            request=MagicMock(), db=db,
+            current_user=MagicMock(role="admin", email="admin@example.test"),
+        )
+    assert exc.value.status_code == 409
+    db.add.assert_not_called()
+    db.commit.assert_not_awaited()
