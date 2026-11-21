@@ -170,3 +170,11 @@ The initial code-level review found that DOCX extraction joined paragraphs/table
 - Corrected in `backend/app/services/document_extractor.py`.
 - Added regression assertions in `backend/tests/test_document_extractor_security.py` for actual paragraph/table separation and truncation marker line breaks.
 - GitHub Actions backend checks on the current review commit have passed; the frontend job is still running at the time of this update.
+
+### M0 — pgvector extension prerequisite
+
+- The initial baseline creates SQLAlchemy metadata containing the PostgreSQL `vector` column type used by `document_chunks.embedding`.
+- The previous baseline did not explicitly create the `vector` extension before creating tables; development startup also called `create_all()` without enabling the extension.
+- **Correction applied:** `0001_initial.py` and development startup now execute `CREATE EXTENSION IF NOT EXISTS vector` before metadata creation. A static regression assertion was added.
+- **Remaining validation:** disposable PostgreSQL run must confirm the image contains pgvector and the DB role has extension-creation rights. Existing stamped databases require inspection; the baseline will not run again automatically.
+
