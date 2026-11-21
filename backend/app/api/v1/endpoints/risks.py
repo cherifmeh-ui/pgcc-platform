@@ -16,6 +16,7 @@ from app.models.user import User
 from app.schemas.risk import RiskCreate, RiskResponse, RiskUpdate
 from app.services.security_logger import log_action
 from app.services.risk_scoring import calculate_risk_level
+from app.utils.rbac import role_has_permission
 
 router = APIRouter(prefix="/risks", tags=["Risques SI"])
 
@@ -256,6 +257,8 @@ async def list_risk_assets(
     db: AsyncSession = Depends(get_db),
     current_user: User = require_permission("risks", "read"),
 ):
+    if not role_has_permission((current_user.role or "").lower(), "assets", "read"):
+        raise HTTPException(status_code=403, detail="Accès refusé : permission assets:read requise.")
     risk_result = await db.execute(select(Risk.id).where(Risk.id == risk_id))
     if risk_result.scalar_one_or_none() is None:
         raise HTTPException(status_code=404, detail="Risque introuvable")
