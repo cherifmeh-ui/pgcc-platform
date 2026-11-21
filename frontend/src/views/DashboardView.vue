@@ -301,7 +301,13 @@ async function fetchActionStats() {
     actionStats.done = done;
     actionStats.inProgress = data.filter(a => a.status === "En cours").length;
     actionStats.blocked = data.filter(a => a.status === "Bloqué").length;
-    actionStats.overdue = data.filter(a => a.status !== "Terminé" && a.due_date && new Date(a.due_date) < now).length;
+    actionStats.overdue = data.filter(a => {
+      if (a.status === "Terminé" || !a.due_date) return false;
+      const due = new Date(a.due_date);
+      if (Number.isNaN(due.getTime())) return false;
+      due.setHours(23, 59, 59, 999);
+      return due < now;
+    }).length;
     actionStats.completionRate = total ? Math.round((done / total) * 100) : 0;
   } catch (err) {
     console.error("Erreur chargement indicateurs plans d'action:", err);
