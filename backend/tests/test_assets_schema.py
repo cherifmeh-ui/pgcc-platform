@@ -2,7 +2,7 @@ import pytest
 from pydantic import ValidationError
 
 from app.api.v1.endpoints.assets import AssetCreate, AssetUpdate, RelationshipCreate
-from app.models.asset import Asset, AssetRelationship
+from app.models.asset import Asset, AssetRelationship, AssetRiskLink
 
 
 def test_asset_create_accepts_application_link_and_classification():
@@ -45,3 +45,10 @@ def test_asset_models_have_expected_tables_and_constraints():
     assert AssetRelationship.__tablename__ == "asset_relationships"
     assert any(c.name == "uq_assets_reference" for c in Asset.__table__.constraints)
     assert any(c.name == "ck_asset_relationship_not_self" for c in AssetRelationship.__table__.constraints)
+
+
+def test_asset_risk_link_has_unique_pair_and_explicit_foreign_keys():
+    assert AssetRiskLink.__tablename__ == "asset_risk_links"
+    assert any(c.name == "uq_asset_risk_link" for c in AssetRiskLink.__table__.constraints)
+    foreign_keys = {fk.target_fullname for fk in AssetRiskLink.__table__.foreign_keys}
+    assert foreign_keys == {"assets.id", "risks.id"}
