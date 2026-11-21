@@ -259,8 +259,8 @@ function exportRisksCsv() {
     return '"' + text.replace(/"/g, '""') + '"';
   };
   const rows = filteredRisks.value.map(r => [r.ref, r.title, r.description, r.threat, r.impact, r.likelihood, r.risk_level, r.site, r.status, r.treatment_plan, r.created_at, r.updated_at]);
-  const csv = [headers, ...rows].map(row => row.map(escapeCsv).join(";")).join("\\r\\n");
-  const blob = new Blob(["\\uFEFF", csv], { type: "text/csv;charset=utf-8" });
+  const csv = [headers, ...rows].map(row => row.map(escapeCsv).join(";")).join("\r\n");
+  const blob = new Blob(["\uFEFF", csv], { type: "text/csv;charset=utf-8" });
   const url = URL.createObjectURL(blob);
   const link = document.createElement("a");
   link.href = url;
