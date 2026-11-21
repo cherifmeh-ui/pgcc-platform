@@ -1031,6 +1031,30 @@ async def list_supplier_risk_snapshots(
     ]
 
 
+
+@router.get("/overview/trends")
+async def get_supplier_risk_trends(
+    limit: int = Query(default=12, ge=2, le=60),
+    db: AsyncSession = Depends(get_db),
+    current_user: User = require_permission("suppliers", "read"),
+):
+    """Compare the two latest captured monthly TPRM snapshots."""
+    if not role_has_permission((current_user.role or "").lower(), "risks", "read"):
+        raise HTTPException(status_code=403, detail="La permission risks:read est requise.")
+    from app.services.supplier_risk_overview import compare_supplier_risk_snapshots
+
+    result = await db.execute(
+        select(SupplierRiskSnapshot)
+        .order_by(SupplierRiskSnapshot.snapshot_month.desc())
+        .limit(limit)
+    )
+    snapshots = [
+        {"snapshot_month": item.snapshot_month, "indicators": item.indicators}
+        for item in result.scalars().all()
+    ]
+    return compare_supplier_risk_snapshots(snapshots)
+
+
 @router.get("/{supplier_id}", response_model=SupplierResponse)
 async def get_supplier(
     supplier_id: UUID,
