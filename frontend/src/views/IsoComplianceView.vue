@@ -37,6 +37,7 @@
 
     <!-- Filtres Modernes -->
     <div class="filters-bar card-modern">
+      <input v-model.trim="filterSearch" type="search" class="filter-select modern" placeholder="🔎 Rechercher référence ou contrôle..." aria-label="Rechercher un contrôle ISO" />
       <select v-model="filterDomain" class="filter-select modern">
         <option value="">📂 Tous les Domaines</option>
         <option v-for="d in domains" :key="d" :value="d">{{ d }}</option>
@@ -172,6 +173,7 @@ const loading = ref(true);
 const matrixData = ref(null);
 const filterDomain = ref('');
 const filterStatus = ref('');
+const filterSearch = ref('');
 
 // État IA
 const showAiPanel = ref(false);
@@ -191,7 +193,9 @@ const filteredRows = computed(() => {
   return matrixData.value.rows.filter(r => {
     const matchDomain = !filterDomain.value || r.domain === filterDomain.value;
     const matchStatus = !filterStatus.value || r.status === filterStatus.value;
-    return matchDomain && matchStatus;
+    const query = filterSearch.value.toLocaleLowerCase();
+    const matchSearch = !query || r.ref_code.toLocaleLowerCase().includes(query) || r.title.toLocaleLowerCase().includes(query) || r.domain.toLocaleLowerCase().includes(query);
+    return matchDomain && matchStatus && matchSearch;
   });
 });
 
