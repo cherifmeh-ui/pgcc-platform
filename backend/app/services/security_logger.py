@@ -64,8 +64,8 @@ async def log_action(
                 resource=safe_resource,
                 resource_id=safe_resource_id,
                 details=safe_details,
-                ip_address=resolved_ip,
-                user_agent=resolved_user_agent,
+                ip_address=safe_ip,
+                user_agent=resolved_user_agent[:255] if resolved_user_agent else None,
             )
 
             session.add(new_log)
