@@ -169,6 +169,25 @@ async def _would_create_dependency_cycle(db: AsyncSession, source_id: UUID, targ
     return False
 
 
+
+
+def _compute_asset_impact(source_asset_id: UUID, dependency_pairs: list[tuple[UUID, UUID]]) -> list[tuple[UUID, int]]:
+    """Find assets that transitively depend on source; nearest dependents first."""
+    reverse_graph: dict[UUID, list[UUID]] = {}
+    for dependent_id, dependency_id in dependency_pairs:
+        reverse_graph.setdefault(dependency_id, []).append(dependent_id)
+    distances: dict[UUID, int] = {}
+    queue: list[tuple[UUID, int]] = [(source_asset_id, 0)]
+    while queue:
+        current, distance = queue.pop(0)
+        for dependent in reverse_graph.get(current, []):
+            if dependent == source_asset_id or dependent in distances:
+                continue
+            distances[dependent] = distance + 1
+            queue.append((dependent, distance + 1))
+    return sorted(distances.items(), key=lambda item: (item[1], str(item[0])))
+
+
 async def _ensure_application_exists(application_id: UUID | None, db: AsyncSession) -> None:
     if application_id is None:
         return
@@ -296,6 +315,52 @@ async def retire_asset(
             resource_id=str(asset.id), details=f"Asset retired: {asset.reference}",
             event_type="ASSET", request=request,
         )
+
+
+
+
+@router.get("/{asset_id}/impact")
+async def get_asset_impact(
+    asset_id: UUID,
+    db: AsyncSession = Depends(get_db),
+    current_user: User = require_permission("assets", "read"),
+):
+    """Return transitive assets depending on the selected asset and their linked risks."""
+    source_result = await db.execute(select(Asset).where(Asset.id == asset_id))
+    source = source_result.scalar_one_or_none()
+    if source is None:
+        raise HTTPException(status_code=404, detail="Actif introuvable")
+    rel_result = await db.execute(
+        select(AssetRelationship.source_asset_id, AssetRelationship.target_asset_id)
+        .where(AssetRelationship.relationship_type == "depends_on")
+    )
+    impacted = _compute_asset_impact(asset_id, rel_result.all())
+    if not impacted:
+        return {"source": {"id": source.id, "reference": source.reference, "name": source.name}, "impacted_assets": [], "total_impacted": 0}
+    impacted_ids = [item[0] for item in impacted]
+    asset_result = await db.execute(select(Asset).where(Asset.id.in_(impacted_ids)))
+    assets_by_id = {asset.id: asset for asset in asset_result.scalars().all()}
+    risk_result = await db.execute(
+        select(AssetRiskLink.asset_id, Risk.id, Risk.ref, Risk.title)
+        .join(Risk, Risk.id == AssetRiskLink.risk_id)
+        .where(AssetRiskLink.asset_id.in_(impacted_ids))
+    )
+    risks_by_asset: dict[UUID, list[dict]] = {}
+    for linked_asset_id, risk_id, risk_ref, risk_title in risk_result.all():
+        risks_by_asset.setdefault(linked_asset_id, []).append({"id": risk_id, "ref": risk_ref, "title": risk_title})
+    results = []
+    for impacted_id, distance in impacted:
+        asset = assets_by_id.get(impacted_id)
+        if asset is None:
+            continue
+        results.append({
+            "id": asset.id, "reference": asset.reference, "name": asset.name,
+            "asset_type": asset.asset_type, "criticality": asset.criticality,
+            "lifecycle_status": asset.lifecycle_status, "owner": asset.owner,
+            "direction": asset.direction, "application_id": asset.application_id,
+            "dependency_distance": distance, "linked_risks": risks_by_asset.get(asset.id, []),
+        })
+    return {"source": {"id": source.id, "reference": source.reference, "name": source.name}, "impacted_assets": results, "total_impacted": len(results)}
 
 
 @router.get("/{asset_id}/relationships", response_model=list[RelationshipResponse])
