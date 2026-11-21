@@ -138,3 +138,5 @@ Tests unitaires ajoutés : chaîne de dépendances, actif non lié, chemins mult
 - Permission requise : `assets:create`; l'import réussi est journalisé.
 - Interface : sélection du CSV, prévalidation, erreurs, aperçu, confirmation explicite et rafraîchissement de l'inventaire.
 - Tests ajoutés pour les doublons et colonnes inconnues.
+
+- Endpoint `GET /assets/import/template` et bouton de téléchargement du modèle CSV avec un exemple de ligne.
