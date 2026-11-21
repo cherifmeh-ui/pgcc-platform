@@ -6,6 +6,7 @@ from typing import Literal
 from uuid import UUID
 
 from fastapi import APIRouter, Depends, HTTPException, Query, Request, UploadFile, File, status
+from fastapi.responses import Response
 from pydantic import BaseModel, Field
 from sqlalchemy import select, func
 from sqlalchemy.orm import aliased
@@ -197,6 +198,29 @@ async def _ensure_application_exists(application_id: UUID | None, db: AsyncSessi
     result = await db.execute(select(Application.id).where(Application.id == application_id))
     if result.scalar_one_or_none() is None:
         raise HTTPException(status_code=422, detail="Application associée introuvable")
+
+
+@router.get("/import/template")
+async def download_asset_csv_template(
+    current_user: User = require_permission("assets", "read"),
+):
+    """Download a CSV template containing the supported asset fields."""
+    columns = list(AssetFields.model_fields.keys())
+    sample = {
+        "reference": "ASSET-001", "name": "Serveur applicatif exemple", "asset_type": "hardware",
+        "criticality": "Critique", "lifecycle_status": "Actif", "owner": "Direction Informatique",
+        "direction": "DI", "location": "Datacenter", "hostname": "srv-app-01",
+        "classification": "Confidentiel", "discovery_source": "Inventaire manuel",
+    }
+    output = io.StringIO()
+    writer = csv.DictWriter(output, fieldnames=columns)
+    writer.writeheader()
+    writer.writerow(sample)
+    return Response(
+        content="\ufeff" + output.getvalue(),
+        media_type="text/csv; charset=utf-8",
+        headers={"Content-Disposition": 'attachment; filename="pgcc_assets_template.csv"'},
+    )
 
 
 @router.post("/import/preview")
