@@ -296,3 +296,5 @@ The initial code-level review found that DOCX extraction joined paragraphs/table
 - Initial MFA enrollment recovery codes are now included in this one-time response and displayed for secure saving before the user continues.
 - Added token-type regression coverage.
 - CI validation of these backend/frontend changes is pending.
+
+- CI caught two implementation/test defects in this workflow (missing test import and Vue form closing tag); both were corrected in follow-up commits. Final combined CI evidence is pending.
