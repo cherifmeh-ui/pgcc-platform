@@ -168,3 +168,14 @@ def test_supplier_access_request_model_integrity_and_permissions():
     assert role_has_permission("admin", "suppliers", "revoke_access")
     assert not role_has_permission("auditor", "suppliers", "decide_access")
     assert not role_has_permission("executive", "suppliers", "read_access_requests")
+
+
+def test_supplier_access_open_link_has_database_uniqueness():
+    indexes = {index.name: index for index in SupplierAccessRequest.__table__.indexes}
+    assert indexes["uq_supplier_access_requests_open_link"].unique is True
+    assert "Demandé" in str(indexes["uq_supplier_access_requests_open_link"].dialect_options["postgresql"]["where"])
+
+
+def test_supplier_access_expiry_permission_is_admin_only():
+    assert role_has_permission("admin", "suppliers", "expire_access")
+    assert not role_has_permission("auditor", "suppliers", "expire_access")
