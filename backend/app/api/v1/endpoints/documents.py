@@ -13,6 +13,7 @@ from app.api.deps import require_permission
 from app.core.database import get_db
 from app.models.document import Document
 from app.models.document_chunk import DocumentChunk
+from app.models.iso_control_evidence import IsoControlEvidence
 from app.services.document_extractor import DocumentExtractor
 from app.models.user import User
 from app.services.security_logger import log_action
@@ -168,6 +169,15 @@ async def delete_document(
         raise HTTPException(status_code=404, detail="Document introuvable")
         
     filename = doc.filename
+    evidence_result = await db.execute(
+        select(IsoControlEvidence).where(IsoControlEvidence.document_id == doc.id)
+    )
+    linked_evidence = evidence_result.scalars().all()
+    if linked_evidence:
+        raise HTTPException(
+            status_code=409,
+            detail="Ce document est utilisé comme preuve ISO. Retirez ses associations de preuve avant de le supprimer.",
+        )
     # Explicitly remove vector chunks before the source document. This avoids
     # orphaned embeddings even if DB cascade behavior is not configured in a
     # particular deployment or migration.
