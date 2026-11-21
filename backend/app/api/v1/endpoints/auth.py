@@ -29,6 +29,7 @@ from app.core.security import (
 )
 from app.models.user import User
 from app.services.security_logger import log_action
+from app.services.auth_session_policy import refresh_denial_reason
 
 router = APIRouter(prefix="/auth", tags=["Authentification"])
 
@@ -428,28 +429,20 @@ async def refresh_tokens(
     if not user:
         raise HTTPException(status_code=401, detail="Utilisateur non trouvé.")
 
-    if not user.is_active:
-        raise HTTPException(status_code=403, detail="Compte désactivé.")
-
-    if user.is_locked:
-        raise HTTPException(
-            status_code=status.HTTP_423_LOCKED,
-            detail="Compte temporairement verrouillé. Réessayez plus tard.",
+    denial_reason = refresh_denial_reason(
+        is_active=user.is_active,
+        is_locked=user.is_locked,
+        must_change_password=user.must_change_password,
+        password_changed_at=user.password_changed_at,
+        token_issued_at=data.get("iat"),
+    )
+    if denial_reason:
+        denial_status = (
+            status.HTTP_423_LOCKED if user.is_locked
+            else status.HTTP_403_FORBIDDEN if not user.is_active or user.must_change_password
+            else status.HTTP_401_UNAUTHORIZED
         )
-
-    if user.must_change_password:
-        raise HTTPException(
-            status_code=status.HTTP_403_FORBIDDEN,
-            detail="Changement de mot de passe obligatoire avant renouvellement de session.",
-        )
-
-    # Revoke refresh tokens issued before the last password change.
-    password_changed_at = user.password_changed_at
-    token_issued_at = data.get("iat")
-    if password_changed_at and token_issued_at:
-        cutoff = int(password_changed_at.timestamp())
-        if token_issued_at < cutoff:
-            raise HTTPException(status_code=401, detail="Refresh token révoqué.")
+        raise HTTPException(status_code=denial_status, detail=denial_reason)
 
     # Régénérer les tokens
     access_token = create_access_token(subject=user.email, role=user.role)
