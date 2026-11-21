@@ -307,7 +307,7 @@ async def preview_asset_csv_import(
 @router.post("/import/confirm", status_code=status.HTTP_201_CREATED)
 async def confirm_asset_csv_import(
     file: UploadFile = File(...),
-    request: Request,
+    request: Request = None,
     db: AsyncSession = Depends(get_db),
     current_user: User = require_permission("assets", "create"),
 ):
