@@ -493,7 +493,7 @@ async def create_supplier_access_request(
         raise HTTPException(status_code=404, detail="Relation fournisseur-actif active introuvable")
     asset_result = await db.execute(select(Asset).where(Asset.id == link.asset_id))
     asset = asset_result.scalar_one_or_none()
-    if asset is None or asset.lifecycle_status in ("Retiré", "Décommissionné"):
+    if asset is None or asset.lifecycle_status in ("Retiré", "Décommissionné") or asset.retired_at is not None:
         raise HTTPException(status_code=422, detail="L'actif n'est pas éligible à une nouvelle autorisation")
     duplicate = await db.execute(select(SupplierAccessRequest.id).where(
         SupplierAccessRequest.supplier_asset_link_id == link.id,
@@ -542,6 +542,10 @@ async def decide_supplier_access_request(
     if data.decision == "Approuvé":
         if supplier is None or supplier.status not in ("Approuvé", "Approuvé sous conditions") or link is None:
             raise HTTPException(status_code=422, detail="Le fournisseur ou la relation à l’actif n’est plus éligible")
+        asset_result = await db.execute(select(Asset).where(Asset.id == access_request.asset_id))
+        asset = asset_result.scalar_one_or_none()
+        if asset is None or asset.lifecycle_status in ("Retiré", "Décommissionné") or asset.retired_at is not None:
+            raise HTTPException(status_code=422, detail="L'actif n'est plus éligible à une autorisation d'accès")
         if access_request.start_date < date.today() or access_request.end_date < date.today():
             raise HTTPException(status_code=422, detail="La période demandée est échue ou rétroactive")
     access_request.status = data.decision
