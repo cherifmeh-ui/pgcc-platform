@@ -8,10 +8,10 @@ from app.services.auth_session_policy import refresh_denial_reason
 @pytest.mark.parametrize(
     "kwargs,expected",
     [
-        ({"is_active": False, "is_locked": False, "must_change_password": False, "password_changed_at": None, "token_issued_at": 100}, "Compte désactivé."),
-        ({"is_active": True, "is_locked": True, "must_change_password": False, "password_changed_at": None, "token_issued_at": 100}, "Compte temporairement verrouillé. Réessayez plus tard."),
-        ({"is_active": True, "is_locked": False, "must_change_password": True, "password_changed_at": None, "token_issued_at": 100}, "Changement de mot de passe obligatoire avant renouvellement de session."),
-        ({"is_active": True, "is_locked": False, "must_change_password": False, "password_changed_at": datetime.fromtimestamp(200, timezone.utc), "token_issued_at": 100}, "Refresh token révoqué."),
+        ({"is_active": False, "is_locked": False, "must_change_password": False, "role": "viewer", "mfa_enabled": False, "password_changed_at": None, "token_issued_at": 100}, "Compte désactivé."),
+        ({"is_active": True, "is_locked": True, "must_change_password": False, "role": "viewer", "mfa_enabled": False, "password_changed_at": None, "token_issued_at": 100}, "Compte temporairement verrouillé. Réessayez plus tard."),
+        ({"is_active": True, "is_locked": False, "must_change_password": True, "role": "viewer", "mfa_enabled": False, "password_changed_at": None, "token_issued_at": 100}, "Changement de mot de passe obligatoire avant renouvellement de session."),
+        ({"is_active": True, "is_locked": False, "must_change_password": False, "role": "viewer", "mfa_enabled": False, "password_changed_at": datetime.fromtimestamp(200, timezone.utc), "token_issued_at": 100}, "Refresh token révoqué."),
     ],
 )
 def test_refresh_denied_for_ineligible_user(kwargs, expected):
