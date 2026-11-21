@@ -1,6 +1,6 @@
 # backend/app/api/v1/endpoints/actions.py
 from fastapi import APIRouter, Depends, HTTPException, status, Query, Request
-from pydantic import BaseModel, Field
+from pydantic import BaseModel, Field, field_validator
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy import select, and_
 from typing import List, Optional
@@ -27,6 +27,22 @@ class ActionBase(BaseModel):
     priority: Priority = Priority.MEDIUM
     assigned_to: Optional[str] = Field(default=None, max_length=100)
     due_date: Optional[datetime] = None
+
+    @field_validator("title")
+    @classmethod
+    def validate_title(cls, value: str) -> str:
+        value = value.strip()
+        if not value:
+            raise ValueError("Le titre de l'action ne peut pas être vide.")
+        return value
+
+    @field_validator("description")
+    @classmethod
+    def normalize_description(cls, value: Optional[str]) -> Optional[str]:
+        if value is None:
+            return None
+        value = value.strip()
+        return value or None
 
 
 class ActionCreate(ActionBase):
