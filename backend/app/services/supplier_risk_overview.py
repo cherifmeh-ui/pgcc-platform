@@ -13,7 +13,7 @@ def build_supplier_risk_overview(
 ) -> dict[str, Any]:
     """Build aggregate-only TPRM KPIs; never changes enterprise risk scores."""
     today = today or date.today()
-    active_suppliers = [item for item in suppliers if not item.get("archived")]
+    active_suppliers = [item for item in suppliers if not item.get("archived") and item.get("status") != "Terminé"]
     critical_suppliers = [
         item for item in active_suppliers
         if item.get("criticality") in ("Élevée", "Critique")
@@ -57,7 +57,7 @@ def build_supplier_risk_overview(
         if item.get("status") == "Approuvé"
         and item.get("start_date") <= today <= item.get("end_date")
     ]
-    expiring_contracts = sum(
+    required_security_clauses = (\n        "clause_confidentiality", "clause_incident_notification",\n        "clause_audit_right", "clause_business_continuity",\n        "clause_reversibility", "clause_data_location",\n        "clause_subcontracting", "clause_data_return_destruction",\n    )\n    active_contracts = [item for item in contracts if item.get("status") in ("Actif", "À renouveler")]\n    contracts_with_missing_security_clauses = sum(\n        1 for item in active_contracts\n        if any(not item.get(clause, False) for clause in required_security_clauses)\n    )\n    expiring_contracts = sum(
         1 for item in contracts
         if item.get("status") in ("Actif", "À renouveler")
         and item.get("end_date") is not None
@@ -88,6 +88,6 @@ def build_supplier_risk_overview(
                 if item.get("review_due_at") is not None and item["review_due_at"] < today
             ),
         },
-        "contracts": {"expiring_within_90_days": expiring_contracts},
+        "contracts": {\n            "expiring_within_90_days": expiring_contracts,\n            "active_or_renewal": len(active_contracts),\n            "with_missing_security_clauses": contracts_with_missing_security_clauses,\n        },
         "scoring_policy": "Les scores des risques centraux ne sont jamais recalculés par cette synthèse.",
     }
