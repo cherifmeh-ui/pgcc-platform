@@ -60,3 +60,10 @@ def test_supplier_permissions_follow_separation_of_duties():
 
 def test_supplier_dependency_level_is_constrained():
     assert any(c.name == "ck_suppliers_dependency_level" for c in Supplier.__table__.constraints)
+
+
+def test_supplier_contact_read_is_restricted_to_admin_and_auditor():
+    assert role_has_permission("admin", "suppliers", "read_contacts")
+    assert role_has_permission("auditor", "suppliers", "read_contacts")
+    assert not role_has_permission("executive", "suppliers", "read_contacts")
+    assert not role_has_permission("viewer", "suppliers", "read_contacts")
