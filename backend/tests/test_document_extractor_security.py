@@ -1,0 +1,52 @@
+import pytest
+
+from app.services import document_extractor
+from app.services.document_extractor import DocumentExtractor
+
+
+def test_unsupported_extension_has_explicit_error():
+    with pytest.raises(ValueError, match="non supporté"):
+        DocumentExtractor.extract_text(b"ignored", "file.exe")
+
+
+def test_parser_error_does_not_expose_internal_details(monkeypatch):
+    def fail_parser(_data):
+        raise RuntimeError("secret parser internals")
+
+    monkeypatch.setattr(document_extractor, "_extract_pdf_limited", fail_parser)
+    with pytest.raises(ValueError) as error:
+        DocumentExtractor.extract_text(b"%PDF-", "report.pdf")
+    assert "secret parser internals" not in str(error.value)
+
+
+def test_pdf_extraction_is_truncated_at_character_limit(monkeypatch):
+    class FakePage:
+        def extract_text(self):
+            return "A" * 500
+
+    class FakeReader:
+        def __init__(self, _stream, strict=True):
+            self.is_encrypted = False
+            self.pages = [FakePage(), FakePage(), FakePage()]
+
+    monkeypatch.setattr(document_extractor, "PdfReader", FakeReader)
+    monkeypatch.setattr(DocumentExtractor, "MAX_EXTRACTED_CHARS", 700)
+    text = document_extractor._extract_pdf_limited(b"%PDF-")
+    assert len(text) <= 800
+    assert "tronqué à la limite de sécurité" in text
+
+
+
+def test_docx_extraction_is_truncated_at_character_limit(monkeypatch):
+    class FakeParagraph:
+        text = "B" * 500
+
+
+    class FakeDoc:
+        paragraphs = [FakeParagraph(), FakeParagraph(), FakeParagraph()]
+
+    monkeypatch.setattr(document_extractor, "DocxDocument", lambda _stream: FakeDoc())
+    monkeypatch.setattr(DocumentExtractor, "MAX_EXTRACTED_CHARS", 700)
+    text = document_extractor._extract_docx_safe(b"not relevant in fake")
+    assert len(text) <= 800
+    assert "tronqué à la limite de sécurité" in text
