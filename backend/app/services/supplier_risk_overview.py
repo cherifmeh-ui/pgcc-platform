@@ -105,6 +105,10 @@ def build_supplier_risk_overview(
                 if item.get("review_due_at") is not None and item["review_due_at"] < today
             ),
         },
-        "contracts": {\n            "expiring_within_90_days": expiring_contracts,\n            "active_or_renewal": len(active_contracts),\n            "with_missing_security_clauses": contracts_with_missing_security_clauses,\n        },
+        "contracts": {
+            "expiring_within_90_days": expiring_contracts,
+            "active_or_renewal": len(active_contracts),
+            "with_missing_security_clauses": contracts_with_missing_security_clauses,
+        },
         "scoring_policy": "Les scores des risques centraux ne sont jamais recalculés par cette synthèse.",
     }
