@@ -31,6 +31,8 @@ class DocumentResponse(BaseModel):
     title: str
     doc_type: str
     filename: str
+    version: Optional[str] = None
+    author: Optional[str] = None
     file_size_kb: float
     is_indexed: bool
     created_at: str  # ISO String explicite
@@ -114,6 +116,8 @@ async def upload_document(
         "title": new_doc.title,
         "doc_type": new_doc.doc_type,
         "filename": new_doc.filename,
+        "version": new_doc.version,
+        "author": new_doc.author,
         "file_size_kb": float(new_doc.file_size_kb or 0),
         "is_indexed": bool(new_doc.is_indexed),
         "created_at": new_doc.created_at.isoformat() if new_doc.created_at else ""
@@ -136,6 +140,8 @@ async def list_documents(
             "title": doc.title,
             "doc_type": doc.doc_type,
             "filename": doc.filename,
+            "version": doc.version,
+            "author": doc.author,
             "file_size_kb": float(doc.file_size_kb or 0),
             "is_indexed": bool(doc.is_indexed),
             "created_at": doc.created_at.isoformat() if doc.created_at else ""
