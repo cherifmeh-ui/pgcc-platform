@@ -256,7 +256,7 @@ async def list_supplier_contacts(
     supplier_id: UUID,
     include_inactive: bool = False,
     db: AsyncSession = Depends(get_db),
-    current_user: User = require_permission("suppliers", "read"),
+    current_user: User = require_permission("suppliers", "read_contacts"),
 ):
     supplier_result = await db.execute(select(Supplier.id).where(Supplier.id == supplier_id))
     if supplier_result.scalar_one_or_none() is None:
