@@ -183,6 +183,12 @@
                   <option v-for="doc in availableDocuments" :key="doc.id" :value="doc.id">{{ doc.title }} — {{ doc.filename }}</option>
                 </select>
               </label>
+              <label>Évaluation associée (optionnel)
+                <select v-model="evidenceForm.assessment_id">
+                  <option value="">Preuve liée au contrôle uniquement</option>
+                  <option v-for="entry in assessmentHistory" :key="entry.id" :value="entry.id">{{ entry.implementation_status }} · {{ entry.maturity_level }}/5 · {{ formatDate(entry.assessed_at) }}</option>
+                </select>
+              </label>
               <label>Responsable de la preuve
                 <input v-model="evidenceForm.evidence_owner" maxlength="150" placeholder="Direction / responsable" />
               </label>
@@ -392,13 +398,14 @@ async function saveEvidence() {
   try {
     const payload = {
       document_id: evidenceForm.value.document_id,
+      assessment_id: evidenceForm.value.assessment_id || null,
       evidence_owner: evidenceForm.value.evidence_owner.trim() || null,
       collected_at: evidenceForm.value.collected_at ? new Date(evidenceForm.value.collected_at + 'T00:00:00Z').toISOString() : null,
       valid_until: evidenceForm.value.valid_until ? new Date(evidenceForm.value.valid_until + 'T23:59:59Z').toISOString() : null,
       notes: evidenceForm.value.notes.trim() || null,
     };
     await apiClient.post(`/compliance/controls/${encodeURIComponent(selectedControl.value.ref_code)}/evidence`, payload);
-    evidenceForm.value = { document_id: '', evidence_owner: '', collected_at: new Date().toISOString().slice(0, 10), valid_until: '', notes: '' };
+    evidenceForm.value = { document_id: '', assessment_id: '', evidence_owner: '', collected_at: new Date().toISOString().slice(0, 10), valid_until: '', notes: '' };
     await loadEvidence(selectedControl.value.ref_code);
   } catch (error) {
     evidenceError.value = error.response?.data?.detail || "Échec de l'association de la preuve.";
