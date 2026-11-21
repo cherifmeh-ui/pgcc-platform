@@ -115,6 +115,7 @@ class ComplianceMatrixRow(BaseModel):
     domain: str
     status: str # "Déclaré couvert", "À vérifier", "Non évalué"
     linked_risks_count: int
+    linked_actions_count: int = 0
     last_update: str | None
     latest_assessment_status: str | None = None
     latest_assessment_maturity: int | None = None
@@ -355,14 +356,14 @@ async def get_compliance_matrix(
         controls = ctrl_query.scalars().all()
         
         if not controls:
-             return MatrixResponse(total_controls=0, covered_count=0, partial_count=0, uncovered_count=0, overall_score=0.0, evaluated_count=0, applicable_count=0, average_maturity=None, maturity_score=None, evidence_count=0, verified_evidence_count=0, expired_evidence_count=0, rows=[], methodology="Score déclaratif : seuls les contrôles marqués manuellement sont comptés comme couverts; les liens textuels sont des indicateurs à vérifier.")
+             return MatrixResponse(total_controls=0, covered_count=0, partial_count=0, uncovered_count=0, overall_score=0.0, evaluated_count=0, applicable_count=0, average_maturity=None, maturity_score=None, evidence_count=0, verified_evidence_count=0, expired_evidence_count=0, rows=[], methodology="Score déclaratif : seuls les contrôles marqués manuellement sont comptés comme couverts. Les associations explicites risques/actions ISO et les correspondances textuelles sont des indicateurs à vérifier, pas des preuves de conformité.")
 
         # 2. Fetch relevant risks/actions to determine coverage
         risk_query = await db.execute(select(Risk))
         risks = risk_query.scalars().all()
         
-        action_query = await db.execute(select(ActionItem).where(ActionItem.status == ActionStatus.DONE))
-        done_actions = action_query.scalars().all()
+        action_query = await db.execute(select(ActionItem))
+        actions = action_query.scalars().all()
 
         evidence_query = await db.execute(select(IsoControlEvidence))
         evidence_by_control = {}
@@ -409,7 +410,8 @@ async def get_compliance_matrix(
             }
             ref = c.ref_code.lower().strip() # e.g., "a.8.9"
             found_links = 0
-            has_done_action = False
+            linked_actions = [action for action in actions if action.iso_control_id == c.id]
+            has_done_action = any(action.status == ActionStatus.DONE for action in linked_actions)
             
             # Check manual override first
             if c.is_manually_covered:
@@ -417,7 +419,7 @@ async def get_compliance_matrix(
                 covered += 1
                 rows.append(ComplianceMatrixRow(
                     control_id=c.id, ref_code=c.ref_code, title=c.title, domain=c.domain,
-                    status=status, linked_risks_count=0, last_update=None,
+                    status=status, linked_risks_count=0, linked_actions_count=len(linked_actions), last_update=None,
                     **assessment_fields
                 ))
                 continue
@@ -428,11 +430,12 @@ async def get_compliance_matrix(
                 if ref in text_blob:
                     found_links += 1
                     
-            # Search in Done Actions (Title/Desc)
-            for a in done_actions:
-                text_blob = f"{a.title} {getattr(a, 'description', '')}".lower()
-                if ref in text_blob:
-                    has_done_action = True
+            # Legacy text matching remains a fallback for completed actions.
+            for action in actions:
+                if action.status == ActionStatus.DONE and action.iso_control_id is None:
+                    text_blob = f"{action.title} {getattr(action, 'description', '')}".lower()
+                    if ref in text_blob:
+                        has_done_action = True
             
             # Determine Status Logic
             if has_done_action or found_links > 0:
@@ -444,7 +447,7 @@ async def get_compliance_matrix(
                 
             rows.append(ComplianceMatrixRow(
                 control_id=c.id, ref_code=c.ref_code, title=c.title, domain=c.domain,
-                status=status, linked_risks_count=found_links, last_update=None,
+                status=status, linked_risks_count=found_links, linked_actions_count=len(linked_actions), last_update=None,
                 **assessment_fields
             ))
             
@@ -466,7 +469,7 @@ async def get_compliance_matrix(
             verified_evidence_count=sum(item["verified"] for item in evidence_by_control.values()),
             expired_evidence_count=sum(item["expired"] for item in evidence_by_control.values()),
             rows=rows,
-            methodology="Score déclaratif : seuls les contrôles marqués manuellement sont comptés comme couverts; les liens textuels sont des indicateurs à vérifier."
+            methodology="Score déclaratif : seuls les contrôles marqués manuellement sont comptés comme couverts. Les associations explicites risques/actions ISO et les correspondances textuelles sont des indicateurs à vérifier, pas des preuves de conformité."
         )
         
     except Exception as e:
