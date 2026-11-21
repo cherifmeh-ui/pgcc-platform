@@ -252,3 +252,5 @@ The initial code-level review found that DOCX extraction joined paragraphs/table
 - Added static checks confirming the partial unique index for open supplier access requests (`uq_supplier_access_requests_open_link`) is declared consistently in the model and migration, including its status predicate.
 - Added parity checks for the unique monthly supplier-risk snapshot constraint.
 - These checks protect against ORM metadata drift; PostgreSQL migration tests are still required for actual database behavior.
+
+- Supplier assessment validation safeguards are now covered by endpoint regression tests: an assessor cannot validate their own assessment, and a high/critical assessment cannot receive an unconditional `Approuvé` decision. Both cases assert that the database transaction is not committed.
