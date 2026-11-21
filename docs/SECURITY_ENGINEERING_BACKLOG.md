@@ -142,3 +142,11 @@ Status: active engineering review. This is a static review backlog, not a securi
 - The public `/health` response reports environment name, AI-enabled state, database connectivity, service phase, and version. Consider separating a minimal liveness endpoint from an authenticated or network-restricted readiness/diagnostics endpoint; public health should expose only the minimum needed by the load balancer.
 - Production CORS must be explicitly configured to the deployed frontend origin(s). The current defaults are localhost development origins; validate deployment configuration rather than relying on defaults.
 - Security headers, trusted-host validation, and reverse-proxy trust configuration remain unimplemented. Do not enable forwarded-header trust globally without a defined trusted proxy boundary.
+
+
+## Container configuration review (2026-11-21)
+
+- The current Compose file is development-oriented: PostgreSQL publishes port 5432 on all host interfaces, the frontend runs the Vite development server, backend source is bind-mounted, and `ENVIRONMENT=development` is set. Do not deploy this Compose configuration as-is to production.
+- PostgreSQL uses `ankane/pgvector:latest`; pin a maintained image and version/digest. Other runtime images should also be pinned.
+- Prepare separate production Compose/deployment configuration: no public database port, production frontend build served by a hardened web server, no source bind mounts, production settings, non-root containers, resource limits, health checks, and private network boundaries.
+- `.env.example` includes a placeholder password and JWT secret; deployment automation must fail if placeholders remain and must never commit actual `.env` files.
