@@ -258,3 +258,24 @@ def test_asset_reference_ci_migration_guards_existing_index():
     source = (MIGRATIONS_DIR / "0011_asset_reference_case_insensitive.py").read_text(encoding="utf-8")
     assert "get_indexes(\"assets\")" in source
     assert "uq_assets_reference_ci" in source
+
+
+def test_supplier_register_migration_guards_existing_tables_and_indexes():
+    source = (MIGRATIONS_DIR / "0012_supplier_register.py").read_text(encoding="utf-8")
+    upgrade = source.split("def upgrade() -> None:", 1)[1].split("def downgrade() -> None:", 1)[0]
+    downgrade = source.split("def downgrade() -> None:", 1)[1]
+    assert 'has_table("suppliers")' in upgrade
+    assert 'has_table("supplier_contacts")' in upgrade
+    assert "get_indexes(\"suppliers\")" in upgrade
+    assert "get_indexes(\"supplier_contacts\")" in upgrade
+    assert 'has_table("suppliers")' in downgrade
+    assert 'has_table("supplier_contacts")' in downgrade
+
+
+def test_supplier_contract_migration_guards_existing_table_and_indexes():
+    source = (MIGRATIONS_DIR / "0013_supplier_contracts.py").read_text(encoding="utf-8")
+    upgrade = source.split("def upgrade() -> None:", 1)[1].split("def downgrade() -> None:", 1)[0]
+    downgrade = source.split("def downgrade() -> None:", 1)[1]
+    assert 'has_table("supplier_contracts")' in upgrade
+    assert "get_indexes(\"supplier_contracts\")" in upgrade
+    assert 'has_table("supplier_contracts")' in downgrade
