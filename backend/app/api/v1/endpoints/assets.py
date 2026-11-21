@@ -196,6 +196,24 @@ async def _ensure_application_exists(application_id: UUID | None, db: AsyncSessi
         raise HTTPException(status_code=422, detail="Application associée introuvable")
 
 
+@router.get("/graph")
+async def get_asset_dependency_graph(
+    db: AsyncSession = Depends(get_db),
+    current_user: User = require_permission("assets", "read"),
+):
+    """Return the active asset inventory and its explicit relationships for visualization."""
+    assets_result = await db.execute(select(Asset).where(Asset.retired_at.is_(None)).order_by(Asset.name.asc()))
+    assets = assets_result.scalars().all()
+    relations_result = await db.execute(select(AssetRelationship).order_by(AssetRelationship.created_at.asc()))
+    asset_ids = {asset.id for asset in assets}
+    relations = [relation for relation in relations_result.scalars().all() if relation.source_asset_id in asset_ids and relation.target_asset_id in asset_ids]
+    return {
+        "nodes": [{"id": asset.id, "reference": asset.reference, "name": asset.name, "asset_type": asset.asset_type, "criticality": asset.criticality, "direction": asset.direction} for asset in assets],
+        "edges": [{"id": relation.id, "source": relation.source_asset_id, "target": relation.target_asset_id, "relationship_type": relation.relationship_type, "description": relation.description} for relation in relations],
+        "node_count": len(assets), "edge_count": len(relations),
+    }
+
+
 @router.get("/", response_model=list[AssetResponse])
 async def list_assets(
     q: str | None = Query(default=None, max_length=100),
