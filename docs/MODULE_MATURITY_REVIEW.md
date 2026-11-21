@@ -370,3 +370,10 @@ The initial code-level review found that DOCX extraction joined paragraphs/table
 - Auth store previously reset Pinia state before clearing localStorage; its state initializer could therefore reload the stale tokens into memory.
 - Logout now clears persisted credential keys first, then resets the store, preventing credential resurrection in memory.
 - Current-head frontend CI/build validation remains pending.
+
+
+### 29. Authorization header cleanup on logout
+
+- Both explicit logout and forced logout after refresh failure now clear Axios' default Authorization header in addition to persisted tokens.
+- This avoids stale bearer credentials remaining attached to subsequent API requests in the same page lifecycle.
+- Current-head validation pending.
