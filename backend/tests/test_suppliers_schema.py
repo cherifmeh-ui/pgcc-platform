@@ -1,4 +1,5 @@
 import pytest
+from datetime import date
 from pydantic import ValidationError
 
 from app.api.v1.endpoints.suppliers import (
