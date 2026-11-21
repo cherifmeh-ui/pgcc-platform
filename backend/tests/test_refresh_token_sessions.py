@@ -77,6 +77,7 @@ def test_refresh_session_model_indexes_and_constraints_match_migration():
     assert "ix_refresh_token_sessions_user_id" in indexes
     assert "ix_refresh_token_sessions_expires_at" in indexes
     assert "ix_refresh_token_sessions_token_jti_hash" not in indexes
+    assert RefreshTokenSession.__table__.c.created_at.server_default is not None
 
 
 @pytest.mark.asyncio
