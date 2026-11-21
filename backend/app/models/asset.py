@@ -41,7 +41,6 @@ class Asset(Base):
             name="ck_assets_availability",
         ),
         UniqueConstraint("reference", name="uq_assets_reference"),
-        UniqueConstraint("application_id", name="uq_assets_application_id"),
     )
 
     id = Column(PG_UUID(as_uuid=True), primary_key=True, default=uuid4)
