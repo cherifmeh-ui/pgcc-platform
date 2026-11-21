@@ -391,3 +391,10 @@ The initial code-level review found that DOCX extraction joined paragraphs/table
 - Refresh and forced password-change paths now acquire a row lock on the user before evaluating policy or revoking/creating sessions.
 - This serializes the two operations, preventing a refresh transaction from creating a new session concurrently with password-change session revocation.
 - Added static regression coverage for both lock paths. PostgreSQL concurrency integration test remains required.
+
+
+### 32. Frontend multi-tab refresh behavior — known residual
+
+- Backend rotation is single-use and detects refresh-token replay. Two browser tabs attempting refresh with the same token can therefore cause replay detection and revoke active refresh sessions.
+- Current frontend refresh queue only coordinates requests within one tab. It does not yet coordinate refresh across browser tabs.
+- This is documented as a residual usability/security integration issue for Phase 0; recommended next implementation is cross-tab refresh coordination (BroadcastChannel or Web Locks with a fallback) plus frontend tests before declaring auth stabilization complete.
