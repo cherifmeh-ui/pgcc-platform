@@ -70,3 +70,8 @@ Les migrations doivent être vérifiées sur une base de test vide et sur une co
 ## 8. Protection de la traçabilité Actif–Risque
 
 La suppression physique d'un risque est refusée tant qu'il possède des associations avec des actifs. La FK `asset_risk_links.risk_id` est configurée en `ON DELETE RESTRICT` (migration `0010_asset_risk_restrict_delete`). La suppression d'une association doit passer par l'endpoint explicite de dissociation, autorisé uniquement avec `assets:update` et `risks:update`. Cela évite la disparition silencieuse du contexte de cartographie.
+
+
+## 9. Unicité des références — migration 0011
+
+Les références sont désormais débarrassées des espaces périphériques à l'entrée API et une unicité insensible à la casse est imposée en base par l'index unique fonctionnel `uq_assets_reference_ci`. La migration effectue un contrôle préalable des doublons historiques après `lower(btrim(reference))` et s'arrête avec les références concernées au lieu de modifier ou supprimer des données. En cas d'échec, corriger les doublons manuellement après arbitrage métier puis relancer la migration. Les références existantes ne sont pas automatiquement renommées.
