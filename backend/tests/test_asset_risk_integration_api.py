@@ -17,7 +17,7 @@ async def test_asset_risk_link_listing_requires_risk_read_permission():
     db = AsyncMock()
     with pytest.raises(HTTPException) as exc:
         await list_asset_risk_links(
-            asset_id=ASSET_ID, db=db, current_user=MagicMock(role="viewer")
+            asset_id=ASSET_ID, db=db, current_user=MagicMock(role="limited")
         )
     assert exc.value.status_code == 403
     db.execute.assert_not_awaited()
@@ -40,10 +40,13 @@ async def test_risk_asset_listing_returns_linked_asset_context_for_auditor():
     risk_result = MagicMock()
     risk_result.scalar_one_or_none.return_value = RISK_ID
     rows_result = MagicMock()
-    asset = MagicMock(
-        id=ASSET_ID, reference="AST-001", name="Serveur applicatif",
-        asset_type="hardware", criticality="Critique", lifecycle_status="Actif",
-    )
+    asset = MagicMock()
+    asset.id = ASSET_ID
+    asset.reference = "AST-001"
+    asset.name = "Serveur applicatif"
+    asset.asset_type = "hardware"
+    asset.criticality = "Critique"
+    asset.lifecycle_status = "Actif"
     rows_result.all.return_value = [(asset, "Héberge l'application critique")]
     db.execute.side_effect = [risk_result, rows_result]
 
