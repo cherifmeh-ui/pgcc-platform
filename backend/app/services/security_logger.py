@@ -58,12 +58,12 @@ async def log_action(
     async with AsyncSessionLocal() as session:
         try:
             new_log = SecurityLog(
-                event_type=resolved_event_type,
-                user_email=user_email,
-                action=action,
-                resource=resource,
-                resource_id=resource_id,
-                details=details,
+                event_type=safe_event_type,
+                user_email=safe_user_email,
+                action=safe_action,
+                resource=safe_resource,
+                resource_id=safe_resource_id,
+                details=safe_details,
                 ip_address=resolved_ip,
                 user_agent=resolved_user_agent,
             )
