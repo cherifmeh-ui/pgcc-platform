@@ -90,6 +90,10 @@ async def create_action(
     if not risk:
         raise HTTPException(status_code=404, detail=f"Risque ID={data.risk_id} introuvable.")
     
+    # Enforce a controlled initial state: creation cannot mark work completed.
+    if data.status != ActionStatus.TODO:
+        raise HTTPException(status_code=422, detail="Une action doit être créée au statut 'À faire'. Les transitions sont réalisées après création.")
+
     # 2. Créer l'action
     action_dict = data.model_dump(exclude={"risk_id"})
     action = ActionItem(**action_dict, risk_id=data.risk_id)
@@ -118,8 +122,17 @@ async def update_action(
     if not action:
         raise HTTPException(status_code=404, detail="Action non trouvée.")
     
+    # Validate effective state before applying a partial update.
+    update_data = data.model_dump(exclude_unset=True)
+    effective_status = update_data.get("status", action.status)
+    effective_description = update_data.get("description", action.description)
+    if effective_status == ActionStatus.DONE and not (effective_description or "").strip():
+        raise HTTPException(status_code=422, detail="La clôture d'une action exige une description documentant la réalisation. Une preuve formelle sera ajoutée au workflow GRC.")
+    if action.status == ActionStatus.DONE and effective_status != ActionStatus.DONE:
+        raise HTTPException(status_code=409, detail="Une action terminée ne peut pas être réouverte par cette API. Utilisez un workflow de réouverture audité.")
+
     # Mise à jour partielle (exclude_unset évite d'écraser avec None)
-    for key, value in data.model_dump(exclude_unset=True).items():
+    for key, value in update_data.items():
         setattr(action, key, value)
         
     await db.commit()
@@ -145,5 +158,8 @@ async def delete_action(
     if not action:
         raise HTTPException(status_code=404, detail="Action non trouvée.")
     
+    if action.status == ActionStatus.DONE:
+        raise HTTPException(status_code=409, detail="La suppression d'une action terminée est refusée pour préserver la traçabilité.")
+
     await db.delete(action)
     await db.commit()
