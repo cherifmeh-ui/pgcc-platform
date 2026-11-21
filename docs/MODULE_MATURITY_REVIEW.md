@@ -229,3 +229,11 @@ The initial code-level review found that DOCX extraction joined paragraphs/table
 - Supplier access requests and approvals now reject retired assets using both lifecycle status and the `retired_at` marker, protecting against inconsistent historical rows. The eligibility rule is isolated and unit-tested with valid asset lifecycle values.
 
 - Asset dependency relationship creation now checks both `retired_at` and lifecycle status (`Retiré`/`Décommissionné`), not only the timestamp. This blocks relationships against inconsistent legacy records; tests cover both conditions.
+
+### 12. Asset-risk association integrity
+
+- New asset-risk links now reject lifecycle statuses `Retiré` and `Décommissionné`, as well as a non-null `retired_at` marker.
+- Duplicate/constraint errors are handled specifically as `IntegrityError`; unrelated application/database exceptions are no longer disguised as HTTP 409.
+- Unlink now verifies that both the asset and risk exist before looking up/removing the association, avoiding ambiguous missing-link responses for orphan IDs.
+- Unit and API-level mock tests cover eligibility and missing-entity paths.
+- **Remaining validation:** PostgreSQL constraint behavior, transaction rollback and route permission tests still need integration validation.
