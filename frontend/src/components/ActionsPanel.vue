@@ -28,7 +28,7 @@
               <label v-if="newAction.iso_control_ref">Évaluation ISO associée (optionnel)
                 <select v-model="newAction.iso_assessment_id">
                   <option value="">Lien au contrôle uniquement</option>
-                  <option v-for="assessment in isoAssessments" :key="assessment.id" :value="assessment.id">{{ assessment.implementation_status }} · {{ assessment.maturity_level }}/5 · {{ formatDate(assessment.assessed_at) }}</option>
+                  <option v-for="assessment in isoAssessments" :key="assessment.id" :value="assessment.id">{{ assessment.implementation_status }} · {{ assessment.maturity_level }}/5 · {{ formatIsoAssessmentDate(assessment.assessed_at) }}</option>
                 </select>
               </label>
             </div>
@@ -168,7 +168,7 @@ async function loadControlAssessments(refCode) {
     console.warn('ISO assessments unavailable', err);
   }
 }
-function formatDate(value) {
+function formatIsoAssessmentDate(value) {
   return value ? new Date(value).toLocaleDateString('fr-FR') : '—';
 }
 
