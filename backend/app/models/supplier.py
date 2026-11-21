@@ -204,3 +204,25 @@ class SupplierAccessRequest(Base):
     revocation_reason = Column(String(1000), nullable=True)
     created_at = Column(DateTime(timezone=True), server_default=func.now(), nullable=False)
     updated_at = Column(DateTime(timezone=True), server_default=func.now(), onupdate=func.now(), nullable=False)
+
+
+class SupplierAccessReview(Base):
+    """Immutable audit record of a periodic supplier access review."""
+    __tablename__ = "supplier_access_reviews"
+    __table_args__ = (
+        CheckConstraint("outcome IN ('Maintenue', 'Réduite', 'Révoquée')", name="ck_supplier_access_reviews_outcome"),
+        CheckConstraint("previous_access_level IN ('Standard', 'Privilégié')", name="ck_supplier_access_reviews_previous_level"),
+        CheckConstraint("resulting_access_level IN ('Standard', 'Privilégié')", name="ck_supplier_access_reviews_resulting_level"),
+        Index("ix_supplier_access_reviews_request_reviewed", "access_request_id", "reviewed_at"),
+    )
+    id = Column(PG_UUID(as_uuid=True), primary_key=True, default=uuid4)
+    access_request_id = Column(PG_UUID(as_uuid=True), ForeignKey("supplier_access_requests.id", ondelete="RESTRICT"), nullable=False, index=True)
+    reviewed_by_id = Column(PG_UUID(as_uuid=True), ForeignKey("users.id", ondelete="RESTRICT"), nullable=False, index=True)
+    reviewed_at = Column(DateTime(timezone=True), server_default=func.now(), nullable=False)
+    outcome = Column(String(20), nullable=False)
+    comment = Column(String(2000), nullable=False)
+    previous_access_level = Column(String(20), nullable=False)
+    previous_data_access = Column(Boolean, nullable=False)
+    resulting_access_level = Column(String(20), nullable=False)
+    resulting_data_access = Column(Boolean, nullable=False)
+    next_review_at = Column(Date, nullable=True)
