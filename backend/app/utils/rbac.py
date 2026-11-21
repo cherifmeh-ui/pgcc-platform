@@ -149,10 +149,10 @@ def role_has_permission(role: str | None, module: str, action: str = "read") -> 
     """Vérifie si un rôle a une permission donnée."""
     if not role:
         return False
-    
-    # Strip pour tolérer les légères variations whitespace si jamais présentes ailleurs
-    clean_module = module.strip() 
-    clean_action = action.strip()
+
+    clean_role = role.strip().lower()
+    clean_module = module.strip().lower()
+    clean_action = action.strip().lower()
     
     module_perms = PERMISSIONS.get(clean_module)
     if not module_perms:
@@ -162,7 +162,7 @@ def role_has_permission(role: str | None, module: str, action: str = "read") -> 
     if allowed_roles is None:
         return False
     
-    return role in allowed_roles
+    return clean_role in allowed_roles
 
 
 def get_effective_permissions(role: str | None) -> dict[str, Any]:
@@ -172,11 +172,12 @@ def get_effective_permissions(role: str | None) -> dict[str, Any]:
     """
     if not role:
         return {}
-    
+
+    clean_role = role.strip().lower()
     result: dict[str, Any] = {}
     for module, actions in PERMISSIONS.items():
         allowed_actions = [
-            action for action, roles in actions.items() if role in roles
+            action for action, roles in actions.items() if clean_role in roles
         ]
         if allowed_actions:
             result[module] = allowed_actions
