@@ -1,7 +1,6 @@
 """Store immutable monthly snapshots of supplier risk indicators."""
 from alembic import op
 import sqlalchemy as sa
-import sqlalchemy as sa
 from sqlalchemy.dialects import postgresql
 
 revision = "0019_supplier_risk_snapshots"
