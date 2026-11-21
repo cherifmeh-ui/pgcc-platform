@@ -2,6 +2,7 @@
 from fastapi import APIRouter, Depends, HTTPException, Request
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy import select
+from sqlalchemy.exc import IntegrityError
 from pydantic import BaseModel, Field, field_validator, model_validator
 from typing import List, Dict, Any
 from datetime import datetime, timezone
@@ -240,8 +241,6 @@ async def create_control_evidence(
         raise HTTPException(status_code=404, detail="Document introuvable.")
     if not document.file_data:
         raise HTTPException(status_code=422, detail="Le document ne possède pas de fichier source.")
-    if payload.valid_until and payload.collected_at and payload.valid_until < payload.collected_at:
-        raise HTTPException(status_code=422, detail="La date de validité doit être postérieure à la collecte.")
     if payload.assessment_id:
         assessment_result = await db.execute(
             select(IsoControlAssessment).where(
@@ -271,7 +270,11 @@ async def create_control_evidence(
         notes=payload.notes.strip() if payload.notes else None,
     )
     db.add(evidence)
-    await db.commit()
+    try:
+        await db.commit()
+    except IntegrityError as exc:
+        await db.rollback()
+        raise HTTPException(status_code=409, detail="Cette preuve est déjà associée à ce contrôle.") from exc
     await db.refresh(evidence)
     await log_action(
         user_email=current_user.email, action="CREATE", resource="iso_evidence",
