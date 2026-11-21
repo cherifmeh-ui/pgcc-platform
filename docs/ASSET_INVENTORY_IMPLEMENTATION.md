@@ -99,3 +99,7 @@ Tests unitaires ajoutés : chaîne de dépendances, actif non lié, chemins mult
 - Tests API ajoutés pour un graphe non vide et un inventaire vide.
 
 - La suppression d'une relation d'actif est désormais disponible via `DELETE /assets/{asset_id}/relationships/{relationship_id}`, avec vérification que la relation concerne bien l'actif fourni, permission `assets:update`, journalisation et test API.
+
+- L'interface affiche maintenant une visualisation SVG circulaire du graphe avec nœuds colorés par criticité, relations, recherche et filtre par type. Il s'agit d'une disposition déterministe, non d'un algorithme de placement automatique avancé.
+- Les relations peuvent être supprimées depuis le panneau de dépendances; la suppression est journalisée et limitée à une relation associée à l'actif sélectionné.
+- Les tests ajoutés ont été corrigés après CI : les fixtures utilisent désormais des UUID valides.
