@@ -227,3 +227,14 @@ def test_asset_inventory_migration_guards_existing_baseline_tables():
 def test_all_migrations_are_valid_python():
     for migration in MIGRATIONS_DIR.glob("*.py"):
         ast.parse(migration.read_text(encoding="utf-8"), filename=str(migration))
+
+
+def test_asset_risk_links_migration_guards_baseline_overlap():
+    source = (MIGRATIONS_DIR / "0007_asset_risk_links.py").read_text(encoding="utf-8")
+    upgrade = source.split("def upgrade() -> None:", 1)[1].split("def downgrade() -> None:", 1)[0]
+    downgrade = source.split("def downgrade() -> None:", 1)[1]
+    assert 'has_table("asset_risk_links")' in upgrade
+    assert "get_indexes(\"asset_risk_links\")" in upgrade
+    assert 'has_table("asset_risk_links")' in downgrade
+    assert "ix_asset_risk_links_asset_id" in downgrade
+    assert "ix_asset_risk_links_risk_id" in downgrade
