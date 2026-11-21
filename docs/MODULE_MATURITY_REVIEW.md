@@ -254,3 +254,9 @@ The initial code-level review found that DOCX extraction joined paragraphs/table
 - These checks protect against ORM metadata drift; PostgreSQL migration tests are still required for actual database behavior.
 
 - Supplier assessment validation safeguards are now covered by endpoint regression tests: an assessor cannot validate their own assessment, and a high/critical assessment cannot receive an unconditional `Approuvé` decision. Both cases assert that the database transaction is not committed.
+
+### 15. CI correction: UUID fixtures
+
+- The new assessment-validation regression tests initially failed due to malformed UUID fixture strings (four hyphen-separated groups instead of the canonical five).
+- Corrected the fixtures. This was a test-data defect, not an application defect.
+- A new CI run is required to verify the fix.
