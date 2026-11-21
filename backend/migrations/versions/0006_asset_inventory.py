@@ -79,7 +79,7 @@ def upgrade() -> None:
             sa.UniqueConstraint("reference", name="uq_assets_reference"),
             sa.UniqueConstraint("application_id", name="uq_assets_application_id"),
         )
-        if "ix_assets_reference" not in {item["name"] for item in sa.inspect(op.get_bind()).get_indexes("assets")}:
+    if "ix_assets_reference" not in {item["name"] for item in sa.inspect(op.get_bind()).get_indexes("assets")}:
         op.create_index("ix_assets_reference", "assets", ["reference"], unique=False)
     if "ix_assets_name" not in {item["name"] for item in sa.inspect(op.get_bind()).get_indexes("assets")}:
         op.create_index("ix_assets_name", "assets", ["name"], unique=False)
@@ -114,7 +114,7 @@ def upgrade() -> None:
             sa.PrimaryKeyConstraint("id"),
             sa.UniqueConstraint("source_asset_id", "target_asset_id", "relationship_type", name="uq_asset_relationship_pair_type"),
         )
-        if "ix_asset_relationships_source_asset_id" not in {item["name"] for item in sa.inspect(op.get_bind()).get_indexes("asset_relationships")}:
+    if "ix_asset_relationships_source_asset_id" not in {item["name"] for item in sa.inspect(op.get_bind()).get_indexes("asset_relationships")}:
         op.create_index("ix_asset_relationships_source_asset_id", "asset_relationships", ["source_asset_id"], unique=False)
     if "ix_asset_relationships_target_asset_id" not in {item["name"] for item in sa.inspect(op.get_bind()).get_indexes("asset_relationships")}:
         op.create_index("ix_asset_relationships_target_asset_id", "asset_relationships", ["target_asset_id"], unique=False)
