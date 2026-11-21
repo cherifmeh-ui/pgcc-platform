@@ -289,3 +289,50 @@ def test_supplier_snapshot_capture_permission_is_admin_only():
     assert role_has_permission("admin", "suppliers", "manage_risks")
     assert not role_has_permission("auditor", "suppliers", "manage_risks")
     assert not role_has_permission("executive", "suppliers", "manage_risks")
+
+@pytest.mark.asyncio
+async def test_supplier_archive_is_blocked_when_active_asset_links_exist():
+    from app.api.v1.endpoints.suppliers import archive_supplier
+
+    supplier_id = __import__("uuid").UUID("00000000-0000-0000-0000-000000000010")
+    supplier = MagicMock(id=supplier_id, code="SUP-001", archived_at=None)
+    supplier_result = MagicMock()
+    supplier_result.scalar_one_or_none.return_value = supplier
+    active_link_result = MagicMock()
+    active_link_result.scalar_one_or_none.return_value = __import__("uuid").UUID("00000000-0000-0000-0000-000000000011")
+    db = AsyncMock()
+    db.execute.side_effect = [supplier_result, active_link_result]
+
+    with pytest.raises(Exception) as exc:
+        await archive_supplier(
+            supplier_id=supplier_id, request=MagicMock(), db=db,
+            current_user=MagicMock(role="admin", email="admin@example.test"),
+        )
+    assert getattr(exc.value, "status_code", None) == 409
+    assert "relations" in exc.value.detail
+    db.commit.assert_not_awaited()
+
+
+@pytest.mark.asyncio
+async def test_supplier_archive_is_blocked_when_open_access_requests_exist():
+    from app.api.v1.endpoints.suppliers import archive_supplier
+
+    supplier_id = __import__("uuid").UUID("00000000-0000-0000-0000-000000000010")
+    supplier = MagicMock(id=supplier_id, code="SUP-001", archived_at=None)
+    supplier_result = MagicMock()
+    supplier_result.scalar_one_or_none.return_value = supplier
+    no_active_links = MagicMock()
+    no_active_links.scalar_one_or_none.return_value = None
+    open_request_result = MagicMock()
+    open_request_result.scalar_one_or_none.return_value = __import__("uuid").UUID("00000000-0000-0000-0000-000000000012")
+    db = AsyncMock()
+    db.execute.side_effect = [supplier_result, no_active_links, open_request_result]
+
+    with pytest.raises(Exception) as exc:
+        await archive_supplier(
+            supplier_id=supplier_id, request=MagicMock(), db=db,
+            current_user=MagicMock(role="admin", email="admin@example.test"),
+        )
+    assert getattr(exc.value, "status_code", None) == 409
+    assert "demandes d'accès" in exc.value.detail
+    db.commit.assert_not_awaited()
