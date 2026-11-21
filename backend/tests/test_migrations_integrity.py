@@ -135,3 +135,11 @@ def test_refresh_token_hash_has_unique_constraint_without_redundant_index():
     source = migration.read_text(encoding="utf-8")
     assert 'sa.UniqueConstraint("token_jti_hash", name="uq_refresh_token_sessions_jti_hash")' in source
     assert 'op.create_index("ix_refresh_token_sessions_token_jti_hash"' not in source
+
+
+def test_password_change_revokes_existing_refresh_sessions():
+    endpoint = MIGRATIONS_DIR.parent.parent / "app" / "api" / "v1" / "endpoints" / "auth.py"
+    source = endpoint.read_text(encoding="utf-8")
+    change_password = source.split('@router.post("/change-password"', 1)[1].split('@router.post("/refresh"', 1)[0]
+    assert "RefreshTokenSession.user_id == user.id" in change_password
+    assert "revoked_at=user.password_changed_at" in change_password
