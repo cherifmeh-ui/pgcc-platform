@@ -60,6 +60,8 @@ async def test_persist_refresh_session_stores_hash_and_expiry_not_raw_token(monk
 async def test_persist_refresh_session_requires_refresh_token_type(monkeypatch):
     db = FakeDB()
     user = SimpleNamespace(id=uuid4())
-    monkeypatch.setattr(auth_endpoint, "decode_token", lambda token, expected_type: {"jti": "id", "exp": 1})
+    calls = []
+    monkeypatch.setattr(auth_endpoint, "decode_token", lambda token, expected_type: calls.append(expected_type) or {"jti": "id", "exp": 1})
     await auth_endpoint._persist_refresh_session(db, user, "token")
+    assert calls == ["refresh"]
     assert len(db.added) == 1
