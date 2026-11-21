@@ -35,6 +35,7 @@ def upgrade() -> None:
         sa.Column("created_at", sa.DateTime(timezone=True), server_default=sa.func.now(), nullable=False),
         sa.Column("updated_at", sa.DateTime(timezone=True), server_default=sa.func.now(), nullable=False),
         sa.CheckConstraint("criticality IN ('Faible', 'Moyenne', 'Élevée', 'Critique')", name="ck_suppliers_criticality"),
+        sa.CheckConstraint("dependency_level IN ('Faible', 'Moyenne', 'Élevée', 'Critique')", name="ck_suppliers_dependency_level"),
         sa.CheckConstraint("status IN ('À qualifier', 'En évaluation', 'Approuvé', 'Approuvé sous conditions', 'Suspendu', 'Terminé')", name="ck_suppliers_status"),
         sa.UniqueConstraint("code", name="uq_suppliers_code"),
     )
