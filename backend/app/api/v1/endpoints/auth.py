@@ -433,6 +433,8 @@ async def refresh_tokens(
         is_active=user.is_active,
         is_locked=user.is_locked,
         must_change_password=user.must_change_password,
+        role=user.role,
+        mfa_enabled=user.mfa_enabled,
         password_changed_at=user.password_changed_at,
         token_issued_at=data.get("iat"),
     )
