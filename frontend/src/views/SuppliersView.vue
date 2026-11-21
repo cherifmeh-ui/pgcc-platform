@@ -37,7 +37,7 @@
           <label>Date début *<input v-model="contractForm.start_date" type="date" required></label>
           <label>Date fin<input v-model="contractForm.end_date" type="date"></label>
           <label>Préavis (jours)<input v-model.number="contractForm.notice_period_days" type="number" min="0" max="3650"></label>
-          <label>Document existant (UUID)<input v-model="contractForm.document_id" placeholder="Facultatif"></label>
+          <label>Document contractuel existant<select v-model="contractForm.document_id"><option :value="null">Aucun document associé</option><option v-for="doc in documents" :key="doc.id" :value="doc.id">{{doc.title}} — {{doc.filename}}</option></select></label>
         </div>
         <label class="check"><input v-model="contractForm.auto_renew" type="checkbox"> Renouvellement automatique</label>
         <div class="clauses"><label v-for="clause in clauseFields" :key="clause.key" class="check"><input v-model="contractForm[clause.key]" type="checkbox">{{clause.label}}</label></div>
@@ -62,10 +62,11 @@ const canManageContacts=computed(()=>auth.canAccessModule('suppliers','manage_co
 const canReadContacts=computed(()=>auth.canAccessModule('suppliers','read_contacts'));
 const canReadContracts=computed(()=>auth.canAccessModule('suppliers','read_contracts'));
 const canManageContracts=computed(()=>auth.canAccessModule('suppliers','manage_contracts'));
+const canReadDocuments=computed(()=>auth.canAccessModule('documents','read'));
 const levels=['Faible','Moyenne','Élevée','Critique'];
 const statuses=['À qualifier','En évaluation','Approuvé','Approuvé sous conditions','Suspendu','Terminé'];
 const contactTypes=['Commercial','Technique','Sécurité','Contractuel','Autre'];
-const suppliers=ref([]),contacts=ref([]),contracts=ref([]),loading=ref(false),saving=ref(false),error=ref(''),formError=ref(''),contactError=ref(''),contractError=ref(''),contractFormError=ref('');
+const suppliers=ref([]),contacts=ref([]),contracts=ref([]),documents=ref([]),loading=ref(false),saving=ref(false),error=ref(''),formError=ref(''),contactError=ref(''),contractError=ref(''),contractFormError=ref('');
 const search=ref(''),criticality=ref(''),status=ref(''),includeArchived=ref(false),limit=ref(25),offset=ref(0);
 const formOpen=ref(false),editing=ref(null),contactSupplier=ref(null),contractSupplier=ref(null);
 const contractTypes=['Service','Maintenance','Hébergement','Infogérance','Licence','Autre'];
@@ -82,7 +83,7 @@ function openCreate(){editing.value=null;Object.assign(form,blank());formOpen.va
 function edit(s){editing.value=s;Object.assign(form,blank(),s);formOpen.value=true;formError.value=''}
 async function save(){saving.value=true;formError.value='';try{if(editing.value)await apiClient.patch('/suppliers/'+editing.value.id,form);else await apiClient.post('/suppliers/',form);formOpen.value=false;await load()}catch(e){formError.value=e.response?.data?.detail||'Enregistrement impossible.'}finally{saving.value=false}}
 async function archive(s){if(!confirm('Archiver '+s.code+' ? Les données historiques seront conservées.'))return;try{await apiClient.post('/suppliers/'+s.id+'/archive');await load()}catch(e){error.value=e.response?.data?.detail||'Archivage impossible.'}}
-async function openContracts(s){contractSupplier.value=s;contracts.value=[];contractError.value='';contractFormError.value='';Object.assign(contractForm,blankContract());try{const {data}=await apiClient.get('/suppliers/'+s.id+'/contracts');contracts.value=data}catch(e){contractError.value=e.response?.data?.detail||'Chargement des contrats impossible.'}}
+async function openContracts(s){contractSupplier.value=s;contracts.value=[];documents.value=[];contractError.value='';contractFormError.value='';Object.assign(contractForm,blankContract());try{const {data}=await apiClient.get('/suppliers/'+s.id+'/contracts');contracts.value=data;if(canReadDocuments.value){const docs=await apiClient.get('/documents/');documents.value=docs.data}}catch(e){contractError.value=e.response?.data?.detail||'Chargement des contrats ou documents impossible.'}}
 function clauseCount(c){return clauseFields.filter(x=>c[x.key]).length}
 async function createContract(){saving.value=true;contractFormError.value='';try{const payload={...contractForm};if(!payload.end_date)payload.end_date=null;await apiClient.post('/suppliers/'+contractSupplier.value.id+'/contracts',payload);await openContracts(contractSupplier.value)}catch(e){contractFormError.value=e.response?.data?.detail||'Création du contrat impossible.'}finally{saving.value=false}}
 async function openContacts(s){contactSupplier.value=s;contacts.value=[];contactError.value='';try{const {data}=await apiClient.get('/suppliers/'+s.id+'/contacts');contacts.value=data}catch(e){contactError.value=e.response?.data?.detail||'Chargement contacts impossible.'}}
