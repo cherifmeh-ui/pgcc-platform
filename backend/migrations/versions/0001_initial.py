@@ -15,6 +15,8 @@ depends_on = None
 
 
 def upgrade() -> None:
+    # The pgvector type must exist before metadata creates document_chunks.
+    op.execute("CREATE EXTENSION IF NOT EXISTS vector")
     # This baseline intentionally delegates table creation to SQLAlchemy metadata
     # so that model definitions remain the single schema source at this stage.
     from app.core.database import Base
