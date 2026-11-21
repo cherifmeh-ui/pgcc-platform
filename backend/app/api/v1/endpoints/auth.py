@@ -516,3 +516,20 @@ async def refresh_tokens(
         user={"email": user.email, "full_name": user.full_name, "role": user.role,
               "must_change_password": user.must_change_password, "mfa_enabled": user.mfa_enabled},
     )
+
+
+@router.post("/logout", status_code=status.HTTP_204_NO_CONTENT)
+async def logout(payload: RefreshRequest, db: AsyncSession = Depends(get_db)):
+    """Revoke the presented refresh session; idempotent for invalid/revoked tokens."""
+    try:
+        data = decode_token(payload.refresh_token, expected_type="refresh")
+    except Exception:
+        return None
+    token_hash = _refresh_jti_hash(data)
+    await db.execute(
+        update(RefreshTokenSession)
+        .where(RefreshTokenSession.token_jti_hash == token_hash, RefreshTokenSession.revoked_at.is_(None))
+        .values(revoked_at=_now())
+    )
+    await db.commit()
+    return None
