@@ -323,3 +323,12 @@ The initial code-level review found that DOCX extraction joined paragraphs/table
 - **Residual risk:** refresh JWTs are stateless and not persisted server-side; successful refresh does not invalidate the presented token. Replay remains possible until expiry.
 - Production-grade remediation should introduce a persisted refresh-token/session record keyed by `jti` (store a hash, not the raw token), atomic one-time rotation, family revocation on replay, logout/revoke-all, and tests for concurrent refresh and reuse.
 - This requires a dedicated migration, model, endpoint transaction design, and frontend logout/session handling. It is intentionally not patched as a superficial endpoint change.
+
+
+### 23. Frontend session-token storage review
+
+- Access and refresh JWTs are currently stored in browser `localStorage` (`pgcc_access_token`, `pgcc_refresh_token`).
+- The Axios interceptor performs automatic refresh and replaces both tokens, but the backend does not persist refresh-token sessions; rotation therefore does not revoke prior tokens.
+- `localStorage` is readable by JavaScript and increases token-exfiltration impact from an XSS. Production architecture should evaluate HttpOnly/Secure/SameSite cookies (with CSRF protections), short-lived access tokens, server-side session/refresh-token hashes, atomic rotation, reuse detection, logout and revoke-all.
+- Frontend logout currently removes local tokens only; it cannot revoke server-side refresh sessions until the session model/API exists.
+- This is an architectural security gap, not a cosmetic frontend change; keep it as a Phase 0 release gate.
