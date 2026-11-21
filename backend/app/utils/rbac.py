@@ -66,6 +66,7 @@ PERMISSIONS: dict[str, dict[str, list[str]]] = {
     # --- Cartographie des actifs et dépendances ---
     "assets": {
         "read": [Role.ADMIN.value, Role.EXECUTIVE.value, Role.AUDITOR.value],
+        "read_contacts": [Role.ADMIN.value, Role.AUDITOR.value],
         "create": [Role.ADMIN.value],
         "update": [Role.ADMIN.value],
         "delete": [Role.ADMIN.value],
