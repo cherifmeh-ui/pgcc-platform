@@ -56,3 +56,61 @@
 ## Prochaine mise à jour
 
 Chaque module sera revu à partir de ses fichiers réels (models, schemas, endpoints, services, frontend, migrations et tests). Le statut sera remplacé par **Validé**, **Partiel**, **Bloquant** ou **Non commencé**, avec références aux tests et aux issues de backlog.
+
+## Findings from first code-level sampling
+
+These observations are directly visible in the current branch files and require follow-up tests or remediation; they are not exhaustive.
+
+### 1. Reporting endpoint is narrow and uses hard-coded classification
+
+- `backend/app/api/v1/endpoints/reports.py` exposes `GET /reports/dg-summary`.
+- The endpoint aggregates risks, critical applications, PAC actions, and requests an AI-generated executive summary.
+- Risk category classification is based on title/threat keyword matching; risk-level bands are hard-coded in the endpoint.
+- The endpoint does not yet provide a consolidated GRC report covering assets, ISO assessments/evidence, supplier risk, audits, or governance.
+- Follow-up: centralize KPI definitions, test the classification thresholds, establish report period/filters and data provenance, and separate deterministic data from AI narrative.
+
+### 2. RBAC inventory
+
+- Backend `backend/app/utils/rbac.py` is documented as the permission source of truth.
+- Asset read is restricted to admin, executive and auditor; viewer does not receive `assets:read`.
+- Supplier read is restricted to admin, executive and auditor; viewer does not receive `suppliers:read`.
+- Risk, action, document, ISO, app and dashboard read permissions include viewer.
+- Risk acceptance permission exists for admin/executive, but its actual endpoint/workflow must be verified against the current risk API.
+- Follow-up: build a route-to-permission matrix and automated negative tests for each role, including dashboard visibility and report access.
+
+### 3. Auth frontend storage and session lifecycle
+
+- `frontend/src/stores/auth.js` persists access and refresh tokens, role, and permissions in browser localStorage.
+- MFA confirmation stores the session and loads permissions.
+- Logout clears local values and redirects, but the sampled frontend action does not itself call a server-side revocation endpoint.
+- Follow-up: review refresh-token rotation, reuse detection, server-side revocation, expiration, logout semantics, and browser storage threat model. Do not mark session security complete based on unit tests alone.
+
+### 4. Database migration strategy
+
+- Migration series currently includes `0001_initial` through `0019_supplier_risk_snapshots`.
+- `docs/DATABASE_MIGRATIONS.md` explicitly warns that existing databases created by `create_all()` must be inspected and backed up before stamping the baseline.
+- The baseline is described as transitional metadata-based initialization, not a fully hand-authored migration history.
+- Follow-up: verify fresh DB upgrade, legacy/dev DB baseline/stamp path, constraints/indexes and downgrade safety using disposable databases.
+
+### 5. CI scope
+
+- The backend workflow installs dev dependencies, compiles backend modules, and runs pytest.
+- The frontend workflow runs `npm ci` and `npm run build`.
+- These checks do not establish runtime integration with PostgreSQL, Docker deployment, migration execution, browser end-to-end behavior, or production readiness.
+- Follow-up: add DB-backed API integration tests, migration CI, container build, and smoke tests in a controlled environment.
+
+### 6. Audit module gap
+
+- No dedicated Audit model, endpoint, or frontend view was identified in the initial repository tree.
+- Existing risks, controls, documents, and actions can support parts of audit work, but do not replace a formal audit lifecycle.
+- Follow-up: design the audit domain and its links to findings, risks, controls, assets, suppliers, evidence, and actions.
+
+### 7. Evidence and RAG security
+
+- Document upload, extraction, indexing, preview/download and RAG services exist.
+- Security review documents already flag retrieval-time authorization, parsing isolation and malware scanning as open risks.
+- Follow-up: validate access checks at every document operation and retrieval path; test unauthorized cross-document retrieval; implement or document malware scanning and parser isolation.
+
+## Evidence and limits
+
+The sampling used repository files on the current branch. No local runtime, fresh database, Docker deployment, browser E2E or penetration test was executed during this review. CI status is commit-specific and must be checked separately.
