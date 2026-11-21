@@ -27,6 +27,11 @@ def _supplier_allows_new_asset_link(status: str) -> bool:
     return status not in ("Suspendu", "Terminé")
 
 
+def _asset_allows_supplier_access(lifecycle_status: str, retired_at: datetime | None) -> bool:
+    """Reject lifecycle statuses or markers that identify retired assets."""
+    return lifecycle_status not in ("Retiré", "Décommissionné") and retired_at is None
+
+
 Level = Literal["Faible", "Moyenne", "Élevée", "Critique"]
 SupplierStatus = Literal[
     "À qualifier", "En évaluation", "Approuvé",
@@ -493,7 +498,7 @@ async def create_supplier_access_request(
         raise HTTPException(status_code=404, detail="Relation fournisseur-actif active introuvable")
     asset_result = await db.execute(select(Asset).where(Asset.id == link.asset_id))
     asset = asset_result.scalar_one_or_none()
-    if asset is None or asset.lifecycle_status in ("Retiré", "Décommissionné") or asset.retired_at is not None:
+    if asset is None or not _asset_allows_supplier_access(asset.lifecycle_status, asset.retired_at):
         raise HTTPException(status_code=422, detail="L'actif n'est pas éligible à une nouvelle autorisation")
     duplicate = await db.execute(select(SupplierAccessRequest.id).where(
         SupplierAccessRequest.supplier_asset_link_id == link.id,
@@ -544,7 +549,7 @@ async def decide_supplier_access_request(
             raise HTTPException(status_code=422, detail="Le fournisseur ou la relation à l’actif n’est plus éligible")
         asset_result = await db.execute(select(Asset).where(Asset.id == access_request.asset_id))
         asset = asset_result.scalar_one_or_none()
-        if asset is None or asset.lifecycle_status in ("Retiré", "Décommissionné") or asset.retired_at is not None:
+        if asset is None or not _asset_allows_supplier_access(asset.lifecycle_status, asset.retired_at):
             raise HTTPException(status_code=422, detail="L'actif n'est plus éligible à une autorisation d'accès")
         if access_request.start_date < date.today() or access_request.end_date < date.today():
             raise HTTPException(status_code=422, detail="La période demandée est échue ou rétroactive")
