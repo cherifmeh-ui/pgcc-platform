@@ -50,6 +50,7 @@ class ActionBase(BaseModel):
 class ActionCreate(ActionBase):
     risk_id: UUID = Field(..., description="UUID du risque associé")
     iso_control_id: Optional[int] = Field(default=None, gt=0)
+    iso_control_ref: Optional[str] = Field(default=None, max_length=50)
     iso_assessment_id: Optional[UUID] = None
 
 
@@ -61,6 +62,7 @@ class ActionUpdate(BaseModel):
     assigned_to: Optional[str] = Field(default=None, max_length=100)
     due_date: Optional[datetime] = None
     iso_control_id: Optional[int] = Field(default=None, gt=0)
+    iso_control_ref: Optional[str] = Field(default=None, max_length=50)
     iso_assessment_id: Optional[UUID] = None
 
 
@@ -68,6 +70,7 @@ class ActionResponse(ActionBase):
     id: UUID
     risk_id: UUID
     iso_control_id: Optional[int] = None
+    iso_control_ref: Optional[str] = None
     iso_assessment_id: Optional[UUID] = None
     created_at: datetime
     updated_at: datetime
@@ -132,6 +135,15 @@ async def create_action(
     if not risk:
         raise HTTPException(status_code=404, detail=f"Risque ID={data.risk_id} introuvable.")
     
+    # Resolve ISO control reference into its database ID.
+    if data.iso_control_ref:
+        control_result = await db.execute(select(IsoControl).where(IsoControl.ref_code == data.iso_control_ref))
+        selected_control = control_result.scalar_one_or_none()
+        if selected_control is None:
+            raise HTTPException(status_code=404, detail="Contrôle ISO introuvable.")
+        if data.iso_control_id is not None and data.iso_control_id != selected_control.id:
+            raise HTTPException(status_code=422, detail="Référence et identifiant du contrôle ISO incohérents.")
+        data.iso_control_id = selected_control.id
     # Validate ISO traceability, if provided.
     if data.iso_assessment_id:
         assessment_result = await db.execute(select(IsoControlAssessment).where(IsoControlAssessment.id == data.iso_assessment_id))
@@ -198,6 +210,15 @@ async def update_action(
         except ValueError as exc:
             raise HTTPException(status_code=409, detail=str(exc)) from exc
 
+    # Resolve the human-readable ISO control reference.
+    if update_data.get("iso_control_ref"):
+        control_result = await db.execute(select(IsoControl).where(IsoControl.ref_code == update_data["iso_control_ref"]))
+        selected_control = control_result.scalar_one_or_none()
+        if selected_control is None:
+            raise HTTPException(status_code=404, detail="Contrôle ISO introuvable.")
+        if update_data.get("iso_control_id") not in (None, selected_control.id):
+            raise HTTPException(status_code=422, detail="Référence et identifiant du contrôle ISO incohérents.")
+        update_data["iso_control_id"] = selected_control.id
     # Validate ISO references and preserve control/assessment consistency.
     effective_control_id = update_data.get("iso_control_id", action.iso_control_id)
     effective_assessment_id = update_data.get("iso_assessment_id", action.iso_assessment_id)
