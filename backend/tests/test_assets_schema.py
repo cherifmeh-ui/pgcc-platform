@@ -58,3 +58,10 @@ def test_asset_application_link_is_many_to_one():
     assert not any(c.name == "uq_assets_application_id" for c in Asset.__table__.constraints)
     fk = next(fk for fk in Asset.__table__.foreign_keys if fk.parent.name == "application_id")
     assert fk.target_fullname == "applications.id"
+
+
+
+def test_inventory_filter_fields_have_indexes():
+    indexed_fields = {"owner", "location", "lifecycle_status", "criticality", "classification"}
+    for field_name in indexed_fields:
+        assert Asset.__table__.c[field_name].index is True
