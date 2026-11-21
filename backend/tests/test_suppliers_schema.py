@@ -7,7 +7,7 @@ from app.api.v1.endpoints.suppliers import (
     SupplierCreate, SupplierUpdate, SupplierContactCreate, SupplierContractCreate, SupplierContractUpdate,
     SupplierAccessRequestCreate, SupplierAccessDecision, SupplierAccessRevocation,
 )
-from app.models.supplier import Supplier, SupplierContact, SupplierContract, SupplierAssetLink, SupplierAccessRequest
+from app.models.supplier import Supplier, SupplierContact, SupplierContract, SupplierAssetLink, SupplierAccessRequest, SupplierRiskSnapshot
 from app.utils.rbac import role_has_permission
 
 
@@ -270,3 +270,22 @@ async def test_supplier_risk_link_creation_requires_risk_update_permission_befor
         )
     assert exc.value.status_code == 403
     db.execute.assert_not_awaited()
+
+
+
+def test_supplier_risk_snapshot_is_immutable_monthly_record():
+    assert SupplierRiskSnapshot.__tablename__ == "supplier_risk_snapshots"
+    assert any(
+        constraint.name == "uq_supplier_risk_snapshots_month"
+        for constraint in SupplierRiskSnapshot.__table__.constraints
+    )
+    foreign_keys = {
+        fk.parent.name: fk for fk in SupplierRiskSnapshot.__table__.foreign_keys
+    }
+    assert foreign_keys["captured_by_id"].ondelete == "RESTRICT"
+
+
+def test_supplier_snapshot_capture_permission_is_admin_only():
+    assert role_has_permission("admin", "suppliers", "manage_risks")
+    assert not role_has_permission("auditor", "suppliers", "manage_risks")
+    assert not role_has_permission("executive", "suppliers", "manage_risks")
