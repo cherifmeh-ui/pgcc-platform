@@ -56,3 +56,7 @@ def test_supplier_permissions_follow_separation_of_duties():
     assert role_has_permission("auditor", "suppliers", "export")
     assert not role_has_permission("executive", "suppliers", "manage_contacts")
     assert not role_has_permission("viewer", "suppliers", "read")
+
+
+def test_supplier_dependency_level_is_constrained():
+    assert any(c.name == "ck_suppliers_dependency_level" for c in Supplier.__table__.constraints)
