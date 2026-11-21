@@ -12,7 +12,8 @@
 - Nombre de risques distincts liés à des fournisseurs, répartis par score et statut.
 - Autorisations fournisseurs actuellement approuvées et dans leur période de validité.
 - Accès privilégiés actifs et revues d'accès en retard.
-- Contrats actifs ou à renouveler arrivant à échéance dans les 90 jours.\n- Contrats actifs ou à renouveler présentant au moins une clause SSI essentielle manquante parmi les huit clauses suivies (confidentialité, notification d’incident, droit d’audit, continuité, réversibilité, localisation, sous-traitance, restitution/destruction).
+- Contrats actifs ou à renouveler arrivant à échéance dans les 90 jours.
+- Contrats actifs ou à renouveler présentant au moins une clause SSI essentielle manquante parmi les huit clauses suivies (confidentialité, notification d’incident, droit d’audit, continuité, réversibilité, localisation, sous-traitance, restitution/destruction).
 
 ## Règles de calcul
 
@@ -21,7 +22,8 @@
 - Seules les évaluations au statut `Validée` sont considérées comme évaluations valides; une échéance absente ou dépassée ne vaut pas conformité.
 - Seules les autorisations au statut `Approuvé` et dont la période couvre la date du calcul sont comptées comme actives.
 - Les contrats ne sont considérés comme échéant que s'ils sont au statut `Actif` ou `À renouveler` et leur date de fin se situe dans les 90 prochains jours.
-- Les niveaux de risques sont dérivés du score existant (1–4 faible, 5–9 modéré, 10–14 élevé, 15–19 critique, 20–25 inacceptable); aucune cotation n'est recalculée.\n- Les lacunes contractuelles sont calculées sur les contrats `Actif` ou `À renouveler`; un contrat est signalé dès qu’une des huit clauses SSI suivies est absente.
+- Les niveaux de risques sont dérivés du score existant (1–4 faible, 5–9 modéré, 10–14 élevé, 15–19 critique, 20–25 inacceptable); aucune cotation n'est recalculée.
+- Les lacunes contractuelles sont calculées sur les contrats `Actif` ou `À renouveler`; un contrat est signalé dès qu’une des huit clauses SSI suivies est absente.
 
 ## Sécurité
 
@@ -32,4 +34,4 @@
 
 ## Limites et prochaines étapes
 
-Cette première version est un instantané calculé à la demande, non un moteur d'alertes planifiées. Les dates sont évaluées selon la date locale du serveur applicatif; le déploiement devra fixer explicitement le fuseau métier de référence. Une prochaine tranche pourra ajouter un tableau de bord, les filtres organisationnels, les seuils configurables et des tests d'intégration PostgreSQL.
+La synthèse est un instantané calculé à la demande. Les dates utilisent la date du serveur applicatif; le fuseau métier devra être fixé explicitement au déploiement. Les dépendances fournisseurs sont également intégrées à l'analyse d'impact des actifs, sous réserve de la permission `suppliers:read_assets`.
