@@ -242,3 +242,21 @@ class SupplierRiskLink(Base):
     relationship_context = Column(String(2000), nullable=False)
     created_by_id = Column(PG_UUID(as_uuid=True), ForeignKey("users.id", ondelete="RESTRICT"), nullable=False)
     created_at = Column(DateTime(timezone=True), server_default=func.now(), nullable=False)
+
+
+class SupplierRiskSnapshot(Base):
+    """Immutable monthly snapshot of consolidated third-party risk indicators."""
+    __tablename__ = "supplier_risk_snapshots"
+    __table_args__ = (
+        UniqueConstraint("snapshot_month", name="uq_supplier_risk_snapshots_month"),
+        Index("ix_supplier_risk_snapshots_month", "snapshot_month"),
+    )
+
+    id = Column(PG_UUID(as_uuid=True), primary_key=True, default=uuid4)
+    snapshot_month = Column(Date, nullable=False)
+    indicators = Column(JSONB, nullable=False)
+    captured_by_id = Column(
+        PG_UUID(as_uuid=True), ForeignKey("users.id", ondelete="RESTRICT"),
+        nullable=False, index=True,
+    )
+    created_at = Column(DateTime(timezone=True), server_default=func.now(), nullable=False)
