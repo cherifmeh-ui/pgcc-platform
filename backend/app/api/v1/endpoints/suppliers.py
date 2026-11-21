@@ -1150,6 +1150,31 @@ async def archive_supplier(
     supplier = result.scalar_one_or_none()
     if supplier is None:
         raise HTTPException(status_code=404, detail="Fournisseur introuvable ou déjà archivé")
+    # Archiving is administrative, not an access-revocation workflow.
+    # Require active asset links and open access approvals to be explicitly
+    # terminated/revoked first, preserving traceability and decision metadata.
+    active_links = await db.execute(
+        select(SupplierAssetLink.id).where(
+            SupplierAssetLink.supplier_id == supplier_id,
+            SupplierAssetLink.status == "Actif",
+        ).limit(1)
+    )
+    if active_links.scalar_one_or_none() is not None:
+        raise HTTPException(
+            status_code=409,
+            detail="Archive impossible : des relations fournisseur-actif sont encore actives. Terminez-les avant l'archivage.",
+        )
+    open_access = await db.execute(
+        select(SupplierAccessRequest.id).where(
+            SupplierAccessRequest.supplier_id == supplier_id,
+            SupplierAccessRequest.status.in_(("Demandé", "Approuvé", "Suspendu")),
+        ).limit(1)
+    )
+    if open_access.scalar_one_or_none() is not None:
+        raise HTTPException(
+            status_code=409,
+            detail="Archive impossible : des demandes d'accès sont encore ouvertes. Révoquez ou clôturez-les avant l'archivage.",
+        )
     supplier.archived_at = datetime.now(timezone.utc)
     await db.commit()
     await db.refresh(supplier)
