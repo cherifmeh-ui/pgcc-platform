@@ -73,7 +73,7 @@
                 <div class="task-content">
                   <strong>{{ act.title }}</strong>
                   <p v-if="act.description">{{ act.description }}</p>
-                  <p v-if="act.iso_control_id" class="iso-action-tag">ISO 27002 · contrôle #{{ act.iso_control_id }}{{ act.iso_assessment_id ? ' · Évaluation liée' : '' }}</p>
+                  <p v-if="act.iso_control_id" class="iso-action-tag">ISO 27002 · {{ isoControls.find(control => control.control_id === act.iso_control_id)?.ref_code || ('#' + act.iso_control_id) }}{{ act.iso_assessment_id ? ' · Évaluation liée' : '' }}</p>
                   <div class="meta-info">
                     <!-- ✅ BADGES BASÉS SUR LES CHAÎNES RÉELLES -->
                     <span class="badge-status" :class="getStatusClass(act.status)">
