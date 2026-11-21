@@ -286,3 +286,5 @@ The initial code-level review found that DOCX extraction joined paragraphs/table
 - Refresh endpoint validates token type/signature/expiry and current account eligibility; password changes invalidate older refresh tokens via `password_changed_at`.
 - **Gap:** refresh tokens are not currently tracked server-side and are not rotated/revoked on use. A stolen token can be reused until expiry unless another account-level revocation condition applies.
 - Recommended future implementation: persist refresh-token `jti` or a token-family identifier, atomically rotate on refresh, revoke the previous token, and support logout/revoke-all. Add concurrency and replay tests before production deployment.
+
+- JWT hardening was adjusted after CI showed the internal `role` claim is legitimately used by pre-auth and access-token constructors. Reserved standard claims are blocked in the shared builder; `create_access_token` separately rejects caller-supplied role overrides while preserving the trusted role parameter.
