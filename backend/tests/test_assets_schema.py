@@ -1,0 +1,47 @@
+import pytest
+from pydantic import ValidationError
+
+from app.api.v1.endpoints.assets import AssetCreate, AssetUpdate, RelationshipCreate
+from app.models.asset import Asset, AssetRelationship
+
+
+def test_asset_create_accepts_application_link_and_classification():
+    payload = AssetCreate(
+        reference="AST-001",
+        name="Serveur applicatif",
+        asset_type="hardware",
+        criticality="Critique",
+        application_id="00000000-0000-0000-0000-000000000001",
+        confidentiality="Élevée",
+        integrity="Critique",
+        availability="Critique",
+    )
+    assert payload.asset_type == "hardware"
+    assert payload.criticality == "Critique"
+
+
+def test_asset_create_rejects_invalid_type_or_criticality():
+    with pytest.raises(ValidationError):
+        AssetCreate(reference="AST-002", name="Invalid", asset_type="unknown")
+    with pytest.raises(ValidationError):
+        AssetCreate(reference="AST-003", name="Invalid", criticality="Unknown")
+
+
+def test_asset_update_is_partial():
+    payload = AssetUpdate(criticality="Élevée")
+    assert payload.model_dump(exclude_unset=True) == {"criticality": "Élevée"}
+
+
+def test_relationship_schema_rejects_invalid_type():
+    with pytest.raises(ValidationError):
+        RelationshipCreate(
+            target_asset_id="00000000-0000-0000-0000-000000000002",
+            relationship_type="random",
+        )
+
+
+def test_asset_models_have_expected_tables_and_constraints():
+    assert Asset.__tablename__ == "assets"
+    assert AssetRelationship.__tablename__ == "asset_relationships"
+    assert any(c.name == "uq_assets_reference" for c in Asset.__table__.constraints)
+    assert any(c.name == "ck_asset_relationship_not_self" for c in AssetRelationship.__table__.constraints)
