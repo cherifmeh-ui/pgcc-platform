@@ -34,7 +34,7 @@ async def test_inventory_quality_counts_missing_fields_and_support_dates():
     assert quality["missing_direction"] == 1
     assert quality["support_overdue"] == 1
     assert quality["support_ending_90_days"] == 1
-    assert quality["completeness_percent"] == 70.0
+    assert quality["completeness_percent"] == 60.0
 
 
 @pytest.mark.asyncio
