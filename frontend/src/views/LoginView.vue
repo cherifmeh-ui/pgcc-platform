@@ -111,6 +111,11 @@
       <form v-else-if="step === 'change-password'" @submit.prevent="changePassword" class="auth-form">
         <h2>Changement obligatoire du mot de passe</h2>
         <p>Votre compte doit définir un nouveau mot de passe avant d'accéder à la plateforme.</p>
+        <div v-if="backupCodes.length" class="backup-codes">
+          <strong>Codes de secours MFA — sauvegardez-les maintenant</strong>
+          <p>Ils ne seront affichés qu'une seule fois. Conservez-les dans un endroit sûr.</p>
+          <ul><li v-for="code in backupCodes" :key="code"><code>{{ code }}</code></li></ul>
+        </div>
         <label for="new-password">Nouveau mot de passe</label>
         <input id="new-password" v-model="newPassword" type="password" minlength="12" maxlength="255" autocomplete="new-password" required :disabled="isLoading"/>
         <label for="confirm-new-password">Confirmer le mot de passe</label>
@@ -141,6 +146,7 @@ const mfaSecret = ref('');
 const changePasswordToken = ref('');
 const newPassword = ref('');
 const confirmPassword = ref('');
+const backupCodes = ref([]);
 const isLoading = ref(false);
 const errorMessage = ref(null);
 
@@ -259,6 +265,7 @@ async function verifyExistingMfa() {
 async function handleMfaSuccess(data) {
   if (data.change_password_required) {
     changePasswordToken.value = data.change_password_token;
+    backupCodes.value = data.backup_codes || [];
     step.value = 'change-password';
     return;
   }
@@ -295,11 +302,32 @@ function goBackToCredentials() {
   changePasswordToken.value = '';
   newPassword.value = '';
   confirmPassword.value = '';
+  backupCodes.value = [];
   currentPreAuthToken = null;
 }
 </script>
 
 <style scoped>
+.backup-codes {
+  background: #fff7ed;
+  border: 1px solid #fdba74;
+  border-radius: 8px;
+  padding: 0.75rem;
+  color: #9a3412;
+}
+.backup-codes p { font-size: 0.8rem; }
+.backup-codes ul {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 0.35rem;
+  list-style: none;
+  padding: 0;
+}
+.backup-codes code {
+  font-family: monospace;
+  font-weight: 700;
+  color: #7c2d12;
+}
 .login-wrapper {
   display: flex;
   justify-content: center;
