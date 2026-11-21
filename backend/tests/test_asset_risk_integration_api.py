@@ -127,3 +127,17 @@ async def test_risk_deletion_is_blocked_when_asset_links_exist():
     assert "associé" in exc.value.detail
     db.delete.assert_not_awaited()
     db.commit.assert_not_awaited()
+
+def test_asset_risk_link_eligibility_rejects_retired_lifecycle():
+    from app.api.v1.endpoints.assets import _asset_allows_risk_link
+    from datetime import datetime, timezone
+    assert not _asset_allows_risk_link("Retiré", None)
+    assert not _asset_allows_risk_link("Décommissionné", None)
+    assert not _asset_allows_risk_link("Actif", datetime(2026, 1, 1, tzinfo=timezone.utc))
+
+
+def test_asset_risk_link_eligibility_allows_active_assets():
+    from app.api.v1.endpoints.assets import _asset_allows_risk_link
+    assert _asset_allows_risk_link("Actif", None)
+    assert _asset_allows_risk_link("En maintenance", None)
+    assert _asset_allows_risk_link("En projet", None)
