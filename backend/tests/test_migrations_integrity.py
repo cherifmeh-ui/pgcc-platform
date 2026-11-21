@@ -195,8 +195,18 @@ def test_refresh_rotation_locks_user_before_refresh_session():
 def test_asset_reference_index_upgrade_and_downgrade_are_symmetrical():
     migration = MIGRATIONS_DIR / "0020_asset_reference_and_type_constraints.py"
     source = migration.read_text(encoding="utf-8")
-    upgrade = source.split("def upgrade():", 1)[1].split("def downgrade():", 1)[0]
-    downgrade = source.split("def downgrade():", 1)[1]
+    upgrade = source.split("def upgrade() -> None:", 1)[1].split("def downgrade() -> None:", 1)[0]
+    downgrade = source.split("def downgrade() -> None:", 1)[1]
     assert 'sa.text("lower(btrim(reference))")' in upgrade
     assert 'sa.text("lower(reference)")' in downgrade
     assert "Cannot downgrade asset type constraint" in downgrade
+
+
+def test_action_iso_link_migration_is_idempotent_and_guards_existing_schema():
+    migration = MIGRATIONS_DIR / "0004_action_iso_links.py"
+    source = migration.read_text(encoding="utf-8")
+    assert "inspector.get_columns(\"action_items\")" in source
+    assert "if \"iso_control_id\" not in columns" in source
+    assert "if \"iso_assessment_id\" not in columns" in source
+    assert "inspector.get_foreign_keys(\"action_items\")" in source
+    assert "inspector.get_indexes(\"action_items\")" in source
