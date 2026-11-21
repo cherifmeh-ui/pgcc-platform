@@ -153,3 +153,12 @@ def test_refresh_denial_revokes_active_sessions():
     assert "RefreshTokenSession.user_id == user.id" in denial
     assert "revoked_at=_now()" in denial
     assert "await db.commit()" in denial
+
+
+def test_refresh_and_password_change_lock_user_row_before_session_mutations():
+    endpoint = MIGRATIONS_DIR.parent.parent / "app" / "api" / "v1" / "endpoints" / "auth.py"
+    source = endpoint.read_text(encoding="utf-8")
+    change_password = source.split('@router.post("/change-password"', 1)[1].split('@router.post("/refresh"', 1)[0]
+    refresh = source.split('@router.post("/refresh"', 1)[1].split('@router.post("/logout"', 1)[0]
+    assert "select(User).where(User.email == email).with_for_update()" in change_password
+    assert "select(User).where(User.email == email).with_for_update()" in refresh
