@@ -53,7 +53,7 @@ La migration `0009_asset_inventory_filter_indexes` ajoute des index sur les colo
 2. **Hostname et numéro de série :** la détection de doublons CSV est une validation applicative. Il n'existe pas encore de contraintes uniques SQL sur ces champs; il faut confirmer les règles d'unicité réelles avec les équipes d'exploitation avant de les imposer.
 3. **Responsable et direction :** `owner`, `custodian` et `direction` sont encore des chaînes libres. Le futur référentiel Organisation/Utilisateurs devra être relié par clés étrangères dans une migration progressive, avec correspondance et reprise contrôlées.
 4. **Historique métier :** le journal de sécurité trace les opérations, mais le modèle n'est pas encore un historique versionné complet des changements de chaque actif.
-5. **Suppression des risques :** la FK `AssetRiskLink.risk_id` utilise actuellement `ON DELETE CASCADE`. Avant de généraliser l'archivage, confirmer si la suppression d'un risque doit être bloquée dès qu'il est lié à des actifs afin de préserver la traçabilité métier.
+5. **Suppression des risques :** la FK `AssetRiskLink.risk_id` utilise désormais `ON DELETE RESTRICT`. Avant de généraliser l'archivage, confirmer si la suppression d'un risque doit être bloquée dès qu'il est lié à des actifs afin de préserver la traçabilité métier.
 6. **Relations orientées :** les types de relation sont stockés en texte contrôlé; la sémantique source/cible doit être documentée et normalisée avant l'ajout de relations fournisseurs.
 
 ## 6. Décision d'architecture
@@ -65,3 +65,8 @@ Le modèle actuel est suffisamment stable pour achever la tranche Cartographie, 
 `0006_asset_inventory` → `0007_asset_risk_links` → `0008_asset_application_cardinality` → `0009_asset_inventory_filter_indexes`.
 
 Les migrations doivent être vérifiées sur une base de test vide et sur une copie représentative de la base existante avant tout déploiement. Le downgrade `0008` peut échouer si une application possède plusieurs actifs; ne pas l'exécuter sans contrôle des données.
+
+
+## 8. Protection de la traçabilité Actif–Risque
+
+La suppression physique d'un risque est refusée tant qu'il possède des associations avec des actifs. La FK `asset_risk_links.risk_id` est configurée en `ON DELETE RESTRICT` (migration `0010_asset_risk_restrict_delete`). La suppression d'une association doit passer par l'endpoint explicite de dissociation, autorisé uniquement avec `assets:update` et `risks:update`. Cela évite la disparition silencieuse du contexte de cartographie.
