@@ -211,3 +211,11 @@ The initial code-level review found that DOCX extraction joined paragraphs/table
 - The application deletion endpoint previously allowed the database integrity error to escape as an unhandled server error.
 - **Correction applied:** the endpoint now rolls back and returns HTTP 409 with an actionable message when linked assets prevent deletion.
 - **Remaining validation:** add route-level tests for the conflict response and verify that successful deletion and audit logging still work.
+
+### 11. Supplier archive and access lifecycle
+
+- Supplier archival now refuses to proceed while supplier-asset links remain `Actif`.
+- Archival also refuses while supplier access requests are in `Demandé`, `Approuvé`, or `Suspendu` states.
+- The archive operation intentionally does not silently terminate links or revoke approvals: those actions require their own traceable workflows and actors.
+- Regression tests cover both conflict conditions.
+- **Remaining validation:** route-level role/permission tests and database integration tests are pending; review whether terminated supplier status should also block new link creation and access approvals (currently archived state is the explicit block).
