@@ -1,7 +1,6 @@
 """Add versioned supplier security assessments."""
 from alembic import op
 import sqlalchemy as sa
-import sqlalchemy as sa
 from sqlalchemy.dialects import postgresql
 
 revision = "0014_supplier_assessments"
@@ -37,10 +36,14 @@ def upgrade() -> None:
             sa.CheckConstraint("score IS NULL OR (score >= 0 AND score <= 100)", name="ck_supplier_assessments_score"),
             sa.CheckConstraint("(status = 'Brouillon' AND submitted_at IS NULL AND validated_at IS NULL) OR (status = 'À valider' AND submitted_at IS NOT NULL AND validated_at IS NULL) OR (status IN ('Validée', 'Clôturée') AND submitted_at IS NOT NULL AND validated_at IS NOT NULL)", name="ck_supplier_assessments_lifecycle"),
         )
-    op.create_index("ix_supplier_assessments_supplier_id", "supplier_assessments", ["supplier_id"])
-    op.create_index("ix_supplier_assessments_assessed_by_id", "supplier_assessments", ["assessed_by_id"])
-    op.create_index("ix_supplier_assessments_validated_by_id", "supplier_assessments", ["validated_by_id"])
-    op.create_index("ix_supplier_assessments_supplier_status", "supplier_assessments", ["supplier_id", "status", "created_at"])
+    if "ix_supplier_assessments_supplier_id" not in {item["name"] for item in sa.inspect(op.get_bind()).get_indexes("supplier_assessments")}:
+        op.create_index("ix_supplier_assessments_supplier_id", "supplier_assessments", ["supplier_id"])
+    if "ix_supplier_assessments_assessed_by_id" not in {item["name"] for item in sa.inspect(op.get_bind()).get_indexes("supplier_assessments")}:
+        op.create_index("ix_supplier_assessments_assessed_by_id", "supplier_assessments", ["assessed_by_id"])
+    if "ix_supplier_assessments_validated_by_id" not in {item["name"] for item in sa.inspect(op.get_bind()).get_indexes("supplier_assessments")}:
+        op.create_index("ix_supplier_assessments_validated_by_id", "supplier_assessments", ["validated_by_id"])
+    if "ix_supplier_assessments_supplier_status" not in {item["name"] for item in sa.inspect(op.get_bind()).get_indexes("supplier_assessments")}:
+        op.create_index("ix_supplier_assessments_supplier_status", "supplier_assessments", ["supplier_id", "status", "created_at"])
 
 def downgrade() -> None:
     if sa.inspect(op.get_bind()).has_table("supplier_assessments"):
