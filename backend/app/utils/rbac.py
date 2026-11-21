@@ -69,6 +69,7 @@ PERMISSIONS: dict[str, dict[str, list[str]]] = {
         "create": [Role.ADMIN.value],
         "update": [Role.ADMIN.value],
         "delete": [Role.ADMIN.value],
+        "export": [Role.ADMIN.value, Role.AUDITOR.value],
     },
     
     # --- Menaces & Vulnérabilités ---
