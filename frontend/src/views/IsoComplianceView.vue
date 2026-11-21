@@ -233,13 +233,13 @@ function exportMatrixCsv() {
   const headers = ['Référence', 'Titre', 'Domaine', 'Statut', 'Risques liés'];
   const escapeCsv = (value) => {
     let text = String(value ?? '');
-    if (/^[=+@\\-]/.test(text)) text = "'" + text;
+    if (/^[=+@\-]/.test(text)) text = "'" + text;
     return '"' + text.replace(/"/g, '""') + '"';
   };
   const lines = [headers, ...filteredRows.value.map(row => [
     row.ref_code, row.title, row.domain, row.status, row.linked_risks_count
   ])].map(row => row.map(escapeCsv).join(';'));
-  const csv = '\\uFEFF' + lines.join('\\r\\n');
+  const csv = '\uFEFF' + lines.join('\r\n');
   const blob = new Blob([csv], { type: 'text/csv;charset=utf-8;' });
   const url = URL.createObjectURL(blob);
   const link = document.createElement('a');
