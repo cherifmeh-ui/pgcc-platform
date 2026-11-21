@@ -70,3 +70,11 @@ def test_asset_reference_migration_has_safe_duplicate_and_downgrade_guards() -> 
     assert "ck_assets_reference_nonblank" in source
     assert "cloud_resource" in source
     assert "Cannot downgrade asset type constraint while cloud_resource assets exist" in source
+
+def test_asset_reference_and_type_migration_has_valid_postgresql_downgrade_guard() -> None:
+    migration = MIGRATIONS_DIR / "0020_asset_reference_and_type_constraints.py"
+    source = migration.read_text(encoding="utf-8")
+    assert "DO $$" in source
+    assert "END $$;" in source
+    assert "DO $" not in source
+    assert "cloud_resource" in source
