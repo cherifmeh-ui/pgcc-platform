@@ -18,6 +18,10 @@ class Supplier(Base):
             name="ck_suppliers_criticality",
         ),
         CheckConstraint(
+            "dependency_level IN ('Faible', 'Moyenne', 'Élevée', 'Critique')",
+            name="ck_suppliers_dependency_level",
+        ),
+        CheckConstraint(
             "status IN ('À qualifier', 'En évaluation', 'Approuvé', "
             "'Approuvé sous conditions', 'Suspendu', 'Terminé')",
             name="ck_suppliers_status",
