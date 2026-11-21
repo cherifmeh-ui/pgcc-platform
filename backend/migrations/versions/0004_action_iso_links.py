@@ -22,14 +22,14 @@ def upgrade() -> None:
     if "iso_assessment_id" not in columns:
         op.add_column("action_items", sa.Column("iso_assessment_id", postgresql.UUID(as_uuid=True), nullable=True))
 
-    foreign_keys = {fk["name"] for fk in inspector.get_foreign_keys("action_items")}
-    if "fk_action_items_iso_control_id" not in foreign_keys:
+    foreign_keys = inspector.get_foreign_keys("action_items")
+    if not any(fk.get("constrained_columns") == ["iso_control_id"] and fk.get("referred_table") == "iso_controls" for fk in foreign_keys):
         op.create_foreign_key(
             "fk_action_items_iso_control_id",
             "action_items", "iso_controls",
             ["iso_control_id"], ["id"], ondelete="RESTRICT",
         )
-    if "fk_action_items_iso_assessment_id" not in foreign_keys:
+    if not any(fk.get("constrained_columns") == ["iso_assessment_id"] and fk.get("referred_table") == "iso_control_assessments" for fk in foreign_keys):
         op.create_foreign_key(
             "fk_action_items_iso_assessment_id",
             "action_items", "iso_control_assessments",
