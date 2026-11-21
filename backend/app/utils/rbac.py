@@ -63,6 +63,14 @@ PERMISSIONS: dict[str, dict[str, list[str]]] = {
         "delete": [Role.ADMIN.value],
     },
     
+    # --- Cartographie des actifs et dépendances ---
+    "assets": {
+        "read": [Role.ADMIN.value, Role.EXECUTIVE.value, Role.AUDITOR.value, Role.VIEWER.value],
+        "create": [Role.ADMIN.value],
+        "update": [Role.ADMIN.value],
+        "delete": [Role.ADMIN.value],
+    },
+    
     # --- Menaces & Vulnérabilités ---
     "threats": {
         "read": [Role.ADMIN.value, Role.EXECUTIVE.value, Role.AUDITOR.value],
