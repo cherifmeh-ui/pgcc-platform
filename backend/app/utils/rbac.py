@@ -85,6 +85,7 @@ PERMISSIONS: dict[str, dict[str, list[str]]] = {
         "decide_access": [Role.ADMIN.value],
         "revoke_access": [Role.ADMIN.value],
         "expire_access": [Role.ADMIN.value],
+        "review_access": [Role.ADMIN.value],
         "manage_assets": [Role.ADMIN.value],
         "assess": [Role.ADMIN.value],
         "validate_assessment": [Role.ADMIN.value],
