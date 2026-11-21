@@ -399,3 +399,16 @@ async def test_supplier_suspend_blocked_when_open_access_request_exists():
     assert getattr(exc.value, "status_code", None) == 409
     assert "autorisations d'accès" in exc.value.detail
     db.commit.assert_not_awaited()
+
+def test_supplier_access_eligibility_rejects_retired_asset_marker():
+    from app.api.v1.endpoints.suppliers import _asset_allows_supplier_access
+    from datetime import datetime, timezone
+    assert not _asset_allows_supplier_access("Retiré", None)
+    assert not _asset_allows_supplier_access("Actif", datetime(2026, 1, 1, tzinfo=timezone.utc))
+    assert not _asset_allows_supplier_access("Décommissionné", None)
+
+
+def test_supplier_access_eligibility_allows_active_asset():
+    from app.api.v1.endpoints.suppliers import _asset_allows_supplier_access
+    assert _asset_allows_supplier_access("En service", None)
+    assert _asset_allows_supplier_access("Actif", None)
