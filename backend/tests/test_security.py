@@ -205,3 +205,11 @@ def test_access_token_extra_claims_cannot_override_role():
             "viewer",
             extra_claims={"role": "admin"},
         )
+
+def test_change_password_token_is_typed_and_short_lived():
+    token = create_change_password_token("user@example.test", "viewer")
+    payload = decode_token(token, expected_type="change_password")
+    assert payload["sub"] == "user@example.test"
+    assert payload["type"] == "change_password"
+    with pytest.raises(Exception):
+        decode_token(token, expected_type="access")
