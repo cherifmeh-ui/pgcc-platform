@@ -9,6 +9,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from app.api.deps import require_permission
 from app.core.database import get_db
 from app.models.risk import Risk
+from app.models.asset import Asset, AssetRiskLink
 from app.models.action_item import ActionItem
 from app.models.user import User
 from app.schemas.risk import RiskCreate, RiskResponse, RiskUpdate
@@ -16,6 +17,19 @@ from app.services.security_logger import log_action
 from app.services.risk_scoring import calculate_risk_level
 
 router = APIRouter(prefix="/risks", tags=["Risques SI"])
+
+
+class RiskAssetResponse(BaseModel):
+    id: UUID
+    reference: str
+    name: str
+    asset_type: str
+    criticality: str
+    lifecycle_status: str
+    relationship_context: str | None = None
+
+    class Config:
+        from_attributes = True
 
 
 @router.get("/", response_model=List[RiskResponse])
@@ -232,4 +246,29 @@ async def list_risk_owners(
     return [
         {"id": str(user.id), "full_name": user.full_name, "department": user.department}
         for user in result.all()
+    ]
+
+
+@router.get("/{risk_id}/assets", response_model=List[RiskAssetResponse])
+async def list_risk_assets(
+    risk_id: UUID,
+    db: AsyncSession = Depends(get_db),
+    current_user: User = require_permission("risks", "read"),
+):
+    risk_result = await db.execute(select(Risk.id).where(Risk.id == risk_id))
+    if risk_result.scalar_one_or_none() is None:
+        raise HTTPException(status_code=404, detail="Risque introuvable")
+    result = await db.execute(
+        select(Asset, AssetRiskLink.relationship_context)
+        .join(AssetRiskLink, AssetRiskLink.asset_id == Asset.id)
+        .where(AssetRiskLink.risk_id == risk_id)
+        .order_by(Asset.name.asc())
+    )
+    return [
+        RiskAssetResponse(
+            id=asset.id, reference=asset.reference, name=asset.name,
+            asset_type=asset.asset_type, criticality=asset.criticality,
+            lifecycle_status=asset.lifecycle_status, relationship_context=context,
+        )
+        for asset, context in result.all()
     ]
