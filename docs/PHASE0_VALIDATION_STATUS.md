@@ -217,3 +217,12 @@ Repository/static hardening is substantially progressed, but the remaining gates
 - Added CI job `postgres-integration` using PostgreSQL 16 with pgvector. It runs Alembic migrations from scratch and executes the concurrency test against the service database.
 - Local execution remains skipped unless `PGCC_INTEGRATION_DATABASE_URL` is configured. Runtime proof is pending CI result.
 - Commits: `9ffdb75` (integration test), `521bcf0` (CI gate).
+
+
+### Migration CI failure and correction — 2026-11-21
+
+- PostgreSQL integration job failed at initial revision `0001_initial`: SQLAlchemy could not resolve the FK from `action_items.iso_assessment_id` because `iso_control_assessment` model was not imported into the baseline metadata.
+- Added the assessment model to revision 0001 imports and made revision 0002 table/index creation conditional to avoid duplicate creation on clean DBs while remaining compatible with already-applied deployments.
+- Revision 0020 downgrade index expression mismatch was corrected: upgrade uses `lower(btrim(reference))`; downgrade now restores `lower(reference)`.
+- Regression test added for the 0020 upgrade/downgrade index expression.
+- CI reruns for these fixes are pending. The PostgreSQL job has not yet passed.
