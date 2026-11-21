@@ -106,3 +106,12 @@ Une relation fournisseur–actif ne constitue pas une autorisation. Le modèle `
 - Journalisation : création, décision, révocation et expiration sont inscrites dans le journal de sécurité.
 - L'autorisation est une preuve de gouvernance; elle ne provisionne ni ne désactive techniquement un compte dans les systèmes cibles. La révocation doit être suivie de l'action technique correspondante et de sa vérification.
 - Les dates de revue sont enregistrées; les rappels automatiques et la synchronisation avec IAM/PAM restent des étapes ultérieures.
+
+
+### Tranche 7 — Contrôle de cohérence et analyse d'impact
+
+- L'analyse d'impact distingue désormais les relations d'inventaire fournisseur–actif des autorisations réellement approuvées.
+- Seules les autorisations au statut `Approuvé`, dont la période couvre la date courante et dont le fournisseur n'est pas archivé, sont comptabilisées comme accès actifs.
+- Les indicateurs distinguent les niveaux déclarés sur les relations et les accès privilégiés / accès aux données effectivement autorisés.
+- Les fiches Cartographie affichent explicitement que les métadonnées de relation ne constituent pas une autorisation d'accès.
+- L'index PostgreSQL partiel garantit l'unicité d'une demande/autorisation ouverte par relation, même en cas de soumissions concurrentes.
