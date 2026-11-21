@@ -436,7 +436,7 @@ async def export_assets_csv(
     location: str | None = Query(default=None, max_length=200),
     include_retired: bool = False,
     db: AsyncSession = Depends(get_db),
-    current_user: User = require_permission("assets", "read"),
+    current_user: User = require_permission("assets", "export"),
 ):
     """Export the filtered inventory as UTF-8 CSV with spreadsheet formula protection."""
     filters = []
@@ -670,7 +670,8 @@ async def get_asset_impact(
     )
     impacted = _compute_asset_impact(asset_id, rel_result.all())
     if not impacted:
-        return {"source": {"id": source.id, "reference": source.reference, "name": source.name}, "impacted_assets": [], "total_impacted": 0}
+        empty_summary = {"total": 0, "critical": 0, "high": 0, "moderate": 0, "low": 0, "by_status": {}}
+        return {"source": {"id": source.id, "reference": source.reference, "name": source.name}, "impacted_assets": [], "total_impacted": 0, "risk_summary": empty_summary}
     impacted_ids = [item[0] for item in impacted]
     asset_result = await db.execute(select(Asset).where(Asset.id.in_(impacted_ids)))
     assets_by_id = {asset.id: asset for asset in asset_result.scalars().all()}
