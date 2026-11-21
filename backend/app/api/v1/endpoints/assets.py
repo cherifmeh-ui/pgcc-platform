@@ -220,9 +220,12 @@ def _lifecycle_retirement_marker(status: str | None, current_retired_at: datetim
     return current_retired_at
 
 
-def _relationship_assets_are_active(asset_rows: list[tuple[UUID, datetime | None]]) -> bool:
-    """Require both endpoints of a new relationship to exist and be active."""
-    return len(asset_rows) == 2 and all(retired_at is None for _, retired_at in asset_rows)
+def _relationship_assets_are_active(asset_rows: list[tuple[UUID, datetime | None, str]]) -> bool:
+    """Require both endpoints to exist and have no retired lifecycle marker."""
+    return len(asset_rows) == 2 and all(
+        retired_at is None and lifecycle_status not in {"Retiré", "Décommissionné"}
+        for _, retired_at, lifecycle_status in asset_rows
+    )
 
 
 async def _ensure_application_exists(application_id: UUID | None, db: AsyncSession) -> None:
@@ -859,7 +862,7 @@ async def create_asset_relationship(
     # Lock active asset rows in a deterministic order to serialize dependency
     # graph mutations and prevent concurrent requests from introducing cycles.
     locked_assets = await db.execute(
-        select(Asset.id, Asset.retired_at)
+        select(Asset.id, Asset.retired_at, Asset.lifecycle_status)
         .where(Asset.id.in_([asset_id, data.target_asset_id]))
         .order_by(Asset.id)
         .with_for_update()
