@@ -28,7 +28,7 @@ def test_supplier_update_is_partial_and_normalizes_code():
 
 
 def test_supplier_contact_validates_email_and_name():
-    contact = SupplierContactCreate(full_name="  Contact Sécurité ", email="sec@example.test", contact_type="Sécurité")
+    contact = SupplierContactCreate(full_name="  Contact Sécurité ", email="sec@example.com", contact_type="Sécurité")
     assert contact.full_name == "Contact Sécurité"
     with pytest.raises(ValidationError):
         SupplierContactCreate(full_name="Contact", email="not-an-email")
