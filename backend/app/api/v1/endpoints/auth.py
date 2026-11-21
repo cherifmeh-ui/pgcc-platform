@@ -424,6 +424,13 @@ async def change_password(
     user.must_change_password = False
     user.password_changed_at = _now()
 
+    # Password changes invalidate all previously issued refresh sessions.
+    await db.execute(
+        update(RefreshTokenSession)
+        .where(RefreshTokenSession.user_id == user.id, RefreshTokenSession.revoked_at.is_(None))
+        .values(revoked_at=user.password_changed_at)
+    )
+
     access_token = create_access_token(subject=user.email, role=user.role)
     refresh_token = create_refresh_token(subject=user.email)
     await _persist_refresh_session(db, user, refresh_token)
