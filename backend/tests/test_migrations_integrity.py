@@ -222,3 +222,8 @@ def test_asset_inventory_migration_guards_existing_baseline_tables():
     assert 'has_table("asset_relationships")' in downgrade
     assert "get_indexes(\"assets\")" in upgrade
     assert "get_indexes(\"asset_relationships\")" in upgrade
+
+
+def test_all_migrations_are_valid_python():
+    for migration in MIGRATIONS_DIR.glob("*.py"):
+        ast.parse(migration.read_text(encoding="utf-8"), filename=str(migration))
