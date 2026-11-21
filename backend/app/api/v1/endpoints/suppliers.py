@@ -1032,6 +1032,48 @@ async def list_supplier_risk_snapshots(
 
 
 
+
+@router.get("/overview/concentration")
+async def get_supplier_risk_concentration(
+    limit: int = Query(default=10, ge=1, le=50),
+    db: AsyncSession = Depends(get_db),
+    current_user: User = require_permission("suppliers", "read"),
+):
+    """Identify suppliers concentrating linked central risks and privileged access."""
+    if not role_has_permission((current_user.role or "").lower(), "risks", "read"):
+        raise HTTPException(status_code=403, detail="La permission risks:read est requise.")
+    from app.services.supplier_risk_overview import build_supplier_risk_concentration
+
+    risk_result = await db.execute(
+        select(
+            Supplier.id.label("supplier_id"), Supplier.code.label("supplier_code"),
+            Supplier.legal_name.label("supplier_name"), Supplier.criticality,
+            Risk.id.label("risk_id"), Risk.risk_level,
+        )
+        .join(SupplierRiskLink, SupplierRiskLink.supplier_id == Supplier.id)
+        .join(Risk, Risk.id == SupplierRiskLink.risk_id)
+        .where(Supplier.archived_at.is_(None), Supplier.status != "Terminé")
+    )
+    risk_rows = [dict(row._mapping) for row in risk_result.all()]
+    access_result = await db.execute(
+        select(
+            SupplierAccessRequest.supplier_id,
+            SupplierAccessRequest.access_level,
+        )
+        .join(Supplier, Supplier.id == SupplierAccessRequest.supplier_id)
+        .where(
+            Supplier.archived_at.is_(None),
+            Supplier.status != "Terminé",
+            SupplierAccessRequest.status == "Approuvé",
+            SupplierAccessRequest.access_level == "Privilégié",
+            SupplierAccessRequest.start_date <= date.today(),
+            SupplierAccessRequest.end_date >= date.today(),
+        )
+    )
+    access_rows = [dict(row._mapping) for row in access_result.all()]
+    return build_supplier_risk_concentration(risk_rows, access_rows)[:limit]
+
+
 @router.get("/overview/trends")
 async def get_supplier_risk_trends(
     limit: int = Query(default=12, ge=2, le=60),
