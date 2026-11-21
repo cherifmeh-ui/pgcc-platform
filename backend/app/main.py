@@ -67,7 +67,7 @@ async def health():
     except Exception:
         db_status = "unavailable"
     return {
-        "status": "healthy",
+        "status": "healthy" if db_status == "connected" else "degraded",
         "service": "pgcc-backend",
         "phase": 4,
         "environment": settings.ENVIRONMENT,
