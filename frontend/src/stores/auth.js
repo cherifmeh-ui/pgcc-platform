@@ -115,6 +115,7 @@ export const useAuthStore = defineStore('auth', {
         'pgcc_user_role',
         'pgcc_permissions',
       ].forEach((key) => localStorage.removeItem(key));
+      delete apiClient.defaults.headers.common['Authorization'];
       // Reset after storage cleanup so state() cannot reload stale credentials.
       this.$reset();
       window.location.href = '/login';
