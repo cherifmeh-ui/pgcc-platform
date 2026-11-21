@@ -79,3 +79,14 @@ Contrats et pièces justificatives, évaluations versionnées, accès tiers et r
 - Les actifs retirés/décommissionnés et fournisseurs archivés ne peuvent pas recevoir de nouveau lien.
 - Les deux clés étrangères utilisent RESTRICT afin d'éviter les suppressions en cascade sur les référentiels.
 - Migration additive `0015_supplier_asset_links`; aucun changement des tables Cartographie ou des modules historiques.
+
+
+### Tranche 5 — Consultation croisée depuis les deux référentiels
+
+- Depuis une fiche fournisseur, l'utilisateur autorisé consulte les actifs liés, leurs rôles, niveaux d'accès, accès aux données et échéances de revue.
+- Depuis la fiche d'un actif, l'utilisateur autorisé consulte les fournisseurs associés avec leur code, raison sociale, type de relation et qualification d'accès.
+- La consultation inverse est exposée par `GET /suppliers/assets/{asset_id}/suppliers`; la consultation fournisseur par `GET /suppliers/{supplier_id}/assets`.
+- Les listes retournent les identifiants lisibles des référentiels associés, sans imposer au profil auditeur un accès général à l'inventaire.
+- Les autorisations `read_assets` et `manage_assets` restent dans le périmètre RBAC `suppliers`; elles ne sont pas dupliquées dans le module `assets`.
+- La gestion et la terminaison logique restent réservées à Admin; les profils Auditor peuvent consulter; Executive ne reçoit pas l'accès détaillé aux liens.
+- Les écrans existants de Cartographie, fournisseurs, risques et dépendances sont conservés; les nouvelles sections sont conditionnées par les permissions dédiées.
