@@ -74,7 +74,10 @@ async def log_action(
             return new_log
         except Exception as exc:
             await session.rollback()
-            logger.warning(\n                "Security audit logging failed (event_type=%s, resource=%s, action=%s)",\n                safe_event_type, safe_resource, safe_action,\n            )
+            logger.warning(
+                "Security audit logging failed (event_type=%s, resource=%s, action=%s)",
+                safe_event_type, safe_resource, safe_action,
+            )
             return None
 
 
