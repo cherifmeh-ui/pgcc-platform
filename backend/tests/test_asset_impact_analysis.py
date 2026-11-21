@@ -23,3 +23,10 @@ def test_impact_does_not_include_unrelated_assets():
 def test_impact_handles_multiple_paths_and_cycles_without_duplicates():
     result = _compute_asset_impact(A, [(B, A), (C, A), (D, B), (D, C), (A, D)])
     assert result == [(B, 1), (C, 1), (D, 2)]
+
+
+def test_supplier_exposure_in_impact_is_permission_gated():
+    from app.utils.rbac import role_has_permission
+    assert role_has_permission("admin", "suppliers", "read_assets")
+    assert role_has_permission("auditor", "suppliers", "read_assets")
+    assert not role_has_permission("executive", "suppliers", "read_assets")
