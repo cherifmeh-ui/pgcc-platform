@@ -1146,6 +1146,30 @@ async def update_supplier(
     if supplier is None:
         raise HTTPException(status_code=404, detail="Fournisseur introuvable ou archivé")
     changes = data.model_dump(exclude_unset=True)
+    requested_status = changes.get("status")
+    if requested_status in ("Suspendu", "Terminé") and requested_status != supplier.status:
+        active_links = await db.execute(
+            select(SupplierAssetLink.id).where(
+                SupplierAssetLink.supplier_id == supplier_id,
+                SupplierAssetLink.status == "Actif",
+            ).limit(1)
+        )
+        if active_links.scalar_one_or_none() is not None:
+            raise HTTPException(
+                status_code=409,
+                detail="Changement de statut impossible : des relations fournisseur-actif sont encore actives. Terminez-les d'abord.",
+            )
+        open_access = await db.execute(
+            select(SupplierAccessRequest.id).where(
+                SupplierAccessRequest.supplier_id == supplier_id,
+                SupplierAccessRequest.status.in_(("Demandé", "Approuvé", "Suspendu")),
+            ).limit(1)
+        )
+        if open_access.scalar_one_or_none() is not None:
+            raise HTTPException(
+                status_code=409,
+                detail="Changement de statut impossible : des demandes ou autorisations d'accès restent ouvertes. Révoquez ou clôturez-les d'abord.",
+            )
     if changes.get("business_owner_id") is not None:
         owner = await db.execute(select(User.id).where(User.id == changes["business_owner_id"], User.is_active.is_(True)))
         if owner.scalar_one_or_none() is None:
