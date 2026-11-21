@@ -4,7 +4,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy import select
 from pydantic import BaseModel, Field, field_validator
 from typing import List, Dict, Any
-from datetime import datetime
+from datetime import datetime, timezone
 import hashlib
 from uuid import UUID
 
@@ -175,7 +175,7 @@ async def list_control_evidence(
         .where(IsoControlEvidence.control_id == control.id)
         .order_by(IsoControlEvidence.created_at.desc())
     )
-    now = datetime.now()
+    now = datetime.now(timezone.utc)
     return [
         {
             **{key: getattr(evidence, key) for key in EvidenceResponse.model_fields if key in evidence.__dict__},
@@ -228,7 +228,7 @@ async def create_control_evidence(
         document_id=document.id,
         assessment_id=payload.assessment_id,
         evidence_owner=payload.evidence_owner.strip() if payload.evidence_owner else None,
-        collected_at=payload.collected_at or datetime.now(),
+        collected_at=payload.collected_at or datetime.now(timezone.utc),
         valid_until=payload.valid_until,
         verification_status="Pending",
         sha256=hashlib.sha256(document.file_data).hexdigest(),
@@ -265,7 +265,7 @@ async def verify_control_evidence(
     evidence, document = row
     evidence.verification_status = payload.verification_status
     evidence.verified_by_id = current_user.id if payload.verification_status != "Pending" else None
-    evidence.verified_at = datetime.now() if payload.verification_status != "Pending" else None
+    evidence.verified_at = datetime.now(timezone.utc) if payload.verification_status != "Pending" else None
     if payload.notes is not None:
         evidence.notes = payload.notes.strip() or None
     await db.commit()
@@ -274,7 +274,7 @@ async def verify_control_evidence(
         **{key: getattr(evidence, key) for key in EvidenceResponse.model_fields if key in evidence.__dict__},
         "document_title": document.title,
         "document_filename": document.filename,
-        "is_expired": bool(evidence.valid_until and evidence.valid_until < datetime.now()),
+        "is_expired": bool(evidence.valid_until and evidence.valid_until < datetime.now(timezone.utc)),
     }
 
 
