@@ -101,6 +101,7 @@ apiClient.interceptors.response.use(
 );
 
 function logoutAndRedirect() {
+  delete apiClient.defaults.headers.common['Authorization'];
   localStorage.removeItem('pgcc_access_token');
   localStorage.removeItem('pgcc_refresh_token');
   localStorage.removeItem('pgcc_user_role');
