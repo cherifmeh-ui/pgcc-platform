@@ -141,3 +141,38 @@ def test_asset_risk_link_eligibility_allows_active_assets():
     assert _asset_allows_risk_link("Actif", None)
     assert _asset_allows_risk_link("En maintenance", None)
     assert _asset_allows_risk_link("En projet", None)
+
+@pytest.mark.asyncio
+async def test_asset_risk_unlink_returns_404_when_asset_missing():
+    from app.api.v1.endpoints.assets import unlink_asset_from_risk
+    db = AsyncMock()
+    missing = MagicMock()
+    missing.scalar_one_or_none.return_value = None
+    db.execute.return_value = missing
+    with pytest.raises(HTTPException) as exc:
+        await unlink_asset_from_risk(
+            asset_id=ASSET_ID, risk_id=RISK_ID, request=MagicMock(), db=db,
+            current_user=MagicMock(role="admin", email="admin@example.test"),
+        )
+    assert exc.value.status_code == 404
+    db.delete.assert_not_awaited()
+    db.commit.assert_not_awaited()
+
+
+@pytest.mark.asyncio
+async def test_asset_risk_unlink_returns_404_when_risk_missing():
+    from app.api.v1.endpoints.assets import unlink_asset_from_risk
+    db = AsyncMock()
+    asset_result = MagicMock()
+    asset_result.scalar_one_or_none.return_value = ASSET_ID
+    missing_risk = MagicMock()
+    missing_risk.scalar_one_or_none.return_value = None
+    db.execute.side_effect = [asset_result, missing_risk]
+    with pytest.raises(HTTPException) as exc:
+        await unlink_asset_from_risk(
+            asset_id=ASSET_ID, risk_id=RISK_ID, request=MagicMock(), db=db,
+            current_user=MagicMock(role="admin", email="admin@example.test"),
+        )
+    assert exc.value.status_code == 404
+    db.delete.assert_not_awaited()
+    db.commit.assert_not_awaited()
