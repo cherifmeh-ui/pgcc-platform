@@ -114,3 +114,13 @@ Tests unitaires ajoutés : chaîne de dépendances, actif non lié, chemins mult
 - La sélection est réinitialisée à l'ouverture du graphe pour éviter un état obsolète.
 
 - L'analyse d'impact refuse désormais les actifs retirés comme source et exclut les relations impliquant des actifs retirés, afin de limiter l'analyse au périmètre actif.
+
+
+## Indicateurs de qualité de l'inventaire
+
+- Endpoint `GET /assets/quality` : indicateurs calculés sur les actifs actifs uniquement.
+- Champs incomplets suivis : propriétaire, classification, date de dernier inventaire, criticité et direction.
+- Indicateurs de cycle de vie : support expiré et support arrivant à échéance dans les 90 jours.
+- Score de complétude : ratio des cinq champs suivis renseignés, exprimé en pourcentage. L'inventaire vide est affiché comme 100 % (aucun élément incomplet), mais le nombre d'actifs reste affiché séparément.
+- Interface : panneau qualité affiché dans la vue Cartographie.
+- Tests : inventaire partiellement renseigné et inventaire vide.
