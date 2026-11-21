@@ -5,11 +5,15 @@ from app.services.rag_service import _split_text
 
 def test_split_text_respects_chunk_size_and_overlap():
     text = " ".join(f"word{i}" for i in range(200))
-    chunks = _split_text(text, size=80, overlap=10)
+    chunks = _split_text(text, size=100, overlap=20)
 
     assert chunks
-    assert all(len(chunk) <= 80 for chunk in chunks)
-    assert " ".join(chunks).replace("  ", " ")
+    assert all(len(chunk) <= 100 for chunk in chunks)
+    chunk_words = [chunk.split() for chunk in chunks]
+    assert any(
+        set(chunk_words[index - 1][-2:]).intersection(chunk_words[index][:2])
+        for index in range(1, len(chunk_words))
+    )
 
 
 def test_split_text_splits_long_tokens():
