@@ -65,3 +65,11 @@ Le workflow GitHub Actions `Backend checks` (compilation Python, tests unitaires
 - Les associations comportent un contexte facultatif, auteur et date; mutations journalisées.
 - Migration `0008_asset_application_cardinality` retire la contrainte 1:1 entre Asset et Application; une application peut désormais être associée à plusieurs actifs techniques.
 - Les routes existantes de risques et actifs sont conservées. Les tests de schéma sont étendus. La validation runtime/CI reste à confirmer sur le HEAD courant.
+
+
+## Interface d'intégration — implémentation initiale
+
+- `AssetsView.vue` : panneau Relations affiche désormais les risques associés, contexte, liaison et dissociation (si permission update); le chargement est conditionné à la permission de lecture Risques.
+- `RisksView.vue` : action dédiée permet d'afficher les actifs associés à un risque via l'endpoint inverse; affichage des caractéristiques essentielles et du contexte.
+- Les fonctions existantes de CRUD actifs/risques, matrice, export CSV, assistant IA et plan d'action sont conservées.
+- Les validations frontend build et CI sur le commit UI sont en cours.
