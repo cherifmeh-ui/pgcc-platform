@@ -50,3 +50,61 @@ def test_assessment_model_constraints_and_permissions():
     assert role_has_permission("auditor", "suppliers", "read_assessments")
     assert not role_has_permission("auditor", "suppliers", "assess")
     assert not role_has_permission("auditor", "suppliers", "validate_assessment")
+@pytest.mark.asyncio
+async def test_high_risk_assessment_cannot_be_approved():
+    from unittest.mock import AsyncMock, MagicMock
+    from uuid import UUID
+    from fastapi import HTTPException
+    from app.api.v1.endpoints.suppliers import validate_supplier_assessment, SupplierAssessmentValidation
+
+    supplier_id = UUID("00000000-0000-0000-0000-000000000010")
+    assessment_id = UUID("00000000-0000-0000-0000-000000000011")
+    assessment = MagicMock(
+        id=assessment_id, supplier_id=supplier_id, status="À valider",
+        assessed_by_id=UUID("00000000-0000-0000-0000-000000000012"),
+        risk_level="Critique",
+    )
+    result = MagicMock()
+    result.scalar_one_or_none.return_value = assessment
+    db = AsyncMock()
+    db.execute.return_value = result
+
+    with pytest.raises(HTTPException) as exc:
+        await validate_supplier_assessment(
+            supplier_id=supplier_id, assessment_id=assessment_id,
+            data=SupplierAssessmentValidation(decision="Approuvé", validation_comment="Validation test"),
+            request=MagicMock(), db=db,
+            current_user=MagicMock(id=UUID("00000000-0000-0000-0000-000000000013"), email="validator@example.test"),
+        )
+    assert exc.value.status_code == 422
+    db.commit.assert_not_awaited()
+
+
+@pytest.mark.asyncio
+async def test_assessment_evaluator_cannot_validate_own_assessment():
+    from unittest.mock import AsyncMock, MagicMock
+    from uuid import UUID
+    from fastapi import HTTPException
+    from app.api.v1.endpoints.suppliers import validate_supplier_assessment, SupplierAssessmentValidation
+
+    supplier_id = UUID("00000000-0000-0000-000000000010")
+    assessment_id = UUID("00000000-0000-0000-000000000011")
+    evaluator_id = UUID("00000000-0000-0000-000000000012")
+    assessment = MagicMock(
+        id=assessment_id, supplier_id=supplier_id, status="À valider",
+        assessed_by_id=evaluator_id, risk_level="Moyen",
+    )
+    result = MagicMock()
+    result.scalar_one_or_none.return_value = assessment
+    db = AsyncMock()
+    db.execute.return_value = result
+
+    with pytest.raises(HTTPException) as exc:
+        await validate_supplier_assessment(
+            supplier_id=supplier_id, assessment_id=assessment_id,
+            data=SupplierAssessmentValidation(decision="Approuvé", validation_comment="Validation test"),
+            request=MagicMock(), db=db,
+            current_user=MagicMock(id=evaluator_id, email="evaluator@example.test"),
+        )
+    assert exc.value.status_code == 403
+    db.commit.assert_not_awaited()
