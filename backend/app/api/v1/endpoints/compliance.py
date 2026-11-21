@@ -72,6 +72,13 @@ class EvidenceVerify(BaseModel):
     verification_status: str
     notes: str | None = Field(default=None, max_length=10000)
 
+    @field_validator("verification_status")
+    @classmethod
+    def validate_verification_status(cls, value: str) -> str:
+        if value not in {"Verified", "Rejected", "Pending"}:
+            raise ValueError("Statut de vérification invalide.")
+        return value
+
 class EvidenceResponse(BaseModel):
     id: UUID
     control_id: int
