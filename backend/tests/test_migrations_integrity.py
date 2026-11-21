@@ -61,3 +61,4 @@ def test_baseline_downgrade_is_explicitly_non_destructive() -> None:
     assert "def downgrade()" in source
     assert "NotImplementedError" in source
     assert "prevent accidental data loss" in source
+    assert "CREATE EXTENSION IF NOT EXISTS vector" in source
