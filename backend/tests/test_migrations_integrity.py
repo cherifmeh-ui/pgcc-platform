@@ -210,3 +210,15 @@ def test_action_iso_link_migration_is_idempotent_and_guards_existing_schema():
     assert "if \"iso_assessment_id\" not in columns" in source
     assert "inspector.get_foreign_keys(\"action_items\")" in source
     assert "inspector.get_indexes(\"action_items\")" in source
+
+
+def test_asset_inventory_migration_guards_existing_baseline_tables():
+    source = (MIGRATIONS_DIR / "0006_asset_inventory.py").read_text(encoding="utf-8")
+    upgrade = source.split("def upgrade() -> None:", 1)[1].split("def downgrade() -> None:", 1)[0]
+    downgrade = source.split("def downgrade() -> None:", 1)[1]
+    assert 'has_table("assets")' in upgrade
+    assert 'has_table("asset_relationships")' in upgrade
+    assert 'has_table("assets")' in downgrade
+    assert 'has_table("asset_relationships")' in downgrade
+    assert "get_indexes(\"assets\")" in upgrade
+    assert "get_indexes(\"asset_relationships\")" in upgrade
