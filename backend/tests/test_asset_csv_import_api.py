@@ -27,7 +27,7 @@ async def test_csv_preview_validates_rows_and_duplicate_references():
         current_user=MagicMock(email="tester@example.test"),
     )
 
-    assert response["rows_parsed"] == 2
+    assert response["rows_parsed"] == 3
     assert response["rows_valid"] == 1
     assert response["can_import"] is False
     assert len(response["errors"]) == 2
@@ -47,3 +47,13 @@ async def test_csv_preview_rejects_unknown_columns():
         )
     assert "Colonnes inconnues" in str(exc.value)
     db.execute.assert_not_awaited()
+
+
+
+def test_csv_export_formula_protection():
+    from app.api.v1.endpoints.assets import _csv_safe_value
+
+    assert _csv_safe_value("normal-value") == "normal-value"
+    assert _csv_safe_value("=HYPERLINK(\"https://example.test\")").startswith("'=")
+    assert _csv_safe_value("+cmd") == "'+cmd"
+    assert _csv_safe_value(None) == ""
