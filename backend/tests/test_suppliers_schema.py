@@ -1,4 +1,5 @@
 import pytest
+from unittest.mock import AsyncMock, MagicMock
 from datetime import date
 from pydantic import ValidationError
 
@@ -249,3 +250,23 @@ def test_supplier_risk_link_routes_are_registered():
     from app.api.v1.endpoints.suppliers import list_supplier_risk_links, link_supplier_to_risk
     assert callable(list_supplier_risk_links)
     assert callable(link_supplier_to_risk)
+
+
+@pytest.mark.asyncio
+async def test_supplier_risk_link_creation_requires_risk_update_permission_before_database_access():
+    from uuid import uuid4
+    from fastapi import HTTPException
+    from app.api.v1.endpoints.suppliers import SupplierRiskLinkCreate, link_supplier_to_risk
+    db = AsyncMock()
+    data = SupplierRiskLinkCreate(
+        risk_id=uuid4(),
+        relationship_type="Dépendance opérationnelle",
+        relationship_context="Dépendance d'exploitation du service critique",
+    )
+    with pytest.raises(HTTPException) as exc:
+        await link_supplier_to_risk(
+            supplier_id=uuid4(), data=data, request=MagicMock(), db=db,
+            current_user=MagicMock(role="auditor", id=uuid4(), email="audit@example.test"),
+        )
+    assert exc.value.status_code == 403
+    db.execute.assert_not_awaited()
