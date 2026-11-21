@@ -148,7 +148,7 @@ async def get_compliance_matrix(
         done_actions = action_query.scalars().all()
 
         assessment_query = await db.execute(
-            select(IsoControlAssessment).order_by(IsoControlAssessment.assessed_at.desc())
+            select(IsoControlAssessment).order_by(IsoControlAssessment.assessed_at.desc(), IsoControlAssessment.id.desc())
         )
         latest_assessments = {}
         for assessment in assessment_query.scalars().all():
