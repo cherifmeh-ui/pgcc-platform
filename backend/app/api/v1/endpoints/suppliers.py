@@ -10,8 +10,10 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.api.deps import require_permission
 from app.core.database import get_db
-from app.models.supplier import Supplier, SupplierContact, SupplierContract, SupplierAssessment, SupplierAssetLink, SupplierAccessRequest, SupplierAccessReview
+from app.models.supplier import Supplier, SupplierContact, SupplierContract, SupplierAssessment, SupplierAssetLink, SupplierAccessRequest, SupplierAccessReview, SupplierRiskLink
 from app.models.asset import Asset
+from app.models.risk import Risk
+from app.utils.rbac import role_has_permission
 from app.models.document import Document
 from app.models.user import User
 from app.services.security_logger import log_action
@@ -291,6 +293,32 @@ class SupplierAccessRevocation(BaseModel):
             raise ValueError("Le motif de révocation est obligatoire")
         return value
 
+
+
+
+class SupplierRiskLinkCreate(BaseModel):
+    risk_id: UUID
+    relationship_type: Literal["Dépendance opérationnelle", "Hébergement", "Maintenance", "Accès aux données", "Accès privilégié", "Sous-traitance", "Autre"]
+    relationship_context: str = Field(min_length=5, max_length=2000)
+
+    @field_validator("relationship_context")
+    @classmethod
+    def normalize_relationship_context(cls, value: str) -> str:
+        value = value.strip()
+        if len(value) < 5:
+            raise ValueError("Le contexte de dépendance doit être renseigné")
+        return value
+
+
+class SupplierRiskLinkResponse(BaseModel):
+    id: UUID
+    supplier_id: UUID
+    risk_id: UUID
+    relationship_type: str
+    relationship_context: str
+    created_by_id: UUID
+    created_at: datetime
+    model_config = ConfigDict(from_attributes=True)
 
 
 class SupplierAccessReviewCreate(BaseModel):
@@ -658,6 +686,64 @@ async def expire_supplier_access_request(
     await db.refresh(access_request)
     await log_action(user_email=current_user.email, action="EXPIRE_SUPPLIER_ACCESS", resource="supplier_access_requests", resource_id=str(access_request.id), details=f"Supplier access expired on {access_request.end_date}", event_type="SUPPLIER", request=request)
     return access_request
+
+
+
+@router.get("/{supplier_id}/risks", response_model=list[SupplierRiskLinkResponse])
+async def list_supplier_risk_links(
+    supplier_id: UUID,
+    db: AsyncSession = Depends(get_db),
+    current_user: User = require_permission("suppliers", "read"),
+):
+    if not role_has_permission((current_user.role or "").lower(), "risks", "read"):
+        raise HTTPException(status_code=403, detail="Accès refusé : permission risks:read requise.")
+    supplier_result = await db.execute(select(Supplier.id).where(Supplier.id == supplier_id, Supplier.archived_at.is_(None)))
+    if supplier_result.scalar_one_or_none() is None:
+        raise HTTPException(status_code=404, detail="Fournisseur introuvable")
+    result = await db.execute(select(SupplierRiskLink).where(
+        SupplierRiskLink.supplier_id == supplier_id
+    ).order_by(SupplierRiskLink.created_at.desc()))
+    return result.scalars().all()
+
+
+@router.post("/{supplier_id}/risks", response_model=SupplierRiskLinkResponse, status_code=status.HTTP_201_CREATED)
+async def link_supplier_to_risk(
+    supplier_id: UUID,
+    data: SupplierRiskLinkCreate,
+    request: Request,
+    db: AsyncSession = Depends(get_db),
+    current_user: User = require_permission("suppliers", "manage_risks"),
+):
+    if not role_has_permission((current_user.role or "").lower(), "risks", "update"):
+        raise HTTPException(status_code=403, detail="Accès refusé : permission risks:update requise.")
+    supplier_result = await db.execute(select(Supplier).where(Supplier.id == supplier_id, Supplier.archived_at.is_(None)))
+    supplier = supplier_result.scalar_one_or_none()
+    if supplier is None:
+        raise HTTPException(status_code=404, detail="Fournisseur introuvable")
+    risk_result = await db.execute(select(Risk).where(Risk.id == data.risk_id))
+    risk = risk_result.scalar_one_or_none()
+    if risk is None:
+        raise HTTPException(status_code=404, detail="Risque introuvable")
+    link = SupplierRiskLink(
+        supplier_id=supplier_id, risk_id=risk.id,
+        relationship_type=data.relationship_type,
+        relationship_context=data.relationship_context,
+        created_by_id=current_user.id,
+    )
+    db.add(link)
+    try:
+        await db.commit()
+    except Exception:
+        await db.rollback()
+        raise HTTPException(status_code=409, detail="Association fournisseur/risque déjà existante ou contrainte invalide")
+    await db.refresh(link)
+    await log_action(
+        user_email=current_user.email, action="LINK_SUPPLIER_RISK",
+        resource="supplier_risk_links", resource_id=str(link.id),
+        details=f"Supplier {supplier.code} linked to risk {risk.ref}: {data.relationship_type}",
+        event_type="SUPPLIER_RISK", request=request,
+    )
+    return link
 
 
 @router.get("/{supplier_id}/assets", response_model=list[SupplierAssetLinkResponse])
