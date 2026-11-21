@@ -211,6 +211,11 @@ def _compute_asset_impact(source_asset_id: UUID, dependency_pairs: list[tuple[UU
     return sorted(distances.items(), key=lambda item: (item[1], str(item[0])))
 
 
+def _relationship_assets_are_active(asset_rows: list[tuple[UUID, datetime | None]]) -> bool:
+    """Require both endpoints of a new relationship to exist and be active."""
+    return len(asset_rows) == 2 and all(retired_at is None for _, retired_at in asset_rows)
+
+
 async def _ensure_application_exists(application_id: UUID | None, db: AsyncSession) -> None:
     if application_id is None:
         return
@@ -848,7 +853,7 @@ async def create_asset_relationship(
     asset_rows = locked_assets.all()
     if len(asset_rows) != 2:
         raise HTTPException(status_code=404, detail="Actif source ou cible introuvable")
-    if any(retired_at is not None for _, retired_at in asset_rows):
+    if not _relationship_assets_are_active(asset_rows):
         raise HTTPException(status_code=409, detail="Les relations ne peuvent pas être créées sur un actif retiré")
 
     if data.relationship_type == "depends_on" and await _would_create_dependency_cycle(db, asset_id, data.target_asset_id):
