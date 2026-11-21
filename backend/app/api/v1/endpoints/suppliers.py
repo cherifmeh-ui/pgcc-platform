@@ -251,6 +251,8 @@ class SupplierAssetLinkResponse(BaseModel):
     id: UUID
     supplier_id: UUID
     asset_id: UUID
+    asset_reference: str | None = None
+    asset_name: str | None = None
     relationship_type: str
     access_level: str
     data_access: bool
@@ -304,11 +306,17 @@ async def list_supplier_assets(
     supplier = await db.execute(select(Supplier.id).where(Supplier.id == supplier_id))
     if supplier.scalar_one_or_none() is None:
         raise HTTPException(status_code=404, detail="Fournisseur introuvable")
-    stmt = select(SupplierAssetLink).where(SupplierAssetLink.supplier_id == supplier_id)
+    stmt = (select(SupplierAssetLink, Asset.reference, Asset.name)
+        .join(Asset, Asset.id == SupplierAssetLink.asset_id)
+        .where(SupplierAssetLink.supplier_id == supplier_id))
     if not include_ended:
         stmt = stmt.where(SupplierAssetLink.status != "Terminé")
     result = await db.execute(stmt.order_by(SupplierAssetLink.created_at.desc()))
-    return result.scalars().all()
+    return [
+        {**{column.name: getattr(link, column.name) for column in SupplierAssetLink.__table__.columns},
+         "asset_reference": reference, "asset_name": name}
+        for link, reference, name in result.all()
+    ]
 
 
 @router.post("/{supplier_id}/assets", response_model=SupplierAssetLinkResponse, status_code=status.HTTP_201_CREATED)
