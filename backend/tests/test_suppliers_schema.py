@@ -4,7 +4,7 @@ from pydantic import ValidationError
 from app.api.v1.endpoints.suppliers import (
     SupplierCreate, SupplierUpdate, SupplierContactCreate, SupplierContractCreate, SupplierContractUpdate,
 )
-from app.models.supplier import Supplier, SupplierContact, SupplierContract
+from app.models.supplier import Supplier, SupplierContact, SupplierContract, SupplierAssetLink
 from app.utils.rbac import role_has_permission
 
 
@@ -95,3 +95,22 @@ def test_supplier_contract_permissions_separate_read_and_write():
     assert role_has_permission("auditor", "suppliers", "read_contracts")
     assert not role_has_permission("executive", "suppliers", "read_contracts")
     assert not role_has_permission("auditor", "suppliers", "manage_contracts")
+
+
+
+def test_supplier_asset_link_has_integrity_constraints():
+    assert SupplierAssetLink.__tablename__ == "supplier_asset_links"
+    assert any(c.name == "uq_supplier_asset_link" for c in SupplierAssetLink.__table__.constraints)
+    assert any(c.name == "ck_supplier_asset_links_type" for c in SupplierAssetLink.__table__.constraints)
+    supplier_fk = next(fk for fk in SupplierAssetLink.__table__.foreign_keys if fk.parent.name == "supplier_id")
+    asset_fk = next(fk for fk in SupplierAssetLink.__table__.foreign_keys if fk.parent.name == "asset_id")
+    assert supplier_fk.ondelete == "RESTRICT"
+    assert asset_fk.ondelete == "RESTRICT"
+
+
+def test_supplier_asset_link_permissions_are_separated():
+    assert role_has_permission("admin", "suppliers", "read_assets")
+    assert role_has_permission("auditor", "suppliers", "read_assets")
+    assert role_has_permission("admin", "suppliers", "manage_assets")
+    assert not role_has_permission("auditor", "suppliers", "manage_assets")
+    assert not role_has_permission("executive", "suppliers", "manage_assets")
