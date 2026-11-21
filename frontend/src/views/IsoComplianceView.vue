@@ -92,13 +92,14 @@
             <th>Domaine</th>
             <th>Statut</th>
             <th>Liens Risques</th>
+            <th>Actions liées</th>
             <th>Preuves</th>
             <th>Action IA</th>
           </tr>
         </thead>
         <tbody>
           <tr v-if="filteredRows.length === 0">
-            <td colspan="7" class="empty-filter-state">Aucun contrôle ne correspond aux filtres sélectionnés.</td>
+            <td colspan="8" class="empty-filter-state">Aucun contrôle ne correspond aux filtres sélectionnés.</td>
           </tr>
           <tr v-for="row in filteredRows" :key="row.ref_code" class="table-row-hover">
             <td><code class="ref-code">{{ row.ref_code }}</code></td>
@@ -123,6 +124,10 @@
               <span v-if="row.linked_risks_count > 0" class="link-pill active">
                 🔗 {{ row.linked_risks_count }}
               </span>
+              <span v-else class="link-pill inactive">—</span>
+            </td>
+            <td class="links-count">
+              <span v-if="row.linked_actions_count" class="link-pill active">🛠️ {{ row.linked_actions_count }}</span>
               <span v-else class="link-pill inactive">—</span>
             </td>
             <td class="links-count">
@@ -509,14 +514,14 @@ async function saveAssessment() {
 }
 
 function exportMatrixCsv() {
-  const headers = ['Référence', 'Titre', 'Domaine', 'Statut déclaratif', 'Risques liés', 'Statut évaluation', 'Maturité', 'Applicabilité', 'Preuves', 'Preuves vérifiées', 'Preuves expirées'];
+  const headers = ['Référence', 'Titre', 'Domaine', 'Statut déclaratif', 'Risques liés', 'Actions liées', 'Statut évaluation', 'Maturité', 'Applicabilité', 'Preuves', 'Preuves vérifiées', 'Preuves expirées'];
   const escapeCsv = (value) => {
     let text = String(value ?? '');
     if (/^[=+@\-]/.test(text)) text = "'" + text;
     return '"' + text.replace(/"/g, '""') + '"';
   };
   const lines = [headers, ...filteredRows.value.map(row => [
-    row.ref_code, row.title, row.domain, row.status, row.linked_risks_count, row.latest_assessment_status || '', row.latest_assessment_maturity ?? '', row.latest_assessment_applicability || '', row.evidence_count || 0, row.verified_evidence_count || 0, row.expired_evidence_count || 0
+    row.ref_code, row.title, row.domain, row.status, row.linked_risks_count, row.linked_actions_count || 0, row.latest_assessment_status || '', row.latest_assessment_maturity ?? '', row.latest_assessment_applicability || '', row.evidence_count || 0, row.verified_evidence_count || 0, row.expired_evidence_count || 0
   ])].map(row => row.map(escapeCsv).join(';'));
   const csv = '\uFEFF' + lines.join('\r\n');
   const blob = new Blob([csv], { type: 'text/csv;charset=utf-8;' });
