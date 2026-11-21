@@ -174,6 +174,51 @@
               <p v-if="entry.gap_description">{{ entry.gap_description }}</p>
             </article>
           </section>
+          <section class="assessment-evidence">
+            <h3>Preuves documentaires</h3>
+            <div class="evidence-form">
+              <label>Document source
+                <select v-model="evidenceForm.document_id">
+                  <option value="">Sélectionner un document</option>
+                  <option v-for="doc in availableDocuments" :key="doc.id" :value="doc.id">{{ doc.title }} — {{ doc.filename }}</option>
+                </select>
+              </label>
+              <label>Responsable de la preuve
+                <input v-model="evidenceForm.evidence_owner" maxlength="150" placeholder="Direction / responsable" />
+              </label>
+              <label>Date de collecte
+                <input v-model="evidenceForm.collected_at" type="date" />
+              </label>
+              <label>Valide jusqu'au
+                <input v-model="evidenceForm.valid_until" type="date" />
+              </label>
+              <label>Notes
+                <textarea v-model="evidenceForm.notes" rows="2" maxlength="10000" placeholder="Contexte, vérification, référence..."></textarea>
+              </label>
+              <div v-if="evidenceError" class="alert-error-box">{{ evidenceError }}</div>
+              <button class="primary-action-btn" @click="saveEvidence" :disabled="evidenceSaving || !evidenceForm.document_id">
+                {{ evidenceSaving ? 'Association...' : 'Associer la preuve au contrôle' }}
+              </button>
+            </div>
+            <div v-if="evidenceLoading" class="loading-state">Chargement des preuves...</div>
+            <div v-else-if="controlEvidence.length === 0" class="empty-filter-state">Aucune preuve associée.</div>
+            <article v-for="evidence in controlEvidence" :key="evidence.id" class="assessment-history-item evidence-item">
+              <div class="assessment-history-head">
+                <strong>{{ evidence.document_title }} — {{ evidence.document_filename }}</strong>
+                <span :class="['evidence-status', evidence.verification_status.toLowerCase()]">{{ evidence.verification_status }}</span>
+              </div>
+              <p>Responsable : {{ evidence.evidence_owner || 'Non renseigné' }} · Collectée : {{ formatDate(evidence.collected_at) }}</p>
+              <p v-if="evidence.valid_until">Validité : {{ formatDate(evidence.valid_until) }} <span v-if="evidence.is_expired" class="expired-warning">Expirée</span></p>
+              <p v-if="evidence.notes">{{ evidence.notes }}</p>
+              <p class="evidence-hash">SHA-256 : {{ evidence.sha256 }}</p>
+              <div class="evidence-actions">
+                <button class="secondary-action-btn" @click="downloadEvidenceDocument(evidence.document_id)">Télécharger</button>
+                <button v-if="evidence.verification_status !== 'Verified'" class="secondary-action-btn" @click="verifyEvidence(evidence.id, 'Verified')">Valider</button>
+                <button v-if="evidence.verification_status !== 'Rejected'" class="secondary-action-btn" @click="verifyEvidence(evidence.id, 'Rejected')">Rejeter</button>
+                <button v-if="evidence.verification_status !== 'Pending'" class="secondary-action-btn" @click="verifyEvidence(evidence.id, 'Pending')">Réinitialiser</button>
+              </div>
+            </article>
+          </section>
         </div>
       </div>
     </Teleport>
@@ -255,6 +300,12 @@ const assessmentLoading = ref(false);
 const assessmentSaving = ref(false);
 const assessmentError = ref('');
 const assessmentForm = ref({ applicability: 'Applicable', implementation_status: 'Non démarré', maturity_level: 0, justification: '', gap_description: '' });
+const availableDocuments = ref([]);
+const controlEvidence = ref([]);
+const evidenceLoading = ref(false);
+const evidenceSaving = ref(false);
+const evidenceError = ref('');
+const evidenceForm = ref({ document_id: '', evidence_owner: '', collected_at: new Date().toISOString().slice(0, 10), valid_until: '', notes: '' });
 
 // État IA
 const showAiPanel = ref(false);
@@ -310,15 +361,91 @@ function getStatusIcon(status) {
   }
 }
 
+function formatDate(value) {
+  if (!value) return '—';
+  return new Date(value).toLocaleDateString();
+}
+async function loadEvidence(refCode) {
+  evidenceLoading.value = true;
+  try {
+    const { data } = await apiClient.get(`/compliance/controls/${encodeURIComponent(refCode)}/evidence`);
+    controlEvidence.value = Array.isArray(data) ? data : [];
+  } catch (error) {
+    evidenceError.value = error.response?.data?.detail || "Impossible de charger les preuves.";
+    controlEvidence.value = [];
+  } finally {
+    evidenceLoading.value = false;
+  }
+}
+async function loadDocuments() {
+  try {
+    const { data } = await apiClient.get('/documents/');
+    availableDocuments.value = Array.isArray(data) ? data : [];
+  } catch (error) {
+    evidenceError.value = error.response?.data?.detail || "Impossible de charger la bibliothèque documentaire.";
+  }
+}
+async function saveEvidence() {
+  if (!selectedControl.value || !evidenceForm.value.document_id) return;
+  evidenceSaving.value = true;
+  evidenceError.value = '';
+  try {
+    const payload = {
+      document_id: evidenceForm.value.document_id,
+      evidence_owner: evidenceForm.value.evidence_owner.trim() || null,
+      collected_at: evidenceForm.value.collected_at ? new Date(evidenceForm.value.collected_at + 'T00:00:00Z').toISOString() : null,
+      valid_until: evidenceForm.value.valid_until ? new Date(evidenceForm.value.valid_until + 'T23:59:59Z').toISOString() : null,
+      notes: evidenceForm.value.notes.trim() || null,
+    };
+    await apiClient.post(`/compliance/controls/${encodeURIComponent(selectedControl.value.ref_code)}/evidence`, payload);
+    evidenceForm.value = { document_id: '', evidence_owner: '', collected_at: new Date().toISOString().slice(0, 10), valid_until: '', notes: '' };
+    await loadEvidence(selectedControl.value.ref_code);
+  } catch (error) {
+    evidenceError.value = error.response?.data?.detail || "Échec de l'association de la preuve.";
+  } finally {
+    evidenceSaving.value = false;
+  }
+}
+async function verifyEvidence(id, verification_status) {
+  evidenceError.value = '';
+  try {
+    await apiClient.patch(`/compliance/evidence/${id}/verify`, { verification_status });
+    await loadEvidence(selectedControl.value.ref_code);
+  } catch (error) {
+    evidenceError.value = error.response?.data?.detail || "Impossible de modifier le statut de vérification.";
+  }
+}
+async function downloadEvidenceDocument(documentId) {
+  try {
+    const response = await apiClient.get(`/documents/${documentId}/download`, { responseType: 'blob' });
+    const blobUrl = URL.createObjectURL(response.data);
+    const link = document.createElement('a');
+    link.href = blobUrl;
+    link.download = 'preuve-documentaire';
+    document.body.appendChild(link);
+    link.click();
+    link.remove();
+    URL.revokeObjectURL(blobUrl);
+  } catch (error) {
+    evidenceError.value = error.response?.data?.detail || "Téléchargement impossible.";
+  }
+}
+
 async function openAssessment(row) {
   selectedControl.value = row;
   showAssessmentPanel.value = true;
   assessmentError.value = '';
   assessmentForm.value = { applicability: 'Applicable', implementation_status: 'Non démarré', maturity_level: 0, justification: '', gap_description: '' };
   assessmentLoading.value = true;
+  evidenceError.value = '';
+  evidenceForm.value = { document_id: '', evidence_owner: '', collected_at: new Date().toISOString().slice(0, 10), valid_until: '', notes: '' };
   try {
-    const { data } = await apiClient.get(`/compliance/controls/${encodeURIComponent(row.ref_code)}/assessments`);
-    assessmentHistory.value = Array.isArray(data) ? data : [];
+    const [assessmentResponse] = await Promise.all([
+      apiClient.get(`/compliance/controls/${encodeURIComponent(row.ref_code)}/assessments`),
+      loadDocuments(),
+      loadEvidence(row.ref_code),
+    ]);
+    assessmentHistory.value = Array.isArray(assessmentResponse.data) ? assessmentResponse.data : [];
   } catch (error) {
     assessmentError.value = error.response?.data?.detail || "Impossible de charger l'historique.";
     assessmentHistory.value = [];
@@ -465,6 +592,17 @@ onMounted(fetchMatrix);
 .assessment-status-tag { font-size:.75rem; color:#0f766e; background:#f0fdfa; border:1px solid #99f6e4; border-radius:6px; padding:.2rem .45rem; }
 .assessment-status-tag.muted { color:#64748b; background:#f8fafc; border-color:#e2e8f0; }
 .btn-assess { border:1px solid #0f766e; background:#ecfdf5; color:#065f46; padding:.4rem .65rem; border-radius:7px; cursor:pointer; margin-right:.35rem; }
+.assessment-evidence { border-top:1px solid #e2e8f0; margin-top:1rem; padding-top:1rem; }
+.evidence-form { display:grid; gap:.7rem; }
+.evidence-form label { display:grid; gap:.3rem; font-weight:600; color:#334155; }
+.evidence-form input,.evidence-form select,.evidence-form textarea { width:100%; border:1px solid #cbd5e1; border-radius:8px; padding:.6rem; font:inherit; }
+.evidence-status { border-radius:6px; padding:.2rem .45rem; font-size:.8rem; font-weight:600; }
+.evidence-status.verified { background:#dcfce7; color:#166534; }
+.evidence-status.pending { background:#fef3c7; color:#92400e; }
+.evidence-status.rejected { background:#fee2e2; color:#991b1b; }
+.expired-warning { color:#b91c1c; font-weight:700; }
+.evidence-hash { font-size:.75rem; word-break:break-all; color:#64748b; }
+.evidence-actions { display:flex; gap:.5rem; flex-wrap:wrap; }
 .assessment-modal { max-height:90vh; overflow-y:auto; width:min(760px,95vw); }
 .assessment-form { display:grid; gap:.8rem; }
 .assessment-form label { display:grid; gap:.35rem; color:#334155; font-weight:600; }
