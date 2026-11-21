@@ -276,3 +276,11 @@ Repository/static hardening is substantially progressed, but the remaining gates
 - Revisions 0012 (supplier register/contact) and 0013 (supplier contracts) were updated to conditionally create tables and indexes and to guard downgrade table drops.
 - Added static migration regression tests for revisions 0009–0013.
 - Runtime CI is pending. The hybrid baseline still risks schema drift; guards are a stabilization measure, not a replacement for a frozen baseline.
+
+
+### Migration review 0014–0019
+
+- Supplier assessments, supplier-asset links, access requests, access reviews, supplier-risk links and monthly risk snapshots are now guarded against baseline-created tables and indexes.
+- Downgrades check table existence before dropping the revision's table.
+- Added static regression coverage across revisions 0014–0019.
+- Runtime PostgreSQL CI is pending.
