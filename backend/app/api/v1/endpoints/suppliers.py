@@ -231,6 +231,21 @@ class SupplierAssetLinkCreate(BaseModel):
     review_due_at: date | None = None
 
 
+class AssetSupplierLinkResponse(BaseModel):
+    model_config = ConfigDict(from_attributes=True)
+    id: UUID
+    supplier_id: UUID
+    supplier_code: str
+    supplier_name: str
+    asset_id: UUID
+    relationship_type: str
+    access_level: str
+    data_access: bool
+    scope: str | None
+    status: str
+    review_due_at: date | None
+
+
 class SupplierAssetLinkResponse(BaseModel):
     model_config = ConfigDict(from_attributes=True)
     id: UUID
@@ -246,6 +261,37 @@ class SupplierAssetLinkResponse(BaseModel):
     created_at: datetime
     updated_at: datetime
 
+
+
+
+@router.get("/assets/{asset_id}/suppliers", response_model=list[AssetSupplierLinkResponse])
+async def list_asset_suppliers(
+    asset_id: UUID,
+    include_ended: bool = False,
+    db: AsyncSession = Depends(get_db),
+    current_user: User = require_permission("suppliers", "read_assets"),
+):
+    asset_result = await db.execute(select(Asset.id).where(Asset.id == asset_id))
+    if asset_result.scalar_one_or_none() is None:
+        raise HTTPException(status_code=404, detail="Actif introuvable")
+    stmt = (
+        select(SupplierAssetLink, Supplier.code, Supplier.legal_name)
+        .join(Supplier, Supplier.id == SupplierAssetLink.supplier_id)
+        .where(SupplierAssetLink.asset_id == asset_id)
+    )
+    if not include_ended:
+        stmt = stmt.where(SupplierAssetLink.status != "Terminé")
+    result = await db.execute(stmt.order_by(Supplier.legal_name.asc()))
+    return [
+        {
+            "id": link.id, "supplier_id": link.supplier_id,
+            "supplier_code": code, "supplier_name": name,
+            "asset_id": link.asset_id, "relationship_type": link.relationship_type,
+            "access_level": link.access_level, "data_access": link.data_access,
+            "scope": link.scope, "status": link.status, "review_due_at": link.review_due_at,
+        }
+        for link, code, name in result.all()
+    ]
 
 
 @router.get("/{supplier_id}/assets", response_model=list[SupplierAssetLinkResponse])
