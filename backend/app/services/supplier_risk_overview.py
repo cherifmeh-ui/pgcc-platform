@@ -112,3 +112,76 @@ def build_supplier_risk_overview(
         },
         "scoring_policy": "Les scores des risques centraux ne sont jamais recalculés par cette synthèse.",
     }
+
+
+def compare_supplier_risk_snapshots(snapshots: list[dict[str, Any]]) -> dict[str, Any]:
+    """Compare the two most recent snapshots without inventing an overall risk score.
+
+    Input order is irrelevant. Only metrics with an explicit adverse direction are
+    classified as improving/deteriorating; contextual metrics are reported neutrally.
+    """
+    ordered = sorted(
+        snapshots,
+        key=lambda item: item.get("snapshot_month") or date.min,
+        reverse=True,
+    )
+    if not ordered:
+        return {"available": False, "reason": "Aucun instantané mensuel disponible.", "metrics": []}
+
+    current = ordered[0]
+    previous = ordered[1] if len(ordered) > 1 else None
+    definitions = (
+        ("critical_without_current_assessment", "Fournisseurs critiques sans évaluation à jour",
+         ("suppliers", "critical_without_current_assessment"), "higher_is_worse"),
+        ("overdue_assessments", "Revues d'évaluation en retard",
+         ("assessments", "overdue_reviews"), "higher_is_worse"),
+        ("overdue_access_reviews", "Revues d'accès en retard",
+         ("access", "overdue_reviews"), "higher_is_worse"),
+        ("missing_security_clauses", "Contrats avec clauses SSI manquantes",
+         ("contracts", "with_missing_security_clauses"), "higher_is_worse"),
+        ("contracts_expiring_90d", "Contrats arrivant à échéance sous 90 jours",
+         ("contracts", "expiring_within_90_days"), "context"),
+        ("privileged_active_access", "Autorisations d'accès privilégié actives",
+         ("access", "privileged_active"), "context"),
+        ("distinct_linked_risks", "Risques distincts liés aux fournisseurs",
+         ("risks", "distinct_linked"), "context"),
+    )
+
+    def read_metric(snapshot: dict[str, Any], path: tuple[str, str]) -> int | float | None:
+        value: Any = snapshot.get("indicators", {})
+        for part in path:
+            if not isinstance(value, dict):
+                return None
+            value = value.get(part)
+        return value if isinstance(value, (int, float)) and not isinstance(value, bool) else None
+
+    metrics = []
+    for key, label, path, direction in definitions:
+        current_value = read_metric(current, path)
+        previous_value = read_metric(previous, path) if previous else None
+        delta = current_value - previous_value if current_value is not None and previous_value is not None else None
+        if delta is None:
+            trend = "insufficient_data"
+        elif delta == 0:
+            trend = "stable"
+        elif direction == "higher_is_worse":
+            trend = "deteriorating" if delta > 0 else "improving"
+        else:
+            trend = "change"
+        metrics.append({
+            "key": key, "label": label, "current": current_value,
+            "previous": previous_value, "delta": delta,
+            "direction": direction, "trend": trend,
+        })
+
+    return {
+        "available": True,
+        "current_month": current.get("snapshot_month"),
+        "previous_month": previous.get("snapshot_month") if previous else None,
+        "comparison_available": previous is not None,
+        "metrics": metrics,
+        "interpretation": (
+            "La comparaison décrit des évolutions d'indicateurs. "
+            "Elle ne constitue pas une cotation automatique et ne modifie pas le registre central des risques."
+        ),
+    }
