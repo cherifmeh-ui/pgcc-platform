@@ -3,12 +3,13 @@ from typing import List
 from uuid import UUID
 
 from fastapi import APIRouter, Depends, HTTPException, Request, status
-from sqlalchemy import select
+from sqlalchemy import select, func
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.api.deps import require_permission
 from app.core.database import get_db
 from app.models.risk import Risk
+from app.models.action_item import ActionItem
 from app.models.user import User
 from app.schemas.risk import RiskCreate, RiskResponse, RiskUpdate
 from app.services.security_logger import log_action
@@ -115,6 +116,16 @@ async def update_risk(
         )
 
     update_data = risk_data.model_dump(exclude_unset=True)
+
+    # Validate the effective state, not only fields present in a partial update.
+    effective_status = update_data.get("status", risk.status)
+    effective_treatment_plan = update_data.get("treatment_plan", risk.treatment_plan)
+    if effective_status in {"En traitement", "Traité", "Accepté"} and not (effective_treatment_plan or "").strip():
+        raise HTTPException(
+            status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
+            detail="Un risque en traitement, traité ou accepté doit comporter un plan ou une justification documentée.",
+        )
+
     if "owner_id" in update_data and update_data["owner_id"] is not None:
         owner_result = await db.execute(select(User.id).where(User.id == update_data["owner_id"]))
         if owner_result.scalar_one_or_none() is None:
@@ -176,6 +187,17 @@ async def delete_risk(
 
     risk_ref = risk.ref
     risk_title = risk.title
+
+    # Do not cascade-delete treatment actions or their history. Until a formal
+    # archive workflow exists, risks with linked actions cannot be hard-deleted.
+    action_count_result = await db.execute(
+        select(func.count(ActionItem.id)).where(ActionItem.risk_id == risk.id)
+    )
+    if action_count_result.scalar_one() > 0:
+        raise HTTPException(
+            status_code=status.HTTP_409_CONFLICT,
+            detail="Ce risque possède des plans d'action associés. La suppression est refusée afin de préserver la traçabilité. Utilisez une procédure d'archivage.",
+        )
 
     await db.delete(risk)
     await db.commit()
