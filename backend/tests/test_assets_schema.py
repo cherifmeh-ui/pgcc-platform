@@ -65,3 +65,22 @@ def test_inventory_filter_fields_have_indexes():
     indexed_fields = {"owner", "location", "lifecycle_status", "criticality", "classification"}
     for field_name in indexed_fields:
         assert Asset.__table__.c[field_name].index is True
+
+
+
+def test_asset_reference_is_trimmed_on_create_and_update():
+    assert AssetCreate(reference="  AST-010  ", name="Serveur").reference == "AST-010"
+    assert AssetUpdate(reference="  AST-011  ").reference == "AST-011"
+
+
+def test_asset_reference_rejects_whitespace_only_values():
+    with pytest.raises(ValidationError):
+        AssetCreate(reference="   ", name="Serveur")
+    with pytest.raises(ValidationError):
+        AssetUpdate(reference="   ")
+
+
+def test_asset_reference_has_case_insensitive_unique_index():
+    indexes = {index.name: index for index in Asset.__table__.indexes}
+    assert "uq_assets_reference_ci" in indexes
+    assert indexes["uq_assets_reference_ci"].unique is True
