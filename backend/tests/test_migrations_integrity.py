@@ -279,3 +279,21 @@ def test_supplier_contract_migration_guards_existing_table_and_indexes():
     assert 'has_table("supplier_contracts")' in upgrade
     assert "get_indexes(\"supplier_contracts\")" in upgrade
     assert 'has_table("supplier_contracts")' in downgrade
+
+
+def test_supplier_assessment_and_relationship_migrations_guard_baseline_overlap():
+    cases = {
+        "0014_supplier_assessments.py": "supplier_assessments",
+        "0015_supplier_asset_links.py": "supplier_asset_links",
+        "0016_supplier_access_requests.py": "supplier_access_requests",
+        "0017_supplier_access_reviews.py": "supplier_access_reviews",
+        "0018_supplier_risk_links.py": "supplier_risk_links",
+        "0019_supplier_risk_snapshots.py": "supplier_risk_snapshots",
+    }
+    for filename, table in cases.items():
+        source = (MIGRATIONS_DIR / filename).read_text(encoding="utf-8")
+        upgrade = source.split("def upgrade() -> None:", 1)[1].split("def downgrade() -> None:", 1)[0]
+        downgrade = source.split("def downgrade() -> None:", 1)[1]
+        assert f'has_table("{table}")' in upgrade, filename
+        assert f'has_table("{table}")' in downgrade, filename
+        assert "get_indexes(" in upgrade, filename
