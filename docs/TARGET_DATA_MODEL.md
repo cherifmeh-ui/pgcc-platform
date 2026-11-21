@@ -59,6 +59,12 @@ Ce document définit les principaux objets métier et leurs relations. Il ne con
 
 ### Cartographie des actifs
 
+**Application (entité existante)**
+- Le module Applications existant demeure le référentiel applicatif fonctionnel ; il n'est pas remplacé par Asset.
+- Les champs existants (nom, module, propriétaire, direction, hébergement, criticité, risque principal et plan de traitement) sont conservés.
+- Une fiche Asset peut référencer une Application existante via application_id (relation 1:1 optionnelle). Cela permet d'enrichir l'inventaire technique sans migration destructive ni duplication des données applicatives.
+- Le lien application_id est facultatif pour les actifs non applicatifs et unique lorsqu'il est renseigné.
+
 **Asset**
 - id, reference, name, description.
 - asset_type : process, information, application, hardware, software, infrastructure, network, service, cloud_resource, facility, other.
