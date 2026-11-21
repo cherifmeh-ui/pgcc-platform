@@ -18,6 +18,20 @@
             <input v-model="newAction.title" placeholder="Titre de l'action corrective..." required />
             <textarea v-model="newAction.description" rows="2" placeholder="Détails techniques..."></textarea>
             
+            <div class="iso-action-link">
+              <label>Contrôle ISO 27002 (optionnel)
+                <select v-model="newAction.iso_control_ref" @change="loadControlAssessments(newAction.iso_control_ref)">
+                  <option value="">Aucun contrôle ISO lié</option>
+                  <option v-for="control in isoControls" :key="control.ref_code" :value="control.ref_code">{{ control.ref_code }} — {{ control.title }}</option>
+                </select>
+              </label>
+              <label v-if="newAction.iso_control_ref">Évaluation ISO associée (optionnel)
+                <select v-model="newAction.iso_assessment_id">
+                  <option value="">Lien au contrôle uniquement</option>
+                  <option v-for="assessment in isoAssessments" :key="assessment.id" :value="assessment.id">{{ assessment.implementation_status }} · {{ assessment.maturity_level }}/5 · {{ formatDate(assessment.assessed_at) }}</option>
+                </select>
+              </label>
+            </div>
             <div class="form-row">
               <!-- ✅ VALEURS FRANÇAISES POUR MATCHER LE BACKEND -->
               <select v-model="newAction.priority">
@@ -59,6 +73,7 @@
                 <div class="task-content">
                   <strong>{{ act.title }}</strong>
                   <p v-if="act.description">{{ act.description }}</p>
+                  <p v-if="act.iso_control_id" class="iso-action-tag">ISO 27002 · contrôle #{{ act.iso_control_id }}{{ act.iso_assessment_id ? ' · Évaluation liée' : '' }}</p>
                   <div class="meta-info">
                     <!-- ✅ BADGES BASÉS SUR LES CHAÎNES RÉELLES -->
                     <span class="badge-status" :class="getStatusClass(act.status)">
@@ -102,6 +117,9 @@ const loading = ref(false);
 const saving = ref(false);
 const actions = ref([]);
 const assignees = ref([]);
+const isoControls = ref([]);
+const isoAssessments = ref([]);
+
 
 // Formulaire création
 const newAction = reactive({
@@ -109,7 +127,9 @@ const newAction = reactive({
   description: '',
   priority: 'Moyenne', // ✅ Valeur par défaut française
   due_date: null,
-  assigned_to: ''
+  assigned_to: '',
+  iso_control_ref: '',
+  iso_assessment_id: ''
 });
 
 // Filtrage (afficher seulement celles liées au risque actuel)
@@ -125,8 +145,32 @@ const filteredActions = computed(() => {
 
 // Charger les actions quand le panel s'ouvre ou que le riskId change
 watch([() => props.isOpen, () => props.riskId], ([open, id]) => {
-  if (open && id) { loadActions(id); loadAssignees(); }
+  if (open && id) { loadActions(id); loadAssignees(); loadIsoControls(); }
 }, { immediate: true });
+
+async function loadIsoControls() {
+  try {
+    const { data } = await apiClient.get('/compliance/matrix');
+    isoControls.value = Array.isArray(data?.rows) ? data.rows : [];
+  } catch (err) {
+    console.warn('ISO controls unavailable for action linkage', err);
+    isoControls.value = [];
+  }
+}
+async function loadControlAssessments(refCode) {
+  newAction.iso_assessment_id = '';
+  isoAssessments.value = [];
+  if (!refCode) return;
+  try {
+    const { data } = await apiClient.get(`/compliance/controls/${encodeURIComponent(refCode)}/assessments`);
+    isoAssessments.value = Array.isArray(data) ? data : [];
+  } catch (err) {
+    console.warn('ISO assessments unavailable', err);
+  }
+}
+function formatDate(value) {
+  return value ? new Date(value).toLocaleDateString('fr-FR') : '—';
+}
 
 async function loadAssignees() {
   try {
@@ -161,13 +205,15 @@ async function addAction() {
       title: newAction.title.trim(),
       description: newAction.description.trim() || null,
       risk_id: props.riskId,
+      iso_control_ref: newAction.iso_control_ref || null,
+      iso_assessment_id: newAction.iso_assessment_id || null,
       due_date: newAction.due_date ? new Date(newAction.due_date).toISOString() : null
     };
     
     await apiClient.post('/actions/', payload);
     
     // Reset form & Reload list
-    Object.assign(newAction, { title:'', description:'', priority:'Moyenne', due_date:null, assigned_to:'' });
+    Object.assign(newAction, { title:'', description:'', priority:'Moyenne', due_date:null, assigned_to:'', iso_control_ref:'', iso_assessment_id:'' });
     await loadActions(props.riskId);
   } catch (err) {
     alert(err.response?.data?.detail || "Erreur lors de l'ajout.");
@@ -257,6 +303,11 @@ function isOverdue(isoStr) {
 .quick-add-form input, .quick-add-form textarea, .quick-add-form select {
   width: 100%; padding: 0.5rem; margin-bottom: 0.5rem; border: 1px solid #cbd5e1; border-radius: 6px; font-size: 0.9rem;
 }
+.iso-action-link { display:grid; grid-template-columns:1fr 1fr; gap:.5rem; margin:.5rem 0; }
+.iso-action-link label { display:grid; gap:.3rem; font-size:.85rem; color:#475569; font-weight:600; }
+.iso-action-link select { width:100%; padding:.5rem; border:1px solid #cbd5e1; border-radius:6px; background:white; }
+.iso-action-tag { display:inline-block; margin:.35rem 0; padding:.2rem .5rem; background:#ede9fe; color:#5b21b6; border-radius:999px; font-size:.75rem; font-weight:600; }
+@media (max-width:600px) { .iso-action-link { grid-template-columns:1fr; } }
 .form-row { display: grid; grid-template-columns: 1fr 1fr 1fr; gap: 0.5rem; margin-bottom: 0.5rem; }
 .btn-primary { background: #0ea5e9; color: white; border: none; padding: 0.6rem 1.2rem; border-radius: 6px; cursor: pointer; font-weight: 600; width: 100%; }
 .btn-primary:disabled { opacity: 0.6; }
