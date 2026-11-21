@@ -18,6 +18,7 @@ async def lifespan(app: FastAPI):
 
     if settings.ENVIRONMENT.lower() == "development":
         async with engine.begin() as conn:
+            await conn.execute(text("CREATE EXTENSION IF NOT EXISTS vector"))
             await conn.run_sync(Base.metadata.create_all)
         print("PGCC | development schema ensured via create_all")
     else:
