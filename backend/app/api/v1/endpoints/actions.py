@@ -165,5 +165,12 @@ async def delete_action(
     if action.status == ActionStatus.DONE:
         raise HTTPException(status_code=409, detail="La suppression d'une action terminée est refusée pour préserver la traçabilité.")
 
+    action_id_str = str(action.id)
+    action_title = action.title
     await db.delete(action)
     await db.commit()
+    await log_action(
+        user_email=current_user.email, action="DELETE", resource="actions",
+        resource_id=action_id_str, details=f"Action supprimée: {action_title}",
+        event_type="GRC_ACTION", request=request,
+    )
