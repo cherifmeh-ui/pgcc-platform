@@ -25,7 +25,7 @@ Le socle Cartographie est présent : modèles `Asset` et `AssetRelationship`, mi
 
 Le modèle Asset ne possède aucune association explicite vers Risk. Il n'existe pas de table de liaison dédiée. L'intégration aux risques est donc un objectif documenté mais pas encore réalisé.
 
-**Correction cible :** association many-to-many explicite `asset_risk_links` avec FK, contexte de relation, date et auteur. Exposer les liens côté API actifs et risques, avec RBAC et audit log. Les risques et actifs restent propriétaires de leurs données.
+**Correction initiale implémentée :** association many-to-many explicite `asset_risk_links` avec FK, contexte de relation, date et auteur. API de liaison/déliaison et consultation depuis l'actif; endpoint inverse de consultation depuis le risque. RBAC et audit log appliqués aux mutations. Les risques et actifs restent propriétaires de leurs données. Tests de schéma ajoutés; tests d'intégration runtime encore requis.
 
 ### A-02 — Cardinalité Asset ↔ Application à revalider (priorité élevée)
 
