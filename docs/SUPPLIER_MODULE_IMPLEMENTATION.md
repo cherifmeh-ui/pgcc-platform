@@ -115,3 +115,19 @@ Une relation fournisseur–actif ne constitue pas une autorisation. Le modèle `
 - Les indicateurs distinguent les niveaux déclarés sur les relations et les accès privilégiés / accès aux données effectivement autorisés.
 - Les fiches Cartographie affichent explicitement que les métadonnées de relation ne constituent pas une autorisation d'accès.
 - L'index PostgreSQL partiel garantit l'unicité d'une demande/autorisation ouverte par relation, même en cas de soumissions concurrentes.
+
+
+## Tranche 8 — Revues périodiques des autorisations d'accès
+
+- Nouvelle table append-only `supplier_access_reviews`, liée à l'autorisation par FK RESTRICT.
+- Historique immuable des revues : réviseur, date, décision, commentaire, niveau et accès aux données avant/après, prochaine échéance.
+- Décisions possibles : maintien, réduction effective des privilèges ou révocation.
+- Une réduction ne peut jamais augmenter les droits; elle doit réduire le niveau Privilégié vers Standard et/ou retirer l'accès aux données.
+- Une revue ne peut être réalisée ni par le demandeur initial ni par l'approbateur initial.
+- Seules les autorisations approuvées et actuellement dans leur période de validité peuvent être revues.
+- Toute décision non révocatoire doit fixer une nouvelle date de revue comprise entre la date du jour et la fin de l'autorisation.
+- La révocation par revue conserve les métadonnées de révocation et libère l'index partiel des demandes ouvertes.
+- Permissions : Admin pour exécuter une revue; Admin/Auditor pour consulter l'historique.
+- API : GET/POST `/{supplier_id}/access-requests/{access_request_id}/reviews`.
+- Migration additive `0017_supplier_access_reviews`; aucune modification destructive des données historiques.
+- La revue est une décision de gouvernance. La désactivation ou l'ajustement technique des comptes fournisseurs doit être exécuté et vérifié dans les systèmes cibles.
