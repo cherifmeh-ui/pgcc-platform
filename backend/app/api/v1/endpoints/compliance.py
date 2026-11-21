@@ -5,6 +5,7 @@ from sqlalchemy import select
 from pydantic import BaseModel, Field, field_validator
 from typing import List, Dict, Any
 from datetime import datetime
+import hashlib
 from uuid import UUID
 
 from app.api.deps import require_permission
@@ -14,6 +15,8 @@ from app.models.risk import Risk
 from app.models.action_item import ActionItem, ActionStatus
 from app.models.user import User
 from app.models.iso_control_assessment import IsoControlAssessment
+from app.models.iso_control_evidence import IsoControlEvidence
+from app.models.document import Document
 
 router = APIRouter(prefix="/compliance", tags=["Conformité ISO"])
 
@@ -56,6 +59,36 @@ class AssessmentResponse(BaseModel):
     justification: str
     gap_description: str | None
     assessed_at: datetime
+
+class EvidenceCreate(BaseModel):
+    document_id: UUID
+    assessment_id: UUID | None = None
+    evidence_owner: str | None = Field(default=None, max_length=150)
+    collected_at: datetime | None = None
+    valid_until: datetime | None = None
+    notes: str | None = Field(default=None, max_length=10000)
+
+class EvidenceVerify(BaseModel):
+    verification_status: str
+    notes: str | None = Field(default=None, max_length=10000)
+
+class EvidenceResponse(BaseModel):
+    id: UUID
+    control_id: int
+    document_id: UUID
+    assessment_id: UUID | None
+    evidence_owner: str | None
+    collected_at: datetime
+    valid_until: datetime | None
+    verification_status: str
+    verified_by_id: UUID | None
+    verified_at: datetime | None
+    sha256: str
+    notes: str | None
+    created_at: datetime
+    document_title: str | None = None
+    document_filename: str | None = None
+    is_expired: bool = False
 
 class ComplianceMatrixRow(BaseModel):
     ref_code: str
@@ -124,6 +157,125 @@ async def create_control_assessment(
     await db.commit()
     await db.refresh(assessment)
     return assessment
+
+
+@router.get("/controls/{ref_code}/evidence", response_model=List[EvidenceResponse])
+async def list_control_evidence(
+    ref_code: str,
+    db: AsyncSession = Depends(get_db),
+    current_user: User = require_permission("iso27002", "read"),
+):
+    control_result = await db.execute(select(IsoControl).where(IsoControl.ref_code == ref_code))
+    control = control_result.scalar_one_or_none()
+    if control is None:
+        raise HTTPException(status_code=404, detail="Contrôle ISO introuvable.")
+    result = await db.execute(
+        select(IsoControlEvidence, Document)
+        .join(Document, Document.id == IsoControlEvidence.document_id)
+        .where(IsoControlEvidence.control_id == control.id)
+        .order_by(IsoControlEvidence.created_at.desc())
+    )
+    now = datetime.now()
+    return [
+        {
+            **{key: getattr(evidence, key) for key in EvidenceResponse.model_fields if key in evidence.__dict__},
+            "document_title": document.title,
+            "document_filename": document.filename,
+            "is_expired": bool(evidence.valid_until and evidence.valid_until < now),
+        }
+        for evidence, document in result.all()
+    ]
+
+
+@router.post("/controls/{ref_code}/evidence", response_model=EvidenceResponse, status_code=201)
+async def create_control_evidence(
+    ref_code: str,
+    payload: EvidenceCreate,
+    db: AsyncSession = Depends(get_db),
+    current_user: User = require_permission("iso27002", "update"),
+):
+    control_result = await db.execute(select(IsoControl).where(IsoControl.ref_code == ref_code))
+    control = control_result.scalar_one_or_none()
+    if control is None:
+        raise HTTPException(status_code=404, detail="Contrôle ISO introuvable.")
+    document_result = await db.execute(select(Document).where(Document.id == payload.document_id))
+    document = document_result.scalar_one_or_none()
+    if document is None:
+        raise HTTPException(status_code=404, detail="Document introuvable.")
+    if not document.file_data:
+        raise HTTPException(status_code=422, detail="Le document ne possède pas de fichier source.")
+    if payload.valid_until and payload.collected_at and payload.valid_until < payload.collected_at:
+        raise HTTPException(status_code=422, detail="La date de validité doit être postérieure à la collecte.")
+    if payload.assessment_id:
+        assessment_result = await db.execute(
+            select(IsoControlAssessment).where(
+                IsoControlAssessment.id == payload.assessment_id,
+                IsoControlAssessment.control_id == control.id,
+            )
+        )
+        if assessment_result.scalar_one_or_none() is None:
+            raise HTTPException(status_code=422, detail="L'évaluation ne correspond pas au contrôle ISO.")
+    duplicate = await db.execute(
+        select(IsoControlEvidence).where(
+            IsoControlEvidence.document_id == document.id,
+            IsoControlEvidence.control_id == control.id,
+        )
+    )
+    if duplicate.scalar_one_or_none():
+        raise HTTPException(status_code=409, detail="Ce document est déjà associé à ce contrôle.")
+    evidence = IsoControlEvidence(
+        control_id=control.id,
+        document_id=document.id,
+        assessment_id=payload.assessment_id,
+        evidence_owner=payload.evidence_owner.strip() if payload.evidence_owner else None,
+        collected_at=payload.collected_at or datetime.now(),
+        valid_until=payload.valid_until,
+        verification_status="Pending",
+        sha256=hashlib.sha256(document.file_data).hexdigest(),
+        notes=payload.notes.strip() if payload.notes else None,
+    )
+    db.add(evidence)
+    await db.commit()
+    await db.refresh(evidence)
+    return {
+        **{key: getattr(evidence, key) for key in EvidenceResponse.model_fields if key in evidence.__dict__},
+        "document_title": document.title,
+        "document_filename": document.filename,
+        "is_expired": False,
+    }
+
+
+@router.patch("/evidence/{evidence_id}/verify", response_model=EvidenceResponse)
+async def verify_control_evidence(
+    evidence_id: UUID,
+    payload: EvidenceVerify,
+    db: AsyncSession = Depends(get_db),
+    current_user: User = require_permission("iso27002", "update"),
+):
+    if payload.verification_status not in {"Verified", "Rejected", "Pending"}:
+        raise HTTPException(status_code=422, detail="Statut de vérification invalide.")
+    result = await db.execute(
+        select(IsoControlEvidence, Document)
+        .join(Document, Document.id == IsoControlEvidence.document_id)
+        .where(IsoControlEvidence.id == evidence_id)
+    )
+    row = result.one_or_none()
+    if row is None:
+        raise HTTPException(status_code=404, detail="Preuve introuvable.")
+    evidence, document = row
+    evidence.verification_status = payload.verification_status
+    evidence.verified_by_id = current_user.id if payload.verification_status != "Pending" else None
+    evidence.verified_at = datetime.now() if payload.verification_status != "Pending" else None
+    if payload.notes is not None:
+        evidence.notes = payload.notes.strip() or None
+    await db.commit()
+    await db.refresh(evidence)
+    return {
+        **{key: getattr(evidence, key) for key in EvidenceResponse.model_fields if key in evidence.__dict__},
+        "document_title": document.title,
+        "document_filename": document.filename,
+        "is_expired": bool(evidence.valid_until and evidence.valid_until < datetime.now()),
+    }
 
 
 @router.get("/matrix", response_model=MatrixResponse)
