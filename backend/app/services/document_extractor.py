@@ -76,7 +76,7 @@ def _extract_docx_safe(data: bytes) -> str:
 
     # DOCX tables often contain policy/control content; omitting them silently
     # loses important material for search and RAG.
-    for table in doc.tables:
+    for table in getattr(doc, "tables", []):
         for row in table.rows:
             cells = [cell.text.strip() for cell in row.cells]
             if any(cells):
