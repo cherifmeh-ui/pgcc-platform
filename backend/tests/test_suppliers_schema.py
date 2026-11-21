@@ -179,3 +179,20 @@ def test_supplier_access_open_link_has_database_uniqueness():
 def test_supplier_access_expiry_permission_is_admin_only():
     assert role_has_permission("admin", "suppliers", "expire_access")
     assert not role_has_permission("auditor", "suppliers", "expire_access")
+
+
+def test_supplier_access_api_routes_are_registered_with_separate_permissions():
+    from app.api.v1.endpoints.suppliers import (
+        list_supplier_access_requests, create_supplier_access_request,
+        decide_supplier_access_request, revoke_supplier_access_request,
+        expire_supplier_access_request,
+    )
+    assert all(callable(route) for route in (
+        list_supplier_access_requests, create_supplier_access_request,
+        decide_supplier_access_request, revoke_supplier_access_request,
+        expire_supplier_access_request,
+    ))
+    assert role_has_permission("admin", "suppliers", "decide_access")
+    assert not role_has_permission("auditor", "suppliers", "decide_access")
+    assert role_has_permission("admin", "suppliers", "revoke_access")
+    assert role_has_permission("admin", "suppliers", "expire_access")
