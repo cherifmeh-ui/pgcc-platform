@@ -175,6 +175,27 @@ async def create_control_assessment(
     return assessment
 
 
+def evidence_response(evidence: IsoControlEvidence, document: Document) -> dict:
+    now = datetime.now(timezone.utc)
+    return {
+        "id": evidence.id,
+        "control_id": evidence.control_id,
+        "document_id": evidence.document_id,
+        "assessment_id": evidence.assessment_id,
+        "evidence_owner": evidence.evidence_owner,
+        "collected_at": evidence.collected_at,
+        "valid_until": evidence.valid_until,
+        "verification_status": evidence.verification_status,
+        "verified_by_id": evidence.verified_by_id,
+        "verified_at": evidence.verified_at,
+        "sha256": evidence.sha256,
+        "notes": evidence.notes,
+        "created_at": evidence.created_at,
+        "document_title": document.title,
+        "document_filename": document.filename,
+        "is_expired": bool(evidence.valid_until and evidence.valid_until < now),
+    }
+
 @router.get("/controls/{ref_code}/evidence", response_model=List[EvidenceResponse])
 async def list_control_evidence(
     ref_code: str,
@@ -191,16 +212,7 @@ async def list_control_evidence(
         .where(IsoControlEvidence.control_id == control.id)
         .order_by(IsoControlEvidence.created_at.desc())
     )
-    now = datetime.now(timezone.utc)
-    return [
-        {
-            **{key: getattr(evidence, key) for key in EvidenceResponse.model_fields if key in evidence.__dict__},
-            "document_title": document.title,
-            "document_filename": document.filename,
-            "is_expired": bool(evidence.valid_until and evidence.valid_until < now),
-        }
-        for evidence, document in result.all()
-    ]
+    return [evidence_response(evidence, document) for evidence, document in result.all()]
 
 
 @router.post("/controls/{ref_code}/evidence", response_model=EvidenceResponse, status_code=201)
@@ -253,12 +265,7 @@ async def create_control_evidence(
     db.add(evidence)
     await db.commit()
     await db.refresh(evidence)
-    return {
-        **{key: getattr(evidence, key) for key in EvidenceResponse.model_fields if key in evidence.__dict__},
-        "document_title": document.title,
-        "document_filename": document.filename,
-        "is_expired": False,
-    }
+    return evidence_response(evidence, document)
 
 
 @router.patch("/evidence/{evidence_id}/verify", response_model=EvidenceResponse)
@@ -286,12 +293,7 @@ async def verify_control_evidence(
         evidence.notes = payload.notes.strip() or None
     await db.commit()
     await db.refresh(evidence)
-    return {
-        **{key: getattr(evidence, key) for key in EvidenceResponse.model_fields if key in evidence.__dict__},
-        "document_title": document.title,
-        "document_filename": document.filename,
-        "is_expired": bool(evidence.valid_until and evidence.valid_until < datetime.now(timezone.utc)),
-    }
+    return evidence_response(evidence, document)
 
 
 @router.get("/matrix", response_model=MatrixResponse)
