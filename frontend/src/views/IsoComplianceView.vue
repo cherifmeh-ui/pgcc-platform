@@ -93,6 +93,9 @@
               <span v-else class="link-pill inactive">—</span>
             </td>
             <td>
+              <button @click="openAssessment(row)" class="btn-assess modern" title="Évaluer et consulter l'historique">
+                📝 Évaluer
+              </button>
               <button @click="askAiGapAnalysis(row)" class="btn-ai-gap modern" title="Analyser l'écart avec l'IA">
                 ✨ Justifier
               </button>
@@ -103,6 +106,53 @@
     </div>
     
     <div v-else class="error-state card-modern">Impossible de charger la matrice.</div>
+
+    <!-- Modal d'évaluation formelle ISO -->
+    <Teleport to="body">
+      <div v-if="showAssessmentPanel" class="modal-overlay" @click.self="closeAssessment">
+        <div class="ai-modal-card assessment-modal">
+          <div class="modal-header">
+            <div class="header-icon">📝</div>
+            <div class="header-text">
+              <h2>Évaluation du contrôle</h2>
+              <p class="control-ref">{{ selectedControl?.ref_code }} — {{ selectedControl?.title }}</p>
+            </div>
+            <button @click="closeAssessment" class="close-btn">×</button>
+          </div>
+          <div class="assessment-form">
+            <label>Applicabilité
+              <select v-model="assessmentForm.applicability">
+                <option>Applicable</option><option>Non applicable</option>
+              </select>
+            </label>
+            <label>État d'implémentation
+              <select v-model="assessmentForm.implementation_status">
+                <option>Non démarré</option><option>En cours</option><option>Partiellement implémenté</option><option>Implémenté</option>
+              </select>
+            </label>
+            <label>Niveau de maturité (0 à 5)
+              <input v-model.number="assessmentForm.maturity_level" type="number" min="0" max="5" />
+            </label>
+            <label>Justification <textarea v-model="assessmentForm.justification" rows="3" maxlength="10000" placeholder="Décrire la situation, la mise en œuvre et les éléments vérifiés"></textarea></label>
+            <label>Écart identifié / mesures à prévoir <textarea v-model="assessmentForm.gap_description" rows="3" maxlength="10000" placeholder="Écart, actions ou justification de non-applicabilité"></textarea></label>
+            <div v-if="assessmentError" class="alert-error-box">{{ assessmentError }}</div>
+            <button class="primary-action-btn" @click="saveAssessment" :disabled="assessmentSaving || !assessmentForm.justification.trim()">
+              {{ assessmentSaving ? 'Enregistrement...' : 'Enregistrer une évaluation' }}
+            </button>
+          </div>
+          <section class="assessment-history">
+            <h3>Historique des évaluations</h3>
+            <div v-if="assessmentLoading" class="loading-state">Chargement...</div>
+            <div v-else-if="assessmentHistory.length === 0" class="empty-filter-state">Aucune évaluation formelle enregistrée.</div>
+            <article v-for="entry in assessmentHistory" :key="entry.id" class="assessment-history-item">
+              <div class="assessment-history-head"><strong>{{ entry.implementation_status }} · Maturité {{ entry.maturity_level }}/5</strong><span>{{ new Date(entry.assessed_at).toLocaleString() }}</span></div>
+              <p><strong>{{ entry.applicability }}</strong> — {{ entry.justification }}</p>
+              <p v-if="entry.gap_description">{{ entry.gap_description }}</p>
+            </article>
+          </section>
+        </div>
+      </div>
+    </Teleport>
 
     <!-- Modal IA Gap Analysis (REDESIGN ÉLÉGANT) -->
     <Teleport to="body">
@@ -174,6 +224,13 @@ const matrixData = ref(null);
 const filterDomain = ref('');
 const filterStatus = ref('');
 const filterSearch = ref('');
+const showAssessmentPanel = ref(false);
+const selectedControl = ref(null);
+const assessmentHistory = ref([]);
+const assessmentLoading = ref(false);
+const assessmentSaving = ref(false);
+const assessmentError = ref('');
+const assessmentForm = ref({ applicability: 'Applicable', implementation_status: 'Non démarré', maturity_level: 0, justification: '', gap_description: '' });
 
 // État IA
 const showAiPanel = ref(false);
@@ -226,6 +283,42 @@ function getStatusIcon(status) {
     case 'À vérifier': return '🟡';
     case 'Non évalué': return '⚪';
     default: return '•';
+  }
+}
+
+async function openAssessment(row) {
+  selectedControl.value = row;
+  showAssessmentPanel.value = true;
+  assessmentError.value = '';
+  assessmentForm.value = { applicability: 'Applicable', implementation_status: 'Non démarré', maturity_level: 0, justification: '', gap_description: '' };
+  assessmentLoading.value = true;
+  try {
+    const { data } = await apiClient.get(`/compliance/controls/${encodeURIComponent(row.ref_code)}/assessments`);
+    assessmentHistory.value = Array.isArray(data) ? data : [];
+  } catch (error) {
+    assessmentError.value = error.response?.data?.detail || "Impossible de charger l'historique.";
+    assessmentHistory.value = [];
+  } finally {
+    assessmentLoading.value = false;
+  }
+}
+function closeAssessment() {
+  showAssessmentPanel.value = false;
+  selectedControl.value = null;
+}
+async function saveAssessment() {
+  if (!selectedControl.value || !assessmentForm.value.justification.trim()) return;
+  assessmentSaving.value = true;
+  assessmentError.value = '';
+  try {
+    const payload = { ...assessmentForm.value, justification: assessmentForm.value.justification.trim(), gap_description: assessmentForm.value.gap_description.trim() || null };
+    const { data } = await apiClient.post(`/compliance/controls/${encodeURIComponent(selectedControl.value.ref_code)}/assessments`, payload);
+    assessmentHistory.value = [data, ...assessmentHistory.value];
+    assessmentForm.value = { applicability: 'Applicable', implementation_status: 'Non démarré', maturity_level: 0, justification: '', gap_description: '' };
+  } catch (error) {
+    assessmentError.value = error.response?.data?.detail || "Échec de l'enregistrement de l'évaluation.";
+  } finally {
+    assessmentSaving.value = false;
   }
 }
 
@@ -337,6 +430,15 @@ onMounted(fetchMatrix);
 </script>
 
 <style scoped>
+.btn-assess { border:1px solid #0f766e; background:#ecfdf5; color:#065f46; padding:.4rem .65rem; border-radius:7px; cursor:pointer; margin-right:.35rem; }
+.assessment-modal { max-height:90vh; overflow-y:auto; width:min(760px,95vw); }
+.assessment-form { display:grid; gap:.8rem; }
+.assessment-form label { display:grid; gap:.35rem; color:#334155; font-weight:600; }
+.assessment-form input,.assessment-form select,.assessment-form textarea { width:100%; border:1px solid #cbd5e1; border-radius:8px; padding:.65rem; font:inherit; }
+.assessment-history { border-top:1px solid #e2e8f0; margin-top:1.2rem; padding-top:1rem; }
+.assessment-history-item { border:1px solid #e2e8f0; border-radius:8px; padding:.75rem; margin:.5rem 0; }
+.assessment-history-head { display:flex; justify-content:space-between; gap:.5rem; flex-wrap:wrap; }
+.assessment-history-head span { color:#64748b; font-size:.85rem; }
 .compliance-table-toolbar { display:flex; justify-content:space-between; align-items:center; gap:1rem; margin-bottom:1rem; color:#64748b; font-size:.9rem; }
 .btn-export { border:1px solid #cbd5e1; background:#fff; color:#334155; padding:.5rem .8rem; border-radius:8px; cursor:pointer; font-weight:600; }
 .btn-export:hover:not(:disabled) { background:#f1f5f9; }
