@@ -308,3 +308,10 @@ The initial code-level review found that DOCX extraction joined paragraphs/table
 - Unknown roles/modules/actions remain denied by default.
 - Added focused tests for normalization and explicit deny-by-default behavior.
 - Remaining work: endpoint-level authorization tests for all sensitive routes and ensure no endpoint bypasses the shared dependency.
+
+
+### 21. Endpoint authorization coverage (AST-based)
+
+- Added a backend test that parses endpoint modules and verifies each router endpoint outside authentication/profile modules declares an explicit authorization dependency (`require_permission`, `require_role`, or `get_current_user`).
+- This complements the permission-matrix consistency test and catches endpoints that omit a backend authorization dependency entirely.
+- The test is a structural guard, not a complete proof: route-level tests must still validate role outcomes, object-level authorization, and authentication flows. Authentication endpoints and profile/permissions endpoints are intentionally excluded because they use dedicated authentication semantics.
