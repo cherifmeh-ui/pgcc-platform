@@ -124,3 +124,5 @@ Tests unitaires ajoutés : chaîne de dépendances, actif non lié, chemins mult
 - Score de complétude : ratio des cinq champs suivis renseignés, exprimé en pourcentage. L'inventaire vide est affiché comme 100 % (aucun élément incomplet), mais le nombre d'actifs reste affiché séparément.
 - Interface : panneau qualité affiché dans la vue Cartographie.
 - Tests : inventaire partiellement renseigné et inventaire vide.
+
+- Le graphe permet désormais de filtrer les nœuds par type d'actif et criticité, en complément de la recherche et du filtre de relations.
