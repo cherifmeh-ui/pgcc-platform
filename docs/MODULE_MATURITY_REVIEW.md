@@ -197,3 +197,10 @@ The initial code-level review found that DOCX extraction joined paragraphs/table
 - Existing dependency-cycle detection remains in place.
 - Limitation: row locking of endpoints reduces concurrent mutation races, but a database-level graph constraint is not available; high-concurrency cycle creation still requires integration tests or a serialized graph-mutation strategy.
 - Follow-up: test relationship creation against PostgreSQL and review all relationship types for lifecycle semantics.
+
+### 9. Asset lifecycle status and risk-link integrity
+
+- Asset PATCH now synchronizes the lifecycle status with the retirement marker: explicit `Retiré`/`Décommissionné` sets `retired_at`, and an explicit active/non-retired lifecycle status clears it.
+- The transition is isolated in a pure helper with regression tests for retirement, decommissioning, reactivation, status-omitted updates, and timestamp preservation.
+- Asset-to-risk linking now rejects retired assets with HTTP 409; missing assets/risks remain 404, and duplicate association remains protected by the unique constraint.
+- **Remaining validation:** route-level authorization/HTTP tests and PostgreSQL lifecycle/relationship integration tests are still required. Review whether lifecycle changes should automatically unlink, retain, or mark historical asset relationships; current decision is to preserve associations for audit history.
