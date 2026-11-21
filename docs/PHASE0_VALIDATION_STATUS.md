@@ -209,3 +209,11 @@ Repository/static hardening is substantially progressed, but the remaining gates
 - Added static regression checks for commit-before-rejection on replay and lock ordering in `backend/tests/test_migrations_integrity.py` (commit `95f96e5`).
 - CI for `9f7814a` (push and PR) completed successfully. CI for `95f96e5` has not yet been observed.
 - These source/static checks do **not** prove PostgreSQL concurrency behavior. Real DB-backed concurrent requests remain an exit gate.
+
+
+### PostgreSQL integration gate added — 2026-11-21
+
+- Added opt-in PostgreSQL concurrency integration test `backend/tests/test_refresh_rotation_postgres.py`. It creates a disposable user/session, runs two concurrent rotations using PostgreSQL row locks, asserts exactly one succeeds, checks the old session is revoked and one active replacement remains, and cleans up the test user.
+- Added CI job `postgres-integration` using PostgreSQL 16 with pgvector. It runs Alembic migrations from scratch and executes the concurrency test against the service database.
+- Local execution remains skipped unless `PGCC_INTEGRATION_DATABASE_URL` is configured. Runtime proof is pending CI result.
+- Commits: `9ffdb75` (integration test), `521bcf0` (CI gate).
