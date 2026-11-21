@@ -249,6 +249,12 @@ async def preview_asset_csv_import(
         except Exception as exc:
             errors.append({"row": row_number, "error": str(exc)})
             invalid_row_numbers.add(row_number)
+    for row in rows:
+        try:
+            await _ensure_application_exists(row["data"].get("application_id"), db)
+        except HTTPException as exc:
+            errors.append({"row": row["row"], "error": exc.detail})
+            invalid_row_numbers.add(row["row"])
     if rows:
         refs = [row["data"]["reference"] for row in rows]
         hostnames = [row["data"]["hostname"] for row in rows if row["data"].get("hostname")]
@@ -277,7 +283,7 @@ async def preview_asset_csv_import(
 @router.post("/import/confirm", status_code=status.HTTP_201_CREATED)
 async def confirm_asset_csv_import(
     file: UploadFile = File(...),
-    request: Request = None,
+    request: Request,
     db: AsyncSession = Depends(get_db),
     current_user: User = require_permission("assets", "create"),
 ):
