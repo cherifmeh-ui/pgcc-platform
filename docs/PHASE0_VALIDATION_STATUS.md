@@ -226,3 +226,12 @@ Repository/static hardening is substantially progressed, but the remaining gates
 - Revision 0020 downgrade index expression mismatch was corrected: upgrade uses `lower(btrim(reference))`; downgrade now restores `lower(reference)`.
 - Regression test added for the 0020 upgrade/downgrade index expression.
 - CI reruns for these fixes are pending. The PostgreSQL job has not yet passed.
+
+
+### Migration CI second failure — action ISO links
+
+- PostgreSQL CI exposed another migration issue: revision `0004_action_iso_links` adds `iso_control_id` and `iso_assessment_id` even though the baseline's metadata `create_all` already created those columns.
+- Updated revision 0004 to inspect existing columns, foreign keys, and indexes and add only missing objects. Downgrade now checks for objects before dropping them.
+- The migration static test was also corrected to parse the actual typed Alembic function signatures (`def upgrade() -> None` / `def downgrade() -> None`).
+- Commits: `5d624a7` migration fix; `d8d2775` test correction.
+- CI must rerun; no green PostgreSQL runtime result yet.
