@@ -185,3 +185,54 @@ def compare_supplier_risk_snapshots(snapshots: list[dict[str, Any]]) -> dict[str
             "Elle ne constitue pas une cotation automatique et ne modifie pas le registre central des risques."
         ),
     }
+
+
+def build_supplier_risk_concentration(
+    supplier_risk_rows: list[dict[str, Any]],
+    supplier_access_rows: list[dict[str, Any]],
+) -> list[dict[str, Any]]:
+    """Rank active suppliers by linked central-risk exposure, without scoring suppliers."""
+    grouped: dict[Any, dict[str, Any]] = {}
+    for row in supplier_risk_rows:
+        supplier_id = row["supplier_id"]
+        item = grouped.setdefault(supplier_id, {
+            "supplier_id": str(supplier_id),
+            "supplier_code": row["supplier_code"],
+            "supplier_name": row["supplier_name"],
+            "criticality": row["criticality"],
+            "linked_risk_ids": set(),
+            "highest_linked_risk_level": None,
+            "risk_levels": {"inacceptable": 0, "critique": 0, "eleve": 0, "modere": 0, "faible": 0},
+            "active_privileged_accesses": 0,
+        })
+        risk_id = row.get("risk_id")
+        if risk_id is not None and risk_id not in item["linked_risk_ids"]:
+            item["linked_risk_ids"].add(risk_id)
+            score = row.get("risk_level")
+            if isinstance(score, (int, float)):
+                item["highest_linked_risk_level"] = (
+                    score if item["highest_linked_risk_level"] is None
+                    else max(item["highest_linked_risk_level"], score)
+                )
+                bucket = "inacceptable" if score >= 20 else "critique" if score >= 15 else "eleve" if score >= 10 else "modere" if score >= 5 else "faible"
+                item["risk_levels"][bucket] += 1
+
+    for row in supplier_access_rows:
+        item = grouped.get(row["supplier_id"])
+        if item is not None and row.get("access_level") == "Privilégié":
+            item["active_privileged_accesses"] += 1
+
+    result = []
+    for item in grouped.values():
+        item["linked_risk_count"] = len(item.pop("linked_risk_ids"))
+        result.append(item)
+    result.sort(
+        key=lambda item: (
+            item["highest_linked_risk_level"] if item["highest_linked_risk_level"] is not None else -1,
+            item["linked_risk_count"],
+            item["active_privileged_accesses"],
+            item["supplier_name"].casefold(),
+        ),
+        reverse=True,
+    )
+    return result
