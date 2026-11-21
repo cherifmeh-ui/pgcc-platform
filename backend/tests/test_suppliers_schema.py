@@ -196,3 +196,25 @@ def test_supplier_access_api_routes_are_registered_with_separate_permissions():
     assert not role_has_permission("auditor", "suppliers", "decide_access")
     assert role_has_permission("admin", "suppliers", "revoke_access")
     assert role_has_permission("admin", "suppliers", "expire_access")
+
+
+def test_supplier_access_review_schema_requires_comment_and_valid_outcome():
+    from app.api.v1.endpoints.suppliers import SupplierAccessReviewCreate
+    valid = SupplierAccessReviewCreate(outcome="Maintenue", comment="Accès toujours justifié", next_review_at=date(2027, 1, 1))
+    assert valid.outcome == "Maintenue"
+    with pytest.raises(ValidationError):
+        SupplierAccessReviewCreate(outcome="Maintenue", comment="   ")
+
+
+def test_supplier_access_review_model_is_append_only_and_permission_is_restricted():
+    from app.models.supplier import SupplierAccessReview
+    assert SupplierAccessReview.__tablename__ == "supplier_access_reviews"
+    assert role_has_permission("admin", "suppliers", "review_access")
+    assert not role_has_permission("auditor", "suppliers", "review_access")
+    assert role_has_permission("auditor", "suppliers", "read_access_requests")
+
+
+def test_supplier_access_review_routes_are_registered():
+    from app.api.v1.endpoints.suppliers import list_supplier_access_reviews, review_supplier_access
+    assert callable(list_supplier_access_reviews)
+    assert callable(review_supplier_access)
