@@ -36,6 +36,8 @@
             <th>Type</th>
             <th>Titre</th>
             <th>Fichier Original</th>
+            <th>Version</th>
+            <th>Auteur / Direction</th>
             <th>Taille</th>
             <th>Statut Indexation</th>
             <th>Date</th>
@@ -47,6 +49,8 @@
             <td><span class="type-badge" :class="'badge-' + normalizeType(doc.doc_type)">{{ doc.doc_type }}</span></td>
             <td class="title-cell"><strong>{{ doc.title }}</strong></td>
             <td><code>{{ doc.filename }}</code></td>
+            <td>{{ doc.version || '—' }}</td>
+            <td>{{ doc.author || '—' }}</td>
             <td>{{ formatSize(doc.file_size_kb) }}</td>
             <td>
               <span v-if="doc.is_indexed" class="status-pill indexed">✅ Prêt IA</span>
@@ -61,7 +65,7 @@
               <button v-if="canDelete" @click="deleteDoc(doc.id)" class="action-btn del" title="Supprimer">🗑️</button>
             </td>
           </tr>
-        <tr v-if="filteredDocuments.length === 0"><td colspan="7" class="no-results">Aucun document ne correspond aux filtres.</td></tr>
+        <tr v-if="filteredDocuments.length === 0"><td colspan="9" class="no-results">Aucun document ne correspond aux filtres.</td></tr>
         </tbody>
       </table>
     </div>
@@ -265,19 +269,19 @@ function handleDrop(event) {
 
 function validateAndSetFile(file) {
   const allowedTypes = ['application/pdf', 'application/vnd.openxmlformats-officedocument.wordprocessingml.document'];
-  
   if (!allowedTypes.includes(file.type) && !file.name.match(/\.(pdf|docx)$/i)) {
-    alert("Format non supporté. Utilisez uniquement PDF ou DOCX.");
+    showMessage("Format non supporté. Utilisez uniquement PDF ou DOCX.", "error");
     return;
   }
-  
+  if (file.size > 10 * 1024 * 1024) {
+    showMessage("Le fichier dépasse la limite de 10 Mo.", "error");
+    selectedFile.value = null;
+    selectedFileName.value = "";
+    return;
+  }
   selectedFile.value = file;
   selectedFileName.value = file.name;
-  
-  // Auto-fill title if empty
-  if (!formData.title) {
-    formData.title = file.name.replace(/\.[^/.]+$/, ""); // Remove extension
-  }
+  if (!formData.title) formData.title = file.name.replace(/\.[^/.]+$/, "");
 }
 
 async function handleUpload() {
