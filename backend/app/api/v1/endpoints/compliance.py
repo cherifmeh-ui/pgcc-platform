@@ -20,7 +20,7 @@ router = APIRouter(prefix="/compliance", tags=["Conformité ISO"])
 class AssessmentCreate(BaseModel):
     applicability: str
     implementation_status: str
-    maturity_level: int = Field(ge=0, le=5)
+    maturity_level: int = Field(strict=True, ge=0, le=5)
     justification: str = Field(min_length=1, max_length=10000)
     gap_description: str | None = Field(default=None, max_length=10000)
 
