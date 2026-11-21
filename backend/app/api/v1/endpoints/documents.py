@@ -181,7 +181,7 @@ async def delete_document(
 # ===================================================================
 # NOUVEL ENDPOINT : DÉCLENCHEMENT DE L'INDEXATION VECTORIELLE (RAG)
 # ===================================================================
-@router.post("/{doc_id}/index", status_code=202)
+@router.post("/{doc_id}/index", status_code=200)
 async def trigger_indexation(
     doc_id: str,
     request: Request,
@@ -190,7 +190,7 @@ async def trigger_indexation(
 ):
     """
     Déclenche l'indexation vectorielle (RAG) d'un document.
-    Retourne 202 Accepted car le traitement est asynchrone/long.
+    Le traitement est exécuté de manière synchrone dans cette version; le endpoint retourne 200 après son résultat.
     """
     if not rag_service:
         raise HTTPException(status_code=503, detail="Service RAG indisponible. Vérifiez que 'rag_service.py' est bien chargé.")
