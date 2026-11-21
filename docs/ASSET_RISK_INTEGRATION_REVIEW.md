@@ -87,3 +87,13 @@ L'interface affiche un inventaire et des relations sous forme de liste. Elle ne 
 - Latest CI results for commits after these fixes are pending; no full non-regression claim until green.
 
 - CI on `f7fffe5` exposed a second escaped-newline syntax error in `AssetsView.vue`; normalized the handler boundaries in `2b27479`. CI for this latest commit is pending.
+
+
+## API integration tests added
+
+Added `backend/tests/test_asset_risk_integration_api.py` to cover:
+- cross-module permission denial before database access;
+- risk-to-asset listing with association context;
+- 404 for an unknown risk.
+
+The permission test file also asserts the relevant role permissions. CI results for the new tests are pending.
