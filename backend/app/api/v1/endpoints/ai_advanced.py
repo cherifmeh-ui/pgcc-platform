@@ -35,11 +35,13 @@ async def query_with_context(
         if not role_has_permission((current_user.role or "").lower(), "documents", "read"):
             raise HTTPException(status_code=403, detail="Accès aux documents non autorisé.")
 
+        # Escape SQL LIKE metacharacters from the user-provided control reference.
+        escaped_ref = req.control_ref.replace("\\", "\\\\").replace("%", "\\%").replace("_", "\\_")
         docs_query = await db.execute(
             select(Document)
             .where(
                 (Document.doc_type == "PSSI")
-                | (Document.content_text.ilike(f"%{req.control_ref}%"))
+                | (Document.content_text.ilike(f"%{escaped_ref}%", escape="\\"))
             )
             .order_by(Document.created_at.desc())
             .limit(3)
