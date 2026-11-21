@@ -28,7 +28,7 @@ penetration-test report, or runtime integration validation.
 
 ## Required before merge
 
-- [ ] Check latest CI status against the current head SHA (workflows pending after latest changes).
+- [x] Check latest CI status against current head SHA `60cd208` (Backend checks succeeded).
 - [ ] Run a clean Docker build.
 - [ ] Start the stack against a fresh PostgreSQL database.
 - [ ] Validate Alembic baseline strategy against both fresh and existing databases.
@@ -57,4 +57,18 @@ Only checks actually executed against the current commit should be marked comple
 
 ## Additional asset inventory validation
 
-Static review found a schema/model mismatch: the SQLAlchemy model accepted `cloud_resource`, but migration 0006's check constraint did not. It also found that the API trimmed references while the database unique index only lowercased them. Migration 0020 corrects both issues, adds a DB-level nonblank reference constraint, and includes a safe downgrade guard for existing `cloud_resource` records. A schema regression test covers the normalized index and nonblank constraint. Earlier CI run exposed an incorrect test assertion; that assertion has been corrected, and the newest CI runs are pending.
+Static review found a schema/model mismatch: the SQLAlchemy model accepted `cloud_resource`, but migration 0006's check constraint did not. It also found that the API trimmed references while the database unique index only lowercased them. Migration 0020 corrects both issues, adds a DB-level nonblank reference constraint, and includes a safe downgrade guard for existing `cloud_resource` records. A schema regression test covers the normalized index and nonblank constraint. Earlier CI run exposed an incorrect test assertion; that assertion has been corrected, and the newest CI runs succeeded on `60cd208`; PostgreSQL runtime validation remains pending.
+
+
+## Current checkpoint — 2026-11-21
+
+- Branch head: `60cd20847408031f739d5f3fe1ec79fb7c462ef3`.
+- GitHub Actions Backend checks on the head: **success** (two runs observed).
+- Static migration checks include the corrected named PL/pgSQL delimiter in migration 0020.
+- Endpoint authorization structural coverage test added; it is not a substitute for role/object-level route tests.
+- RBAC normalization and deny-by-default tests added.
+- **Phase 0 remains open.** Runtime PostgreSQL migrations, fresh-stack Docker validation, legacy baseline compatibility, token rotation/revocation, and deeper authorization tests are outstanding.
+
+### Practical completion estimate
+
+Repository/static hardening is substantially progressed, but the remaining gates are high-value runtime and security validation. A percentage would be misleading; use the checklist below as the release gate rather than commit count.
