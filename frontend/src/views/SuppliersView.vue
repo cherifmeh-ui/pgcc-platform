@@ -81,6 +81,25 @@
       <div class="table-wrap"><table><thead><tr><th>Actif</th><th>Relation</th><th>Accès</th><th>Données</th><th>Statut</th><th>Revue</th><th v-if="canManageAssets">Action</th></tr></thead><tbody>
         <tr v-for="link in supplierAssetLinks" :key="link.id"><td>{{link.asset_reference ? `${link.asset_reference} — ${link.asset_name}` : assetLabel(link.asset_id)}}</td><td>{{link.relationship_type}}</td><td>{{link.access_level}}</td><td>{{link.data_access?'Oui':'Non'}}</td><td>{{link.status}}</td><td>{{link.review_due_at||'—'}}</td><td v-if="canManageAssets"><button v-if="link.status!=='Terminé'" class="danger" @click="terminateAssetLink(link)">Terminer</button></td></tr>
         <tr v-if="!supplierAssetLinks.length"><td :colspan="canManageAssets?7:6" class="empty">Aucun actif lié.</td></tr></tbody></table></div>
+      <section v-if="canReadAccess" class="assessment-editor"><h3>Autorisations d’accès aux actifs</h3>
+        <p class="muted">Une relation fournisseur–actif ne vaut pas autorisation d’accès. Seules les demandes approuvées et encore valides constituent une autorisation enregistrée.</p>
+        <div class="table-wrap"><table><thead><tr><th>Actif</th><th>Accès</th><th>Période</th><th>Revue</th><th>Statut</th><th>Décision</th><th>Actions</th></tr></thead><tbody>
+          <tr v-for="a in supplierAccessRequests" :key="a.id"><td>{{assetLabel(a.asset_id)}}</td><td>{{a.access_level}}<small v-if="a.data_access">Accès aux données</small><small>{{a.scope}}</small></td><td>{{a.start_date}} → {{a.end_date}}</td><td>{{a.review_due_at}}</td><td>{{a.status}}</td><td>{{a.decision_comment||'—'}}</td><td>
+            <button v-if="canDecideAccess && a.status==='Demandé' && a.requested_by_id!==auth.user?.id" class="secondary" @click="decideAccess(a,'Approuvé')">Approuver</button>
+            <button v-if="canDecideAccess && a.status==='Demandé' && a.requested_by_id!==auth.user?.id" class="danger" @click="decideAccess(a,'Refusé')">Refuser</button>
+            <button v-if="canRevokeAccess && ['Approuvé','Suspendu'].includes(a.status)" class="danger" @click="revokeAccess(a)">Révoquer</button>
+            <button v-if="canExpireAccess && ['Approuvé','Suspendu'].includes(a.status) && a.end_date < today" class="secondary" @click="expireAccess(a)">Clôturer comme expirée</button>
+          </td></tr>
+          <tr v-if="!supplierAccessRequests.length"><td colspan="7" class="empty">Aucune demande d’accès enregistrée.</td></tr></tbody></table></div>
+        <form v-if="canRequestAccess && !assetSupplier.archived_at && supplierAssetLinks.some(x=>x.status==='Actif')" @submit.prevent="createAccessRequest"><h4>Nouvelle demande d’accès interne</h4><div class="grid">
+          <label>Relation fournisseur–actif *<select v-model="accessRequestForm.supplier_asset_link_id" required><option value="">Sélectionner</option><option v-for="link in supplierAssetLinks.filter(x=>x.status==='Actif')" :key="link.id" :value="link.id">{{link.asset_reference}} — {{link.asset_name}} ({{link.relationship_type}})</option></select></label>
+          <label>Niveau demandé *<select v-model="accessRequestForm.access_level"><option>Standard</option><option>Privilégié</option></select></label>
+          <label class="check"><input v-model="accessRequestForm.data_access" type="checkbox"> Accès aux données</label>
+          <label>Date de début *<input v-model="accessRequestForm.start_date" type="date" :min="today" required></label>
+          <label>Date de fin *<input v-model="accessRequestForm.end_date" type="date" :min="accessRequestForm.start_date||today" required></label>
+          <label>Date de revue *<input v-model="accessRequestForm.review_due_at" type="date" :min="accessRequestForm.start_date||today" :max="accessRequestForm.end_date||undefined" required></label>
+        </div><label>Justification *<textarea v-model="accessRequestForm.justification" minlength="10" maxlength="2000" required></textarea></label><label>Périmètre précis *<textarea v-model="accessRequestForm.scope" minlength="3" maxlength="1000" required></textarea></label><button :disabled="saving">Soumettre la demande</button></form>
+      </section>
       <form v-if="canManageAssets && !assetSupplier.archived_at" @submit.prevent="createAssetLink"><h3>Associer un actif</h3><div class="grid">
         <label>Actif *<select v-model="assetLinkForm.asset_id" required><option value="">Sélectionner un actif</option><option v-for="a in selectableAssets" :key="a.id" :value="a.id">{{a.reference}} — {{a.name}}</option></select></label>
         <label>Relation *<select v-model="assetLinkForm.relationship_type"><option v-for="x in assetRelationshipTypes" :key="x">{{x}}</option></select></label>
@@ -112,6 +131,11 @@ const canReadDocuments=computed(()=>auth.canAccessModule('documents','read'));
 const canReadAssessments=computed(()=>auth.canAccessModule('suppliers','read_assessments'));
 const canReadAssets=computed(()=>auth.canAccessModule('suppliers','read_assets'));
 const canManageAssets=computed(()=>auth.canAccessModule('suppliers','manage_assets'));
+const canReadAccess=computed(()=>auth.canAccessModule('suppliers','read_access_requests'));
+const canRequestAccess=computed(()=>auth.canAccessModule('suppliers','request_access'));
+const canDecideAccess=computed(()=>auth.canAccessModule('suppliers','decide_access'));
+const canRevokeAccess=computed(()=>auth.canAccessModule('suppliers','revoke_access'));
+const canExpireAccess=computed(()=>auth.canAccessModule('suppliers','expire_access'));
 const canAssess=computed(()=>auth.canAccessModule('suppliers','assess'));
 const canValidate=computed(()=>auth.canAccessModule('suppliers','validate_assessment'));
 const levels=['Faible','Moyenne','Élevée','Critique'];
@@ -119,7 +143,7 @@ const statuses=['À qualifier','En évaluation','Approuvé','Approuvé sous cond
 const contactTypes=['Commercial','Technique','Sécurité','Contractuel','Autre'];
 const suppliers=ref([]),contacts=ref([]),contracts=ref([]),documents=ref([]),assessments=ref([]),loading=ref(false),saving=ref(false),error=ref(''),formError=ref(''),contactError=ref(''),contractError=ref(''),contractFormError=ref('');
 const search=ref(''),criticality=ref(''),status=ref(''),includeArchived=ref(false),limit=ref(25),offset=ref(0);
-const formOpen=ref(false),editing=ref(null),assetSupplier=ref(null),supplierAssetLinks=ref([]),selectableAssets=ref([]),assetLinkError=ref(''),contactSupplier=ref(null),contractSupplier=ref(null),assessmentSupplier=ref(null),activeAssessment=ref(null),validationAssessment=ref(null);
+const formOpen=ref(false),editing=ref(null),assetSupplier=ref(null),supplierAssetLinks=ref([]),selectableAssets=ref([]),supplierAccessRequests=ref([]),assetLinkError=ref(''),contactSupplier=ref(null),contractSupplier=ref(null),assessmentSupplier=ref(null),activeAssessment=ref(null),validationAssessment=ref(null);
 const assessmentError=ref(''),assessmentFormError=ref('');
 const answerMap=reactive({});
 const validationForm=reactive({decision:'Approuvé sous conditions',validation_comment:'',next_review_at:''});
@@ -132,6 +156,7 @@ const contractForm=reactive(blankContract());
 const blank=()=>({code:'',legal_name:'',trade_name:'',country:'',service_category:'',description:'',business_owner_id:null,direction:'',criticality:'Moyenne',dependency_level:'Moyenne',data_categories:'',hosting_location:'',uses_subprocessors:false,status:'À qualifier'});
 const assetRelationshipTypes=['Héberge','Maintient','Administre','Accède','Fournit','Autre'];
 const assetLinkForm=reactive({asset_id:'',relationship_type:'Maintient',access_level:'Aucun',data_access:false,scope:'',review_due_at:''});
+const accessRequestForm=reactive({supplier_asset_link_id:'',access_level:'Standard',data_access:false,justification:'',scope:'',start_date:'',end_date:'',review_due_at:''});
 const form=reactive(blank()),contactForm=reactive({full_name:'',role:'',email:'',phone:'',contact_type:'Autre'});
 let timer;
 function scheduleLoad(){clearTimeout(timer);timer=setTimeout(()=>{offset.value=0;load()},300)}
@@ -141,7 +166,12 @@ function edit(s){editing.value=s;Object.assign(form,blank(),s);formOpen.value=tr
 async function save(){saving.value=true;formError.value='';try{if(editing.value)await apiClient.patch('/suppliers/'+editing.value.id,form);else await apiClient.post('/suppliers/',form);formOpen.value=false;await load()}catch(e){formError.value=e.response?.data?.detail||'Enregistrement impossible.'}finally{saving.value=false}}
 async function archive(s){if(!confirm('Archiver '+s.code+' ? Les données historiques seront conservées.'))return;try{await apiClient.post('/suppliers/'+s.id+'/archive');await load()}catch(e){error.value=e.response?.data?.detail||'Archivage impossible.'}}
 
-async function openSupplierAssets(s){assetSupplier.value=s;supplierAssetLinks.value=[];assetLinkError.value='';Object.assign(assetLinkForm,{asset_id:'',relationship_type:'Maintient',access_level:'Aucun',data_access:false,scope:'',review_due_at:''});try{const [links,assets]=await Promise.all([apiClient.get('/suppliers/'+s.id+'/assets'),canManageAssets.value?apiClient.get('/assets/'):Promise.resolve({data:[]})]);supplierAssetLinks.value=links.data;selectableAssets.value=assets.data.filter(a=>!['Retiré','Décommissionné'].includes(a.lifecycle_status))}catch(e){assetLinkError.value=e.response?.data?.detail||'Chargement des actifs liés impossible.'}}
+const today=new Date().toISOString().slice(0,10);
+async function openSupplierAssets(s){assetSupplier.value=s;supplierAssetLinks.value=[];supplierAccessRequests.value=[];assetLinkError.value='';Object.assign(assetLinkForm,{asset_id:'',relationship_type:'Maintient',access_level:'Aucun',data_access:false,scope:'',review_due_at:''});Object.assign(accessRequestForm,{supplier_asset_link_id:'',access_level:'Standard',data_access:false,justification:'',scope:'',start_date:today,end_date:'',review_due_at:''});try{const requests=[apiClient.get('/suppliers/'+s.id+'/assets'),canManageAssets.value?apiClient.get('/assets/'):Promise.resolve({data:[]}),canReadAccess.value?apiClient.get('/suppliers/'+s.id+'/access-requests'):Promise.resolve({data:[]})];const [links,assets,access]=await Promise.all(requests);supplierAssetLinks.value=links.data;selectableAssets.value=assets.data.filter(a=>!['Retiré','Décommissionné'].includes(a.lifecycle_status));supplierAccessRequests.value=access.data}catch(e){assetLinkError.value=e.response?.data?.detail||'Chargement des actifs ou autorisations impossible.'}}
+async function createAccessRequest(){saving.value=true;assetLinkError.value='';try{await apiClient.post('/suppliers/'+assetSupplier.value.id+'/access-requests',accessRequestForm);await openSupplierAssets(assetSupplier.value)}catch(e){assetLinkError.value=e.response?.data?.detail||'Création de la demande impossible.'}finally{saving.value=false}}
+async function decideAccess(item,decision){const comment=prompt('Commentaire obligatoire pour cette décision :');if(!comment||comment.trim().length<5)return;saving.value=true;try{await apiClient.post('/suppliers/'+assetSupplier.value.id+'/access-requests/'+item.id+'/decision',{decision,comment});await openSupplierAssets(assetSupplier.value)}catch(e){assetLinkError.value=e.response?.data?.detail||'Décision impossible.'}finally{saving.value=false}}
+async function revokeAccess(item){const reason=prompt('Motif obligatoire de révocation :');if(!reason||reason.trim().length<5)return;saving.value=true;try{await apiClient.post('/suppliers/'+assetSupplier.value.id+'/access-requests/'+item.id+'/revoke',{reason});await openSupplierAssets(assetSupplier.value)}catch(e){assetLinkError.value=e.response?.data?.detail||'Révocation impossible.'}finally{saving.value=false}}
+async function expireAccess(item){if(!confirm('Clôturer cette autorisation comme expirée ?'))return;saving.value=true;try{await apiClient.post('/suppliers/'+assetSupplier.value.id+'/access-requests/'+item.id+'/expire');await openSupplierAssets(assetSupplier.value)}catch(e){assetLinkError.value=e.response?.data?.detail||'Clôture impossible.'}finally{saving.value=false}}
 function assetLabel(id){const a=selectableAssets.value.find(x=>x.id===id);return a?a.reference+' — '+a.name:id}
 async function createAssetLink(){saving.value=true;assetLinkError.value='';try{const payload={...assetLinkForm,review_due_at:assetLinkForm.review_due_at||null};await apiClient.post('/suppliers/'+assetSupplier.value.id+'/assets',payload);await openSupplierAssets(assetSupplier.value)}catch(e){assetLinkError.value=e.response?.data?.detail||'Association impossible.'}finally{saving.value=false}}
 async function terminateAssetLink(link){if(!confirm('Terminer cette relation ? Son historique sera conservé.'))return;saving.value=true;try{await apiClient.post('/suppliers/'+assetSupplier.value.id+'/assets/'+link.id+'/terminate');await openSupplierAssets(assetSupplier.value)}catch(e){assetLinkError.value=e.response?.data?.detail||'Terminaison impossible.'}finally{saving.value=false}}
