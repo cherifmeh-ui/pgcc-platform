@@ -1,5 +1,5 @@
 """Supplier register and professional contacts API (TPRM)."""
-from datetime import datetime, timezone
+from datetime import date, datetime, timezone
 from typing import Literal
 from uuid import UUID
 
@@ -10,7 +10,8 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.api.deps import require_permission
 from app.core.database import get_db
-from app.models.supplier import Supplier, SupplierContact
+from app.models.supplier import Supplier, SupplierContact, SupplierContract
+from app.models.document import Document
 from app.models.user import User
 from app.services.security_logger import log_action
 
@@ -22,6 +23,8 @@ SupplierStatus = Literal[
     "Approuvé sous conditions", "Suspendu", "Terminé",
 ]
 ContactType = Literal["Commercial", "Technique", "Sécurité", "Contractuel", "Autre"]
+ContractType = Literal["Service", "Maintenance", "Hébergement", "Infogérance", "Licence", "Autre"]
+ContractStatus = Literal["Brouillon", "En validation", "Actif", "À renouveler", "Expiré", "Résilié"]
 
 
 class SupplierFields(BaseModel):
@@ -102,6 +105,79 @@ class SupplierResponse(SupplierFields):
     model_config = ConfigDict(from_attributes=True)
     id: UUID
     archived_at: datetime | None
+    created_at: datetime
+    updated_at: datetime
+
+
+
+class SupplierContractFields(BaseModel):
+    reference: str = Field(min_length=1, max_length=100)
+    title: str = Field(min_length=1, max_length=200)
+    contract_type: ContractType = "Service"
+    description: str | None = None
+    start_date: date
+    end_date: date | None = None
+    notice_period_days: int = Field(default=90, ge=0, le=3650)
+    auto_renew: bool = False
+    status: ContractStatus = "Brouillon"
+    internal_owner_id: UUID | None = None
+    document_id: UUID | None = None
+    clause_confidentiality: bool = False
+    clause_incident_notification: bool = False
+    clause_audit_right: bool = False
+    clause_business_continuity: bool = False
+    clause_reversibility: bool = False
+    clause_data_location: bool = False
+    clause_subcontracting: bool = False
+    clause_data_return_destruction: bool = False
+
+    @field_validator("reference", "title")
+    @classmethod
+    def normalize_required_text(cls, value: str) -> str:
+        value = value.strip()
+        if not value:
+            raise ValueError("Ce champ ne peut pas être vide")
+        return value
+
+    @field_validator("end_date")
+    @classmethod
+    def validate_end_date(cls, value: date | None, info):
+        start = info.data.get("start_date")
+        if value is not None and start is not None and value < start:
+            raise ValueError("La date de fin doit être postérieure ou égale à la date de début")
+        return value
+
+
+class SupplierContractCreate(SupplierContractFields):
+    pass
+
+
+class SupplierContractUpdate(BaseModel):
+    reference: str | None = Field(default=None, min_length=1, max_length=100)
+    title: str | None = Field(default=None, min_length=1, max_length=200)
+    contract_type: ContractType | None = None
+    description: str | None = None
+    start_date: date | None = None
+    end_date: date | None = None
+    notice_period_days: int | None = Field(default=None, ge=0, le=3650)
+    auto_renew: bool | None = None
+    status: ContractStatus | None = None
+    internal_owner_id: UUID | None = None
+    document_id: UUID | None = None
+    clause_confidentiality: bool | None = None
+    clause_incident_notification: bool | None = None
+    clause_audit_right: bool | None = None
+    clause_business_continuity: bool | None = None
+    clause_reversibility: bool | None = None
+    clause_data_location: bool | None = None
+    clause_subcontracting: bool | None = None
+    clause_data_return_destruction: bool | None = None
+
+
+class SupplierContractResponse(SupplierContractFields):
+    model_config = ConfigDict(from_attributes=True)
+    id: UUID
+    supplier_id: UUID
     created_at: datetime
     updated_at: datetime
 
@@ -306,3 +382,95 @@ async def update_supplier_contact(
     await db.refresh(contact)
     await log_action(user_email=current_user.email, action="UPDATE_CONTACT", resource="supplier_contacts", resource_id=str(contact.id), details=f"Supplier contact updated for supplier {supplier_id}", event_type="SUPPLIER", request=request)
     return contact
+
+@router.get("/{supplier_id}/contracts", response_model=list[SupplierContractResponse])
+async def list_supplier_contracts(
+    supplier_id: UUID,
+    include_ended: bool = False,
+    limit: int = Query(default=50, ge=1, le=200),
+    offset: int = Query(default=0, ge=0),
+    db: AsyncSession = Depends(get_db),
+    current_user: User = require_permission("suppliers", "read_contracts"),
+):
+    supplier_result = await db.execute(select(Supplier.id).where(Supplier.id == supplier_id))
+    if supplier_result.scalar_one_or_none() is None:
+        raise HTTPException(status_code=404, detail="Fournisseur introuvable")
+    stmt = select(SupplierContract).where(SupplierContract.supplier_id == supplier_id)
+    if not include_ended:
+        stmt = stmt.where(SupplierContract.status.notin_(["Expiré", "Résilié"]))
+    result = await db.execute(
+        stmt.order_by(SupplierContract.end_date.asc().nullslast(), SupplierContract.reference.asc())
+        .limit(limit).offset(offset)
+    )
+    return result.scalars().all()
+
+
+@router.post("/{supplier_id}/contracts", response_model=SupplierContractResponse, status_code=status.HTTP_201_CREATED)
+async def create_supplier_contract(
+    supplier_id: UUID,
+    data: SupplierContractCreate,
+    request: Request,
+    db: AsyncSession = Depends(get_db),
+    current_user: User = require_permission("suppliers", "manage_contracts"),
+):
+    supplier_result = await db.execute(select(Supplier).where(Supplier.id == supplier_id, Supplier.archived_at.is_(None)))
+    if supplier_result.scalar_one_or_none() is None:
+        raise HTTPException(status_code=404, detail="Fournisseur introuvable ou archivé")
+    if data.internal_owner_id is not None:
+        owner = await db.execute(select(User.id).where(User.id == data.internal_owner_id, User.is_active.is_(True)))
+        if owner.scalar_one_or_none() is None:
+            raise HTTPException(status_code=422, detail="Responsable contractuel introuvable ou inactif")
+    if data.document_id is not None:
+        document = await db.execute(select(Document.id).where(Document.id == data.document_id))
+        if document.scalar_one_or_none() is None:
+            raise HTTPException(status_code=422, detail="Document contractuel introuvable")
+    contract = SupplierContract(supplier_id=supplier_id, **data.model_dump())
+    db.add(contract)
+    try:
+        await db.commit()
+    except Exception:
+        await db.rollback()
+        raise HTTPException(status_code=409, detail="Référence contractuelle déjà utilisée ou contrainte invalide")
+    await db.refresh(contract)
+    await log_action(user_email=current_user.email, action="CREATE_CONTRACT", resource="supplier_contracts", resource_id=str(contract.id), details=f"Contract created for supplier {supplier_id}: {contract.reference}", event_type="SUPPLIER", request=request)
+    return contract
+
+
+@router.patch("/{supplier_id}/contracts/{contract_id}", response_model=SupplierContractResponse)
+async def update_supplier_contract(
+    supplier_id: UUID,
+    contract_id: UUID,
+    data: SupplierContractUpdate,
+    request: Request,
+    db: AsyncSession = Depends(get_db),
+    current_user: User = require_permission("suppliers", "manage_contracts"),
+):
+    result = await db.execute(select(SupplierContract).where(SupplierContract.id == contract_id, SupplierContract.supplier_id == supplier_id))
+    contract = result.scalar_one_or_none()
+    if contract is None:
+        raise HTTPException(status_code=404, detail="Contrat fournisseur introuvable")
+    changes = data.model_dump(exclude_unset=True)
+    proposed_start = changes.get("start_date", contract.start_date)
+    proposed_end = changes.get("end_date", contract.end_date)
+    if proposed_end is not None and proposed_end < proposed_start:
+        raise HTTPException(status_code=422, detail="La date de fin doit être postérieure ou égale à la date de début")
+    if changes.get("internal_owner_id") is not None:
+        owner = await db.execute(select(User.id).where(User.id == changes["internal_owner_id"], User.is_active.is_(True)))
+        if owner.scalar_one_or_none() is None:
+            raise HTTPException(status_code=422, detail="Responsable contractuel introuvable ou inactif")
+    if changes.get("document_id") is not None:
+        document = await db.execute(select(Document.id).where(Document.id == changes["document_id"]))
+        if document.scalar_one_or_none() is None:
+            raise HTTPException(status_code=422, detail="Document contractuel introuvable")
+    for field, value in changes.items():
+        setattr(contract, field, value)
+    try:
+        await db.commit()
+    except Exception:
+        await db.rollback()
+        raise HTTPException(status_code=409, detail="Référence contractuelle déjà utilisée ou contrainte invalide")
+    await db.refresh(contract)
+    await log_action(user_email=current_user.email, action="UPDATE_CONTRACT", resource="supplier_contracts", resource_id=str(contract.id), details=f"Contract updated: {contract.reference}", event_type="SUPPLIER", request=request)
+    return contract
+
+
