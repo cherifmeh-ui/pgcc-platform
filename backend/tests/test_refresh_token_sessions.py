@@ -77,3 +77,13 @@ def test_refresh_session_model_indexes_and_constraints_match_migration():
     assert "ix_refresh_token_sessions_user_id" in indexes
     assert "ix_refresh_token_sessions_expires_at" in indexes
     assert "ix_refresh_token_sessions_token_jti_hash" not in indexes
+
+
+@pytest.mark.asyncio
+async def test_refresh_session_persist_rejects_missing_exp(monkeypatch):
+    db = FakeDB()
+    user = SimpleNamespace(id=uuid4())
+    monkeypatch.setattr(auth_endpoint, "decode_token", lambda token, expected_type: {"jti": "id"})
+    with pytest.raises(KeyError):
+        await auth_endpoint._persist_refresh_session(db, user, "token")
+    assert db.added == []
