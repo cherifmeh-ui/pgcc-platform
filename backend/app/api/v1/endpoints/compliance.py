@@ -412,6 +412,7 @@ async def get_compliance_matrix(
             found_links = 0
             linked_actions = [action for action in actions if action.iso_control_id == c.id]
             has_done_action = any(action.status == ActionStatus.DONE for action in linked_actions)
+            has_linked_action = bool(linked_actions)
             
             # Check manual override first
             if c.is_manually_covered:
@@ -438,7 +439,7 @@ async def get_compliance_matrix(
                         has_done_action = True
             
             # Determine Status Logic
-            if has_done_action or found_links > 0:
+            if has_linked_action or has_done_action or found_links > 0:
                 status = "À vérifier"
                 partial += 1
             else:
