@@ -50,6 +50,7 @@
             <td class="actions-cell">
               <!-- Bouton Télécharger -->
               <button @click="downloadDoc(doc)" class="action-btn dl" title="Télécharger">⬇️</button>
+              <button v-if="canUpdate && !doc.is_indexed" @click="indexDoc(doc)" :disabled="indexingId === doc.id" class="action-btn" title="Indexer pour l’Assistant IA">{{ indexingId === doc.id ? "⏳" : "🧠" }}</button>
               <!-- Bouton Supprimer -->
               <button v-if="canDelete" @click="deleteDoc(doc.id)" class="action-btn del" title="Supprimer">🗑️</button>
             </td>
@@ -173,6 +174,8 @@ const formData = reactive({
 // Permissions
 const canCreate = computed(() => authStore.canAccessModule('documents', 'create'));
 const canDelete = computed(() => authStore.canAccessModule('documents', 'delete'));
+const canUpdate = computed(() => authStore.canAccessModule('documents', 'update'));
+const indexingId = ref(null);
 
 // Helpers UI
 function normalizeType(type) {
@@ -300,6 +303,19 @@ async function handleUpload() {
     }
   } finally {
     uploading.value = false;
+  }
+}
+
+async function indexDoc(doc) {
+  indexingId.value = doc.id;
+  try {
+    const response = await apiClient.post(`/documents/${doc.id}/index`);
+    await loadDocuments();
+    showMessage(response.data?.message || "Document indexé pour l'Assistant IA.", "success");
+  } catch (err) {
+    showMessage(err.response?.data?.detail || "Échec de l'indexation du document.", "error");
+  } finally {
+    indexingId.value = null;
   }
 }
 
