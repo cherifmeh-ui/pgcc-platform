@@ -36,8 +36,9 @@ This review is based on source inspection of the stabilization branch. It is not
 ### Risks requiring closure
 - File parsing is not sandboxed and antivirus scanning is not integrated.
 - Signature checks are shallow (PDF magic prefix and ZIP prefix for DOCX); deeper structural validation and archive-bomb protection need tests/controls.
-- RAG retrieval authorization must be enforced at query time for document classification/permissions; inspect all AI endpoints and retrieval query paths.
+- Document model has no classification/ACL fields. AI context endpoint checks the global `documents:read` permission, then queries PSSI documents and control-reference matches. This means authorization is role-level only; document-level classification/access policy is not implemented. Define a classification model and enforce it in list, preview, download, AI context retrieval, and vector search before production use.
 - Indexing is synchronous and may block API workers; production should use a bounded worker/job mechanism.
+- AI context query logs only successful responses; denial, provider failures, and query metadata should be considered for security/audit event coverage without logging full prompts or sensitive content.
 - RAG/index failure paths and concurrent re-index/delete need integration tests.
 
 ## Audit logging
@@ -74,3 +75,11 @@ Do not close Phase 0 until evidence is attached for:
 - Unit tests cover normalization and default-deny behavior.
 - Asset-risk endpoints perform explicit cross-module permission checks and API tests verify denial before DB access.
 - The endpoint dependency AST test is structural only; it is not a substitute for route-level permission and object-authorization tests.
+
+
+## Docker deployment review — source inspection
+
+- Compose waits for PostgreSQL health before backend start, which is good.
+- PostgreSQL image uses the floating `ankane/pgvector:latest` tag; pin a tested version/digest for reproducibility.
+- Backend and frontend are development-oriented: hot-reload mounts, `ENVIRONMENT: development`, frontend `npm install` on startup, and direct published ports. A production profile should use immutable builds, lockfile-driven install, non-root runtime, secrets management, reverse proxy/TLS, restrictive network exposure, and health checks for backend/frontend.
+- No Docker Compose runtime test has been executed in this review.
