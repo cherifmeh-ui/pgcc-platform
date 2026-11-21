@@ -157,3 +157,9 @@ Status: active engineering review. This is a static review backlog, not a securi
 - Applications (`apps.py`) create/update/delete operations currently commit without calling the security audit logger. These business mutations are not traceable in the current security-log API.
 - Document upload/delete and risk/action mutations have logging in reviewed paths, but audit logging is a separate best-effort transaction. A mutation can succeed while its audit event fails, leaving a gap. For high-assurance records, use a transactional audit/outbox pattern or append-only database mechanism and monitor failed delivery.
 - Expand audit coverage systematically to inventory, compliance assessments, user/role administration, evidence verification, configuration changes, and exports. Define mandatory fields, actor identity, target ID, event, outcome, timestamp, correlation ID, and sanitized before/after values.
+
+
+## Migration baseline review (2026-11-21)
+
+- `0001_initial.py` calls `Base.metadata.create_all()` rather than declaring an immutable initial schema. This is convenient for fresh development databases but is not a reproducible migration: its behavior changes with model metadata and cannot reliably describe schema drift.
+- Keep this baseline only for controlled fresh-install use until a schema snapshot is generated and reviewed. For existing installations, compare the live schema, back up, and stamp only after equivalence is confirmed. Subsequent migrations must be explicit Alembic operations; do not edit the initial migration after it has been applied.
