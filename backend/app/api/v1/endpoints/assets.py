@@ -818,6 +818,8 @@ async def link_asset_to_risk(
     db: AsyncSession = Depends(get_db),
     current_user: User = require_permission("assets", "update"),
 ):
+    if not role_has_permission((current_user.role or "").lower(), "risks", "update"):
+        raise HTTPException(status_code=403, detail="Accès refusé : permission risks:update requise.")
     asset_result = await db.execute(select(Asset).where(Asset.id == asset_id))
     asset = asset_result.scalar_one_or_none()
     if asset is None:
@@ -846,6 +848,8 @@ async def unlink_asset_from_risk(
     db: AsyncSession = Depends(get_db),
     current_user: User = require_permission("assets", "update"),
 ):
+    if not role_has_permission((current_user.role or "").lower(), "risks", "update"):
+        raise HTTPException(status_code=403, detail="Accès refusé : permission risks:update requise.")
     result = await db.execute(select(AssetRiskLink).where(AssetRiskLink.asset_id == asset_id, AssetRiskLink.risk_id == risk_id))
     link = result.scalar_one_or_none()
     if link is None:
