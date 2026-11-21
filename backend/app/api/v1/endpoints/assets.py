@@ -6,6 +6,7 @@ from uuid import UUID
 from fastapi import APIRouter, Depends, HTTPException, Query, Request, status
 from pydantic import BaseModel, Field
 from sqlalchemy import select
+from sqlalchemy.orm import aliased
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.api.deps import require_permission
@@ -346,11 +347,19 @@ async def get_asset_impact(
     """Return transitive assets depending on the selected asset and their linked risks."""
     source_result = await db.execute(select(Asset).where(Asset.id == asset_id))
     source = source_result.scalar_one_or_none()
-    if source is None:
-        raise HTTPException(status_code=404, detail="Actif introuvable")
+    if source is None or source.retired_at is not None:
+        raise HTTPException(status_code=404, detail="Actif actif introuvable")
+    dependent_asset = aliased(Asset)
+    dependency_asset = aliased(Asset)
     rel_result = await db.execute(
         select(AssetRelationship.source_asset_id, AssetRelationship.target_asset_id)
-        .where(AssetRelationship.relationship_type == "depends_on")
+        .join(dependent_asset, dependent_asset.id == AssetRelationship.source_asset_id)
+        .join(dependency_asset, dependency_asset.id == AssetRelationship.target_asset_id)
+        .where(
+            AssetRelationship.relationship_type == "depends_on",
+            dependent_asset.retired_at.is_(None),
+            dependency_asset.retired_at.is_(None),
+        )
     )
     impacted = _compute_asset_impact(asset_id, rel_result.all())
     if not impacted:
