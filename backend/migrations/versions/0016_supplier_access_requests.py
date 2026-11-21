@@ -45,6 +45,7 @@ def upgrade() -> None:
     op.create_index("ix_supplier_access_requests_asset_id", "supplier_access_requests", ["asset_id"])
     op.create_index("ix_supplier_access_requests_supplier_status", "supplier_access_requests", ["supplier_id", "status", "end_date"])
     op.create_index("ix_supplier_access_requests_asset_status", "supplier_access_requests", ["asset_id", "status", "end_date"])
+    op.create_index("uq_supplier_access_requests_open_link", "supplier_access_requests", ["supplier_asset_link_id"], unique=True, postgresql_where=sa.text("status IN ('Demandé', 'Approuvé', 'Suspendu')"))
 
 
 def downgrade() -> None:
