@@ -301,10 +301,11 @@ async function handleUpload() {
       headers: { 'Content-Type': 'multipart/form-data' }
     });
 
-    // SUCCESS PATH
+    // Capture the title before closeModal resets the form.
+    const uploadedTitle = formData.title;
     closeModal();
-    await loadDocuments(); // Rafraîchir la liste immédiatement
-    showMessage(`✅ Document "${formData.title}" importé avec succès !`, "success");
+    await loadDocuments();
+    showMessage(`Document "${uploadedTitle}" importé avec succès !`, "success");
     
   } catch (err) {
     console.error(err);
