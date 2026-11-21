@@ -41,7 +41,8 @@ class Asset(Base):
             name="ck_assets_availability",
         ),
         UniqueConstraint("reference", name="uq_assets_reference"),
-        Index("uq_assets_reference_ci", text("lower(reference)"), unique=True),
+        CheckConstraint("btrim(reference) <> ''", name="ck_assets_reference_nonblank"),
+        Index("uq_assets_reference_ci", text("lower(btrim(reference))"), unique=True),
     )
 
     id = Column(PG_UUID(as_uuid=True), primary_key=True, default=uuid4)
