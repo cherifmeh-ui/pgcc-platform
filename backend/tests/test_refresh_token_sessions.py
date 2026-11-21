@@ -65,3 +65,15 @@ async def test_persist_refresh_session_requires_refresh_token_type(monkeypatch):
     await auth_endpoint._persist_refresh_session(db, user, "token")
     assert calls == ["refresh"]
     assert len(db.added) == 1
+
+
+def test_refresh_session_model_indexes_and_constraints_match_migration():
+    from app.models.refresh_token_session import RefreshTokenSession
+
+    constraints = {constraint.name for constraint in RefreshTokenSession.__table__.constraints}
+    indexes = {index.name for index in RefreshTokenSession.__table__.indexes}
+    assert "uq_refresh_token_sessions_jti_hash" in constraints
+    assert "ix_refresh_token_sessions_user_active" in indexes
+    assert "ix_refresh_token_sessions_user_id" in indexes
+    assert "ix_refresh_token_sessions_expires_at" in indexes
+    assert "ix_refresh_token_sessions_token_jti_hash" not in indexes
