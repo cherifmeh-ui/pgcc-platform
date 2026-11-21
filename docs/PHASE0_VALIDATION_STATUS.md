@@ -242,3 +242,12 @@ Repository/static hardening is substantially progressed, but the remaining gates
 - Migration 0004 now detects existing action ISO foreign keys by constrained columns and referenced table, not only by the constraint name. This avoids creating duplicate FKs when SQLAlchemy baseline creates equivalent constraints with PostgreSQL-generated names.
 - Corrected static test parsing to match Alembic's typed function declarations (`def upgrade() -> None`).
 - Runtime CI for the latest migration corrections is pending.
+
+
+### Migration 0006 asset inventory baseline overlap
+
+- Latest PostgreSQL CI failure showed `assets` already exists when revision `0006_asset_inventory` runs, due to baseline `0001_initial` metadata creation.
+- Updated revision 0006 to conditionally create `assets` and `asset_relationships`, and to create missing indexes only. Downgrade now checks table/index existence before dropping.
+- Added static regression test for baseline overlap guards.
+- Commit `cbc4156`: migration correction; `99d4f41`: test.
+- Runtime PostgreSQL validation pending.
