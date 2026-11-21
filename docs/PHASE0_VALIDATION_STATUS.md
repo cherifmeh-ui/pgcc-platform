@@ -86,3 +86,13 @@ Repository/static hardening is substantially progressed, but the remaining gates
 - Auth store persists access and refresh tokens in localStorage; Axios refresh interceptor replaces them on successful refresh.
 - Local logout removes tokens but cannot revoke stateless refresh JWTs server-side.
 - XSS impact and lack of server revocation are production release risks; cookie/session architecture and token rotation/reuse detection remain required.
+
+
+### Refresh-session backend implementation checkpoint
+
+- Added revision `0021_refresh_token_sessions` and SQLAlchemy model.
+- Refresh flow now validates persisted session, row-locks it, performs one-time rotation and revokes active sessions on token reuse.
+- Added `/auth/logout` revocation endpoint.
+- Refresh-session records store a SHA-256 hash of `jti`, never the raw JWT.
+- Initial refresh-session records are persisted after MFA login and mandatory password-change completion.
+- **Pending validation:** current-head CI, PostgreSQL migration/runtime tests, concurrent refresh tests, frontend logout integration, and revoke-all/session management.
