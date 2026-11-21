@@ -192,7 +192,9 @@ import ActionsPanel from '@/components/ActionsPanel.vue'; // ✅ IMPORT CRUCIAL 
 const authStore = useAuthStore();
 
 // --- État Local UI ---
-const risks = ref([]);\nconst assetsRiskModal=ref(null),linkedAssets=ref([]);
+const risks = ref([]);
+const assetsRiskModal = ref(null);
+const linkedAssets = ref([]);
 const riskOwners = ref([]);
 const loading = ref(true);
 const showModal = ref(false);
