@@ -57,3 +57,12 @@ Keep impact and likelihood scales configurable and versioned. Scores are compute
 - No data is lost during migration.
 - API enforces transition and ownership rules.
 - Audit trail records important decisions.
+
+
+## Current prototype status and migration notes
+
+The current code implements a basic 1–5 impact and likelihood matrix (score = impact × likelihood), server-side score calculation, a small status set, active-user owner validation, and refusal to hard-delete risks that have linked actions. These are foundational safeguards only.
+
+Not yet implemented in the current risk model: separate inherent and residual assessments, rationale/evidence for ratings, methodology version, acceptance authority and expiry, assessment history, formal treatment options, risk appetite thresholds, and archival workflow. Risk score must not be interpreted as compliance or formal acceptance.
+
+Migration strategy: establish and test an Alembic baseline first; then introduce assessment/history/acceptance entities with an explicit legacy methodology label for existing records. Avoid destructive backfills or silently changing existing scores.
