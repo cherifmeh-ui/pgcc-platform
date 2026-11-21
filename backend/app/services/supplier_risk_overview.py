@@ -21,22 +21,25 @@ def build_supplier_risk_overview(
 
     latest_assessment: dict[Any, dict[str, Any]] = {}
     for item in assessments:
-        if item.get("status") != "Validée":
-            continue
         supplier_id = item["supplier_id"]
         previous = latest_assessment.get(supplier_id)
         if previous is None or item.get("created_at") > previous.get("created_at"):
             latest_assessment[supplier_id] = item
 
+    validated_latest = {
+        supplier_id: item
+        for supplier_id, item in latest_assessment.items()
+        if item.get("status") == "Validée"
+    }
     overdue_assessments = sum(
-        1 for item in latest_assessment.values()
+        1 for item in validated_latest.values()
         if item.get("next_review_at") is not None and item["next_review_at"] < today
     )
     suppliers_without_current_assessment = sum(
         1 for supplier in critical_suppliers
-        if supplier["id"] not in latest_assessment
-        or latest_assessment[supplier["id"]].get("next_review_at") is None
-        or latest_assessment[supplier["id"]]["next_review_at"] < today
+        if supplier["id"] not in validated_latest
+        or validated_latest[supplier["id"]].get("next_review_at") is None
+        or validated_latest[supplier["id"]]["next_review_at"] < today
     )
 
     unique_risks: dict[Any, dict[str, Any]] = {}
@@ -86,7 +89,7 @@ def build_supplier_risk_overview(
             "critical_without_current_assessment": suppliers_without_current_assessment,
         },
         "assessments": {
-            "latest_validated": len(latest_assessment),
+            "latest_validated": len(validated_latest),
             "overdue_reviews": overdue_assessments,
         },
         "risks": {
