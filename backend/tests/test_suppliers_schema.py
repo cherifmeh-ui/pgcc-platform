@@ -371,3 +371,31 @@ async def test_terminate_supplier_asset_link_blocked_with_open_access_request():
     assert getattr(exc.value, "status_code", None) == 409
     assert "autorisation d'accès" in exc.value.detail
     db.commit.assert_not_awaited()
+
+@pytest.mark.asyncio
+async def test_supplier_suspend_blocked_when_open_access_request_exists():
+    from app.api.v1.endpoints.suppliers import update_supplier
+    from uuid import UUID
+
+    supplier_id = UUID("00000000-0000-0000-0000-000000000010")
+    supplier = MagicMock(id=supplier_id, status="Approuvé", archived_at=None)
+    supplier_result = MagicMock()
+    supplier_result.scalar_one_or_none.return_value = supplier
+    no_active_links = MagicMock()
+    no_active_links.scalar_one_or_none.return_value = None
+    open_request = MagicMock()
+    open_request.scalar_one_or_none.return_value = UUID("00000000-0000-0000-0000-000000000012")
+    db = AsyncMock()
+    db.execute.side_effect = [supplier_result, no_active_links, open_request]
+
+    with pytest.raises(Exception) as exc:
+        await update_supplier(
+            supplier_id=supplier_id,
+            data=SupplierUpdate(status="Suspendu"),
+            request=MagicMock(),
+            db=db,
+            current_user=MagicMock(email="admin@example.test"),
+        )
+    assert getattr(exc.value, "status_code", None) == 409
+    assert "autorisations d'accès" in exc.value.detail
+    db.commit.assert_not_awaited()
