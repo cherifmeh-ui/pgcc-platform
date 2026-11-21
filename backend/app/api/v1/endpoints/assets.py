@@ -211,6 +211,15 @@ def _compute_asset_impact(source_asset_id: UUID, dependency_pairs: list[tuple[UU
     return sorted(distances.items(), key=lambda item: (item[1], str(item[0])))
 
 
+def _lifecycle_retirement_marker(status: str | None, current_retired_at: datetime | None) -> datetime | None:
+    """Keep lifecycle status and retired_at consistent during explicit updates."""
+    if status in {"Retiré", "Décommissionné"}:
+        return current_retired_at or datetime.now(timezone.utc)
+    if status is not None:
+        return None
+    return current_retired_at
+
+
 def _relationship_assets_are_active(asset_rows: list[tuple[UUID, datetime | None]]) -> bool:
     """Require both endpoints of a new relationship to exist and be active."""
     return len(asset_rows) == 2 and all(retired_at is None for _, retired_at in asset_rows)
@@ -630,13 +639,10 @@ async def update_asset(
     values = data.model_dump(exclude_unset=True)
     if "application_id" in values:
         await _ensure_application_exists(values.get("application_id"), db)
-    requested_lifecycle = values.get("lifecycle_status")
-    if requested_lifecycle in {"Retiré", "Décommissionné"}:
-        values["retired_at"] = asset.retired_at or datetime.now(timezone.utc)
-    elif requested_lifecycle is not None and requested_lifecycle not in {"Retiré", "Décommissionné"}:
-        # Explicit reactivation clears the retirement marker so active inventory
-        # and relationship validation remain consistent.
-        values["retired_at"] = None
+    if "lifecycle_status" in values:
+        values["retired_at"] = _lifecycle_retirement_marker(
+            values["lifecycle_status"], asset.retired_at
+        )
     for key, value in values.items():
         setattr(asset, key, value)
     try:
