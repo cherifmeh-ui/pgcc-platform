@@ -10,7 +10,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.api.deps import require_permission
 from app.core.database import get_db
-from app.models.supplier import Supplier, SupplierContact, SupplierContract, SupplierAssessment, SupplierAssetLink, SupplierAccessRequest
+from app.models.supplier import Supplier, SupplierContact, SupplierContract, SupplierAssessment, SupplierAssetLink, SupplierAccessRequest, SupplierAccessReview
 from app.models.asset import Asset
 from app.models.document import Document
 from app.models.user import User
@@ -292,6 +292,38 @@ class SupplierAccessRevocation(BaseModel):
         return value
 
 
+
+class SupplierAccessReviewCreate(BaseModel):
+    outcome: Literal["Maintenue", "Réduite", "Révoquée"]
+    comment: str = Field(min_length=5, max_length=2000)
+    next_review_at: date | None = None
+    new_access_level: Literal["Standard", "Privilégié"] | None = None
+    new_data_access: bool | None = None
+
+    @field_validator("comment")
+    @classmethod
+    def normalize_review_comment(cls, value: str) -> str:
+        value = value.strip()
+        if len(value) < 5:
+            raise ValueError("Un commentaire de revue est obligatoire")
+        return value
+
+
+class SupplierAccessReviewResponse(BaseModel):
+    model_config = ConfigDict(from_attributes=True)
+    id: UUID
+    access_request_id: UUID
+    reviewed_by_id: UUID
+    reviewed_at: datetime
+    outcome: str
+    comment: str
+    previous_access_level: str
+    previous_data_access: bool
+    resulting_access_level: str
+    resulting_data_access: bool
+    next_review_at: date | None
+
+
 class SupplierAccessRequestResponse(BaseModel):
     model_config = ConfigDict(from_attributes=True)
     id: UUID
@@ -486,6 +518,92 @@ async def decide_supplier_access_request(
     await db.refresh(access_request)
     await log_action(user_email=current_user.email, action=f"SUPPLIER_ACCESS_{data.decision.upper()}", resource="supplier_access_requests", resource_id=str(access_request.id), details=f"Decision for supplier access request {access_request.id}: {data.decision}", event_type="SUPPLIER", request=request)
     return access_request
+
+
+
+@router.get("/{supplier_id}/access-requests/{access_request_id}/reviews", response_model=list[SupplierAccessReviewResponse])
+async def list_supplier_access_reviews(
+    supplier_id: UUID,
+    access_request_id: UUID,
+    db: AsyncSession = Depends(get_db),
+    current_user: User = require_permission("suppliers", "read_access_requests"),
+):
+    request_result = await db.execute(select(SupplierAccessRequest.id).where(
+        SupplierAccessRequest.id == access_request_id,
+        SupplierAccessRequest.supplier_id == supplier_id,
+    ))
+    if request_result.scalar_one_or_none() is None:
+        raise HTTPException(status_code=404, detail="Autorisation introuvable")
+    result = await db.execute(select(SupplierAccessReview).where(
+        SupplierAccessReview.access_request_id == access_request_id,
+    ).order_by(SupplierAccessReview.reviewed_at.desc(), SupplierAccessReview.id))
+    return result.scalars().all()
+
+
+@router.post("/{supplier_id}/access-requests/{access_request_id}/reviews", response_model=SupplierAccessReviewResponse, status_code=status.HTTP_201_CREATED)
+async def review_supplier_access(
+    supplier_id: UUID,
+    access_request_id: UUID,
+    data: SupplierAccessReviewCreate,
+    request: Request,
+    db: AsyncSession = Depends(get_db),
+    current_user: User = require_permission("suppliers", "review_access"),
+):
+    result = await db.execute(select(SupplierAccessRequest).where(
+        SupplierAccessRequest.id == access_request_id,
+        SupplierAccessRequest.supplier_id == supplier_id,
+    ).with_for_update())
+    access_request = result.scalar_one_or_none()
+    if access_request is None:
+        raise HTTPException(status_code=404, detail="Autorisation introuvable")
+    if access_request.status != "Approuvé":
+        raise HTTPException(status_code=409, detail="Seule une autorisation approuvée peut faire l'objet d'une revue périodique")
+    today = date.today()
+    if access_request.start_date > today or access_request.end_date < today:
+        raise HTTPException(status_code=409, detail="L'autorisation n'est pas actuellement dans sa période de validité")
+    if current_user.id in (access_request.requested_by_id, access_request.decided_by_id):
+        raise HTTPException(status_code=403, detail="Le demandeur et l'approbateur initial ne peuvent pas réaliser la revue périodique")
+    if data.outcome != "Révoquée":
+        if data.next_review_at is None or not today <= data.next_review_at <= access_request.end_date:
+            raise HTTPException(status_code=422, detail="La prochaine revue doit être comprise entre aujourd'hui et la fin de l'autorisation")
+    previous_level, previous_data = access_request.access_level, access_request.data_access
+    resulting_level, resulting_data = previous_level, previous_data
+    if data.outcome == "Maintenue":
+        if data.new_access_level is not None or data.new_data_access is not None:
+            raise HTTPException(status_code=422, detail="Une revue maintenue ne peut pas modifier le niveau d'accès")
+    elif data.outcome == "Réduite":
+        resulting_level = data.new_access_level or previous_level
+        resulting_data = data.new_data_access if data.new_data_access is not None else previous_data
+        reduced = (previous_level == "Privilégié" and resulting_level == "Standard") or (previous_data and not resulting_data)
+        if not reduced or (resulting_level == "Privilégié" and previous_level != "Privilégié") or (resulting_data and not previous_data):
+            raise HTTPException(status_code=422, detail="La décision Réduite doit diminuer réellement les privilèges ou supprimer l'accès aux données, sans élévation")
+        access_request.access_level = resulting_level
+        access_request.data_access = resulting_data
+    else:
+        if data.new_access_level is not None or data.new_data_access is not None:
+            raise HTTPException(status_code=422, detail="Une révocation ne peut pas définir de nouveaux droits")
+        access_request.status = "Révoqué"
+        access_request.revoked_by_id = current_user.id
+        access_request.revoked_at = datetime.now(timezone.utc)
+        access_request.revocation_reason = data.comment
+    if data.outcome != "Révoquée":
+        access_request.review_due_at = data.next_review_at
+    review = SupplierAccessReview(
+        access_request_id=access_request.id,
+        reviewed_by_id=current_user.id,
+        outcome=data.outcome,
+        comment=data.comment,
+        previous_access_level=previous_level,
+        previous_data_access=previous_data,
+        resulting_access_level=resulting_level,
+        resulting_data_access=resulting_data,
+        next_review_at=data.next_review_at,
+    )
+    db.add(review)
+    await db.commit()
+    await db.refresh(review)
+    await log_action(user_email=current_user.email, action="REVIEW_SUPPLIER_ACCESS", resource="supplier_access_reviews", resource_id=str(review.id), details=f"Access review {data.outcome} for authorization {access_request.id}: {data.comment}", event_type="SUPPLIER", request=request)
+    return review
 
 
 @router.post("/{supplier_id}/access-requests/{access_request_id}/revoke", response_model=SupplierAccessRequestResponse)
