@@ -4,6 +4,7 @@ Revision ID: 0011_asset_reference_case_insensitive
 Revises: 0010_asset_risk_restrict_delete
 """
 from alembic import op
+import sqlalchemy as sa
 
 revision = "0011_asset_reference_case_insensitive"
 down_revision = "0010_asset_risk_restrict_delete"
@@ -33,10 +34,10 @@ def upgrade() -> None:
             END IF;
         END $$;
     """)
-    op.execute(
-        "CREATE UNIQUE INDEX uq_assets_reference_ci ON assets (lower(reference))"
-    )
+    if "uq_assets_reference_ci" not in {item["name"] for item in sa.inspect(op.get_bind()).get_indexes("assets")}:
+        op.execute("CREATE UNIQUE INDEX uq_assets_reference_ci ON assets (lower(reference))")
 
 
 def downgrade() -> None:
-    op.drop_index("uq_assets_reference_ci", table_name="assets")
+    if "uq_assets_reference_ci" in {item["name"] for item in sa.inspect(op.get_bind()).get_indexes("assets")}:
+        op.drop_index("uq_assets_reference_ci", table_name="assets")
