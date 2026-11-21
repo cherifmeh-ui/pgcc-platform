@@ -271,6 +271,36 @@ async def create_asset(
     return asset
 
 
+@router.get("/quality")
+async def get_asset_inventory_quality(
+    db: AsyncSession = Depends(get_db),
+    current_user: User = require_permission("assets", "read"),
+):
+    """Return completeness and lifecycle indicators for the active inventory."""
+    result = await db.execute(select(Asset).where(Asset.retired_at.is_(None)))
+    assets = result.scalars().all()
+    total = len(assets)
+    missing_owner = sum(not (asset.owner or "").strip() for asset in assets)
+    missing_classification = sum(not (asset.classification or "").strip() for asset in assets)
+    missing_inventory_date = sum(asset.last_inventory_date is None for asset in assets)
+    missing_criticality = sum(not (asset.criticality or "").strip() for asset in assets)
+    missing_direction = sum(not (asset.direction or "").strip() for asset in assets)
+    now = datetime.now(timezone.utc)
+    overdue_support = sum(asset.end_of_support_date is not None and asset.end_of_support_date < now for asset in assets)
+    support_ending_90_days = sum(asset.end_of_support_date is not None and now <= asset.end_of_support_date <= now + __import__('datetime').timedelta(days=90) for asset in assets)
+    return {
+        "total_active": total,
+        "missing_owner": missing_owner,
+        "missing_classification": missing_classification,
+        "missing_inventory_date": missing_inventory_date,
+        "missing_criticality": missing_criticality,
+        "missing_direction": missing_direction,
+        "support_overdue": overdue_support,
+        "support_ending_90_days": support_ending_90_days,
+        "completeness_percent": round(100 * (total * 5 - missing_owner - missing_classification - missing_inventory_date - missing_criticality - missing_direction) / (total * 5), 1) if total else 100.0,
+    }
+
+
 @router.get("/{asset_id}", response_model=AssetResponse)
 async def get_asset(
     asset_id: UUID,
