@@ -704,7 +704,9 @@ async def get_asset_impact(
             .join(Supplier, Supplier.id == SupplierAssetLink.supplier_id)
             .where(
                 SupplierAssetLink.asset_id.in_(relevant_asset_ids),
-                SupplierAssetLink.status != "Terminé",
+                SupplierAssetLink.status == "Actif",
+                Supplier.archived_at.is_(None),
+                Supplier.status != "Terminé",
             )
         )
         unique_suppliers: set[UUID] = set()
@@ -737,6 +739,7 @@ async def get_asset_impact(
                 SupplierAccessRequest.start_date <= today,
                 SupplierAccessRequest.end_date >= today,
                 Supplier.archived_at.is_(None),
+                Supplier.status != "Terminé",
             )
         )
         for linked_asset_id, supplier_id, supplier_code, supplier_name, authorization_id, access_level, data_access, start_date, end_date, review_due_at in authorization_result.all():
@@ -800,7 +803,7 @@ async def get_asset_impact(
             "active_supplier_authorizations": authorized_access_by_asset.get(asset.id, []),
         })
     return {
-        "source": {"id": source.id, "reference": source.reference, "name": source.name, "linked_suppliers": source_suppliers},
+        "source": {"id": source.id, "reference": source.reference, "name": source.name, "linked_suppliers": source_suppliers, "active_supplier_authorizations": source_authorizations},
         "impacted_assets": results, "total_impacted": len(results), "risk_summary": risk_summary,
         "supplier_summary": supplier_summary, "supplier_access_available": supplier_access_available,
     }
