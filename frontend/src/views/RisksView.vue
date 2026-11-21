@@ -21,7 +21,7 @@
         <button v-for="cell in matrixCells" :key="cell.impact + '-' + cell.likelihood" class="matrix-cell" :class="[getRiskClass(cell.score), { selected: matrixFilter && matrixFilter.impact === cell.impact && matrixFilter.likelihood === cell.likelihood }]" @click="toggleMatrixFilter(cell)" :title="'Impact ' + cell.impact + ' × Probabilité ' + cell.likelihood + ' = ' + cell.score"><small>{{ cell.score }}</small><strong>{{ cell.count }}</strong></button>
       </div><div class="matrix-x-label">PROBABILITÉ (1 → 5) · IMPACT (5 → 1)</div>
     </section>
-    <div class="risk-filters"><input v-model="riskSearch" type="search" placeholder="Recherche référence, titre, menace, site..." /><select v-model="statusFilter"><option value="">Tous les statuts</option><option>Ouvert</option><option>En traitement</option><option>Traité</option><option>Accepté</option></select><select v-model="siteFilter"><option value="">Tous les sites</option><option v-for="site in riskSites" :key="site" :value="site">{{ site }}</option></select><span>{{ filteredRisks.length }} / {{ risks.length }}</span></div>
+    <div class="risk-filters"><input v-model="riskSearch" type="search" placeholder="Recherche référence, titre, menace, site..." /><select v-model="statusFilter"><option value="">Tous les statuts</option><option>Ouvert</option><option>En traitement</option><option>Traité</option><option>Accepté</option></select><select v-model="siteFilter"><option value="">Tous les sites</option><option v-for="site in riskSites" :key="site" :value="site">{{ site }}</option></select><span>{{ filteredRisks.length }} / {{ risks.length }}</span><button @click="exportRisksCsv" class="export-btn">Export CSV</button></div>
     <!-- Tableau principal des risques -->
     <div class="table-container">
       <table class="risks-table">
@@ -246,6 +246,27 @@ const filteredRisks = computed(() => {
     return matchesSearch && matchesStatus && matchesSite && matchesMatrix;
   });
 });
+function exportRisksCsv() {
+  const headers = ["Référence", "Titre", "Description", "Menace", "Impact", "Probabilité", "Score", "Site", "Statut", "Plan de traitement", "Créé le", "Mis à jour le"];
+  const escapeCsv = value => {
+    let text = String(value ?? "");
+    // Prevent spreadsheet formula injection in exported data.
+    if (/^[=+@\\-]/.test(text)) text = "'" + text;
+    return '"' + text.replace(/"/g, '""') + '"';
+  };
+  const rows = filteredRisks.value.map(r => [r.ref, r.title, r.description, r.threat, r.impact, r.likelihood, r.risk_level, r.site, r.status, r.treatment_plan, r.created_at, r.updated_at]);
+  const csv = [headers, ...rows].map(row => row.map(escapeCsv).join(";")).join("\\r\\n");
+  const blob = new Blob(["\\uFEFF", csv], { type: "text/csv;charset=utf-8" });
+  const url = URL.createObjectURL(blob);
+  const link = document.createElement("a");
+  link.href = url;
+  link.download = "registre-risques-" + new Date().toISOString().slice(0, 10) + ".csv";
+  document.body.appendChild(link);
+  link.click();
+  link.remove();
+  window.setTimeout(() => URL.revokeObjectURL(url), 1000);
+}
+
 function toggleMatrixFilter(cell) {
   if (matrixFilter.value && matrixFilter.value.impact === cell.impact && matrixFilter.value.likelihood === cell.likelihood) matrixFilter.value = null;
   else matrixFilter.value = { impact: cell.impact, likelihood: cell.likelihood };
@@ -456,7 +477,7 @@ onMounted(loadRisks);
 .risk-filters { display: flex; gap: .75rem; flex-wrap: wrap; align-items: center; margin: 0 0 1rem; }
 .risk-filters input, .risk-filters select { min-height: 40px; padding: .5rem .75rem; border: 1px solid #cbd5e1; border-radius: 8px; background: white; }
 .risk-filters input { flex: 1; min-width: 220px; }
-.risk-filters span { color: #64748b; font-size: .85rem; }
+.risk-filters span { color: #64748b; font-size: .85rem; }\n.export-btn { min-height: 40px; padding: .5rem .75rem; border: 1px solid #cbd5e1; border-radius: 8px; background: #0f172a; color: white; cursor: pointer; }
 @media (max-width: 640px) { .heatmap-summary { grid-template-columns: repeat(2, 1fr); } .matrix-cell strong { font-size: .9rem; } }
 \n/* Table */
 .table-container { overflow-x: auto; background: white; border-radius: 8px; box-shadow: 0 1px 3px rgba(0,0,0,0.1); }
