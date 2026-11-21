@@ -356,3 +356,10 @@ The initial code-level review found that DOCX extraction joined paragraphs/table
 - Password-change endpoint revokes all active persisted refresh sessions before issuing a new session.
 - Refresh-policy denial (inactive, locked, mandatory password change, etc.) revokes active sessions before returning the denial.
 - Added static regression checks. Runtime transactional/concurrency behavior still requires PostgreSQL integration tests.
+
+
+### 27. Frontend refresh-queue regression
+
+- The Axios refresh queue had a `.catch(reject)` callback referring to an undefined identifier, which could produce a secondary ReferenceError when a queued request failed.
+- Removed the redundant catch so queued promises correctly propagate the refresh failure.
+- CI/build validation for the fix is pending.
