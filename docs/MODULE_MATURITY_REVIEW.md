@@ -160,3 +160,13 @@ This section records source-level findings from a targeted inspection. It is not
 ### Verification boundaries
 
 No Docker startup, database-backed integration test, live API test, penetration test, malware scan or migration run was performed during this source inspection. Findings must be validated by tests and deployment review.
+
+## Corrective finding resolved during review
+
+### DOCX extraction paragraph separators
+
+The initial code-level review found that DOCX extraction joined paragraphs/table rows using the literal characters `\\n\\n`, rather than actual newline separators. This degraded extracted text and downstream RAG context readability.
+
+- Corrected in `backend/app/services/document_extractor.py`.
+- Added regression assertions in `backend/tests/test_document_extractor_security.py` for actual paragraph/table separation and truncation marker line breaks.
+- GitHub Actions backend checks on the current review commit have passed; the frontend job is still running at the time of this update.
