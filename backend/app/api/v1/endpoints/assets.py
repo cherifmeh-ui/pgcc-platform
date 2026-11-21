@@ -145,6 +145,30 @@ class RelationshipResponse(BaseModel):
         from_attributes = True
 
 
+
+
+async def _would_create_dependency_cycle(db: AsyncSession, source_id: UUID, target_id: UUID) -> bool:
+    """Return whether source -> target would close a depends_on cycle."""
+    result = await db.execute(
+        select(AssetRelationship.source_asset_id, AssetRelationship.target_asset_id)
+        .where(AssetRelationship.relationship_type == "depends_on")
+    )
+    graph: dict[UUID, list[UUID]] = {}
+    for source, target in result.all():
+        graph.setdefault(source, []).append(target)
+    pending = [target_id]
+    visited: set[UUID] = set()
+    while pending:
+        node = pending.pop()
+        if node == source_id:
+            return True
+        if node in visited:
+            continue
+        visited.add(node)
+        pending.extend(graph.get(node, []))
+    return False
+
+
 async def _ensure_application_exists(application_id: UUID | None, db: AsyncSession) -> None:
     if application_id is None:
         return
@@ -301,6 +325,8 @@ async def create_asset_relationship(
 ):
     if asset_id == data.target_asset_id:
         raise HTTPException(status_code=422, detail="Un actif ne peut pas dépendre de lui-même")
+    if data.relationship_type == "depends_on" and await _would_create_dependency_cycle(db, asset_id, data.target_asset_id):
+        raise HTTPException(status_code=422, detail="Cette relation créerait un cycle de dépendances")
     result = await db.execute(select(Asset.id).where(Asset.id.in_([asset_id, data.target_asset_id]))
     )
     if len(result.scalars().all()) != 2:
