@@ -105,3 +105,11 @@ Do not close Phase 0 until evidence is attached for:
 - Corrected baseline imports to register `iso_control_assessment` before metadata `create_all`.
 - Revision `0002_iso_assessments` now checks whether the table already exists and creates missing indexes, avoiding duplicate-table failure when the initial metadata baseline creates the table. This supports clean DB upgrade and previously migrated databases where 0002 originally created the table.
 - CI must confirm this migration path. Downgrade semantics remain to be exercised against disposable PostgreSQL.
+
+
+## Alembic baseline architecture caveat
+
+- Revision `0001_initial` uses `Base.metadata.create_all()` and imports only a subset of models; later revisions create other tables and add columns/constraints.
+- This hybrid baseline can overlap later revisions when models imported by the baseline already contain fields added in later migrations (notably ActionItem ISO links). Conditional checks are being added to make clean upgrades resilient.
+- Downgrade symmetry is not fully guaranteed: because baseline metadata can include schema introduced by later revisions, downgrading a later revision may remove columns that were also created by baseline metadata. The baseline is intentionally non-downgradable, but the intermediate downgrade path still needs disposable-DB validation and a documented support policy.
+- Long-term recommendation: replace metadata-driven baseline with explicit schema DDL or a carefully generated frozen baseline, and keep later revisions strictly additive/differential. Do not perform this redesign in the stabilization branch without a dedicated migration strategy.
