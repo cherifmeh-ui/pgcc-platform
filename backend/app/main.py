@@ -14,7 +14,7 @@ from app.api.v1.endpoints.auth import router as auth_router
 
 @asynccontextmanager
 async def lifespan(app: FastAPI):
-    from app.models import user, security_log, risk  # noqa: F401
+    from app.models import user, security_log, risk, asset  # noqa: F401
 
     if settings.ENVIRONMENT.lower() == "development":
         async with engine.begin() as conn:
