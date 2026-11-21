@@ -114,3 +114,49 @@ These observations are directly visible in the current branch files and require 
 ## Evidence and limits
 
 The sampling used repository files on the current branch. No local runtime, fresh database, Docker deployment, browser E2E or penetration test was executed during this review. CI status is commit-specific and must be checked separately.
+
+## Security review — targeted source inspection (Phase 0)
+
+This section records source-level findings from a targeted inspection. It is not a penetration test and does not establish exploitability.
+
+### S0 — Document access is role-wide, not document-scoped
+
+- `GET /documents/`, `/{doc_id}/preview`, and `/{doc_id}/download` enforce the `documents:read` permission.
+- The current permission matrix grants this permission to admin, executive, auditor and viewer.
+- The sampled endpoints do not implement document classification, per-document access policy, department/owner scope, or a distinction between preview and binary download.
+- **Decision:** keep the current RBAC enforcement, but treat document confidentiality scope as a Phase 0 security gap. Before production, define classification and access policy; add negative integration tests. Do not silently restrict roles without a business-approved matrix.
+
+### S1 — Upload parsing is synchronous and only signature/size constrained
+
+- Upload is capped at 10 MiB and checks the PDF or ZIP/DOCX signature before extraction.
+- Extraction runs synchronously in the API process; no malware scanning or sandbox isolation was identified in the sampled route.
+- **Decision:** retain the size cap and validation. Production gate: malware scanning and isolated parsing (or documented compensating controls), tests for malformed and adversarial files, and resource/time limits.
+
+### S2 — MFA enrollment and token/session lifecycle need end-to-end review
+
+- Login creates a short-lived pre-auth token after password validation.
+- MFA enrollment uses that token to initialize an MFA secret; confirmation activates MFA and issues access/refresh tokens.
+- Refresh checks account status, lockout, mandatory password change, MFA for sensitive roles, and password-change timestamp.
+- Tokens include `jti`, but the sampled refresh flow does not persist a refresh-token family or revoke previous tokens on rotation. Server-side logout/revocation behavior requires verification.
+- **Decision:** do not claim refresh-token rotation/revocation is complete. Design a persisted session/token model or an explicitly accepted revocation strategy before production.
+
+### S3 — Login throttling is account-based
+
+- Failed password and MFA attempts increment account-level counters and temporarily lock the account.
+- No IP/network rate limiting or distributed throttle was identified in the inspected auth route.
+- **Decision:** add rate limiting at application/reverse-proxy layer and tests for distributed abuse; ensure account-lockout behavior cannot be trivially used to deny service to target accounts.
+
+### S4 — Production configuration is guarded, but deployment remains development-oriented
+
+- Settings validate minimum HS256 secret length, production DEBUG/CORS and placeholder-secret restrictions.
+- The sampled Compose file exposes database/backend/frontend development ports, mounts source, and starts frontend via dev server.
+- **Decision:** this Compose configuration is a development stack, not a production deployment. Create a separate hardened production profile (non-root, immutable images, restricted ports, TLS reverse proxy, secrets, health checks, backup/restore and observability) in Phase 8.
+
+### S5 — Migration baseline is an explicit release blocker for existing deployments
+
+- Migration documentation warns that legacy `create_all` databases require inspection and a reviewed baseline before Alembic is applied.
+- **Decision:** no production migration should be applied until fresh-install and legacy-baseline procedures are tested on disposable databases and documented with recovery/backup evidence.
+
+### Verification boundaries
+
+No Docker startup, database-backed integration test, live API test, penetration test, malware scan or migration run was performed during this source inspection. Findings must be validated by tests and deployment review.
