@@ -2,7 +2,7 @@
 import uuid
 from datetime import datetime, timezone
 
-from sqlalchemy import Column, DateTime, ForeignKey, String, Index
+from sqlalchemy import Column, DateTime, ForeignKey, String, Index, UniqueConstraint
 from sqlalchemy.dialects.postgresql import UUID
 
 from app.core.database import Base
@@ -24,5 +24,7 @@ class RefreshTokenSession(Base):
     replaced_by_jti_hash = Column(String(64), nullable=True)
 
     __table_args__ = (
+        UniqueConstraint("token_jti_hash", name="uq_refresh_token_sessions_jti_hash"),
+        Index("ix_refresh_token_sessions_token_jti_hash", "token_jti_hash"),
         Index("ix_refresh_token_sessions_user_active", "user_id", "revoked_at", "expires_at"),
     )
