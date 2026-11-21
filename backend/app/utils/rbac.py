@@ -76,6 +76,7 @@ PERMISSIONS: dict[str, dict[str, list[str]]] = {
     # --- Gestion des fournisseurs et tiers (TPRM) ---
     "suppliers": {
         "read": [Role.ADMIN.value, Role.EXECUTIVE.value, Role.AUDITOR.value],
+        "read_contacts": [Role.ADMIN.value, Role.AUDITOR.value],
         "create": [Role.ADMIN.value],
         "update": [Role.ADMIN.value],
         "archive": [Role.ADMIN.value],
