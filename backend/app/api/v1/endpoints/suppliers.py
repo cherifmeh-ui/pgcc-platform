@@ -10,7 +10,8 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.api.deps import require_permission
 from app.core.database import get_db
-from app.models.supplier import Supplier, SupplierContact, SupplierContract, SupplierAssessment
+from app.models.supplier import Supplier, SupplierContact, SupplierContract, SupplierAssessment, SupplierAssetLink
+from app.models.asset import Asset
 from app.models.document import Document
 from app.models.user import User
 from app.services.security_logger import log_action
@@ -218,6 +219,84 @@ class SupplierContactResponse(BaseModel):
     phone: str | None
     contact_type: ContactType
     is_active: bool
+
+
+
+@router.get("/{supplier_id}/assets", response_model=list[SupplierAssetLinkResponse])
+async def list_supplier_assets(
+    supplier_id: UUID,
+    include_ended: bool = False,
+    db: AsyncSession = Depends(get_db),
+    current_user: User = require_permission("suppliers", "read_assets"),
+):
+    supplier = await db.execute(select(Supplier.id).where(Supplier.id == supplier_id))
+    if supplier.scalar_one_or_none() is None:
+        raise HTTPException(status_code=404, detail="Fournisseur introuvable")
+    stmt = select(SupplierAssetLink).where(SupplierAssetLink.supplier_id == supplier_id)
+    if not include_ended:
+        stmt = stmt.where(SupplierAssetLink.status != "Terminé")
+    result = await db.execute(stmt.order_by(SupplierAssetLink.created_at.desc()))
+    return result.scalars().all()
+
+
+@router.post("/{supplier_id}/assets", response_model=SupplierAssetLinkResponse, status_code=status.HTTP_201_CREATED)
+async def link_supplier_asset(
+    supplier_id: UUID,
+    data: SupplierAssetLinkCreate,
+    request: Request,
+    db: AsyncSession = Depends(get_db),
+    current_user: User = require_permission("suppliers", "manage_assets"),
+):
+    supplier_result = await db.execute(select(Supplier).where(Supplier.id == supplier_id, Supplier.archived_at.is_(None)))
+    if supplier_result.scalar_one_or_none() is None:
+        raise HTTPException(status_code=404, detail="Fournisseur introuvable ou archivé")
+    asset_result = await db.execute(select(Asset).where(Asset.id == data.asset_id))
+    asset = asset_result.scalar_one_or_none()
+    if asset is None:
+        raise HTTPException(status_code=404, detail="Actif introuvable")
+    if asset.lifecycle_status in ("Retiré", "Décommissionné"):
+        raise HTTPException(status_code=422, detail="Impossible de rattacher un actif retiré ou décommissionné")
+    existing = await db.execute(select(SupplierAssetLink.id).where(
+        SupplierAssetLink.supplier_id == supplier_id,
+        SupplierAssetLink.asset_id == data.asset_id,
+        SupplierAssetLink.relationship_type == data.relationship_type,
+    ))
+    if existing.scalar_one_or_none() is not None:
+        raise HTTPException(status_code=409, detail="Cette relation fournisseur-actif existe déjà; réactivez-la ou consultez son historique")
+    link = SupplierAssetLink(supplier_id=supplier_id, created_by_id=current_user.id, **data.model_dump())
+    db.add(link)
+    try:
+        await db.commit()
+    except Exception:
+        await db.rollback()
+        raise HTTPException(status_code=409, detail="Relation fournisseur-actif déjà créée ou contrainte invalide")
+    await db.refresh(link)
+    await log_action(user_email=current_user.email, action="LINK_SUPPLIER_ASSET", resource="supplier_asset_links", resource_id=str(link.id), details=f"Supplier {supplier_id} linked to asset {data.asset_id} ({data.relationship_type})", event_type="SUPPLIER", request=request)
+    return link
+
+
+@router.post("/{supplier_id}/assets/{link_id}/terminate", response_model=SupplierAssetLinkResponse)
+async def terminate_supplier_asset_link(
+    supplier_id: UUID,
+    link_id: UUID,
+    request: Request,
+    db: AsyncSession = Depends(get_db),
+    current_user: User = require_permission("suppliers", "manage_assets"),
+):
+    result = await db.execute(select(SupplierAssetLink).where(
+        SupplierAssetLink.id == link_id,
+        SupplierAssetLink.supplier_id == supplier_id,
+    ))
+    link = result.scalar_one_or_none()
+    if link is None:
+        raise HTTPException(status_code=404, detail="Relation fournisseur-actif introuvable")
+    if link.status == "Terminé":
+        raise HTTPException(status_code=409, detail="Cette relation est déjà terminée")
+    link.status = "Terminé"
+    await db.commit()
+    await db.refresh(link)
+    await log_action(user_email=current_user.email, action="TERMINATE_SUPPLIER_ASSET_LINK", resource="supplier_asset_links", resource_id=str(link.id), details=f"Supplier-asset relationship terminated: {link.id}", event_type="SUPPLIER", request=request)
+    return link
 
 
 @router.get("/", response_model=list[SupplierResponse])
@@ -435,6 +514,31 @@ class SupplierAssessmentValidation(BaseModel):
     decision: AssessmentDecision
     validation_comment: str = Field(min_length=5, max_length=4000)
     next_review_at: date | None = None
+
+
+class SupplierAssetLinkCreate(BaseModel):
+    asset_id: UUID
+    relationship_type: Literal["Héberge", "Maintient", "Administre", "Accède", "Fournit", "Autre"]
+    access_level: Literal["Aucun", "Standard", "Privilégié"] = "Aucun"
+    data_access: bool = False
+    scope: str | None = Field(default=None, max_length=1000)
+    review_due_at: date | None = None
+
+
+class SupplierAssetLinkResponse(BaseModel):
+    model_config = ConfigDict(from_attributes=True)
+    id: UUID
+    supplier_id: UUID
+    asset_id: UUID
+    relationship_type: str
+    access_level: str
+    data_access: bool
+    scope: str | None
+    status: str
+    review_due_at: date | None
+    created_by_id: UUID
+    created_at: datetime
+    updated_at: datetime
 
 
 class SupplierAssessmentResponse(BaseModel):
