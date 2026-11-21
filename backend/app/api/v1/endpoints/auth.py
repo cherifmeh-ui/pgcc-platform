@@ -409,7 +409,7 @@ async def change_password(
         raise HTTPException(status_code=401, detail="Token invalide ou expiré.")
 
     email = data.get("sub")
-    result = await db.execute(select(User).where(User.email == email))
+    result = await db.execute(select(User).where(User.email == email).with_for_update())
     user = result.scalar_one_or_none()
 
     if not user:
