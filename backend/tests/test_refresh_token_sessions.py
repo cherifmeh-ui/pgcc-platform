@@ -84,6 +84,21 @@ async def test_refresh_session_persist_rejects_missing_exp(monkeypatch):
     db = FakeDB()
     user = SimpleNamespace(id=uuid4())
     monkeypatch.setattr(auth_endpoint, "decode_token", lambda token, expected_type: {"jti": "id"})
-    with pytest.raises(KeyError):
+    from fastapi import HTTPException
+    with pytest.raises(HTTPException) as exc:
         await auth_endpoint._persist_refresh_session(db, user, "token")
+    assert exc.value.status_code == 401
+    assert db.added == []
+
+
+@pytest.mark.parametrize("expiry", [None, "not-a-number", True])
+@pytest.mark.asyncio
+async def test_refresh_session_persist_rejects_invalid_exp(monkeypatch, expiry):
+    db = FakeDB()
+    user = SimpleNamespace(id=uuid4())
+    monkeypatch.setattr(auth_endpoint, "decode_token", lambda token, expected_type: {"jti": "id", "exp": expiry})
+    from fastapi import HTTPException
+    with pytest.raises(HTTPException) as exc:
+        await auth_endpoint._persist_refresh_session(db, user, "token")
+    assert exc.value.status_code == 401
     assert db.added == []
