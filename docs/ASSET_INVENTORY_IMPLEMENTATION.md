@@ -97,3 +97,5 @@ Tests unitaires ajoutés : chaîne de dépendances, actif non lié, chemins mult
 - Les relations dont une extrémité n'appartient pas à l'inventaire actif sont exclues du graphe.
 - L'interface Cartographie fournit un panneau de graphe avec recherche, filtre par type de relation, inventaire des nœuds et liste des relations. Cette première version est une vue structurée, pas encore une visualisation géométrique interactive de type force-directed.
 - Tests API ajoutés pour un graphe non vide et un inventaire vide.
+
+- La suppression d'une relation d'actif est désormais disponible via `DELETE /assets/{asset_id}/relationships/{relationship_id}`, avec vérification que la relation concerne bien l'actif fourni, permission `assets:update`, journalisation et test API.
