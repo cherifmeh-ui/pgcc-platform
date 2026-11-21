@@ -1,5 +1,5 @@
 """Asset inventory and dependency graph API."""
-from datetime import datetime, timedelta, timezone
+from datetime import date, datetime, timedelta, timezone
 import csv
 import io
 from typing import Literal
@@ -15,7 +15,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from app.api.deps import require_permission
 from app.core.database import get_db
 from app.models.asset import Asset, AssetRelationship, AssetRiskLink
-from app.models.supplier import Supplier, SupplierAssetLink
+from app.models.supplier import Supplier, SupplierAssetLink, SupplierAccessRequest
 from app.models.risk import Risk
 from app.models.application import Application
 from app.models.user import User
@@ -690,7 +690,8 @@ async def get_asset_impact(
     impacted = _compute_asset_impact(asset_id, rel_result.all())
     impacted_ids = [item[0] for item in impacted]
     supplier_links_by_asset: dict[UUID, list[dict]] = {}
-    supplier_summary = {"total_suppliers": 0, "active_relationships": 0, "privileged_access": 0, "data_access": 0}
+    supplier_summary = {"total_suppliers": 0, "active_relationships": 0, "declared_privileged_relationships": 0, "declared_data_access_relationships": 0, "active_authorizations": 0, "authorized_privileged_access": 0, "authorized_data_access": 0}
+    authorized_access_by_asset: dict[UUID, list[dict]] = {}
     supplier_access_available = role_has_permission((current_user.role or "").lower(), "suppliers", "read_assets")
     if supplier_access_available:
         relevant_asset_ids = [asset_id, *impacted_ids]
@@ -717,15 +718,46 @@ async def get_asset_impact(
             unique_suppliers.add(supplier_id)
             supplier_summary["active_relationships"] += 1
             if access_level == "Privilégié":
-                supplier_summary["privileged_access"] += 1
+                supplier_summary["declared_privileged_relationships"] += 1
             if data_access:
-                supplier_summary["data_access"] += 1
+                supplier_summary["declared_data_access_relationships"] += 1
         supplier_summary["total_suppliers"] = len(unique_suppliers)
+        today = date.today()
+        authorization_result = await db.execute(
+            select(
+                SupplierAccessRequest.asset_id, Supplier.id, Supplier.code, Supplier.legal_name,
+                SupplierAccessRequest.id, SupplierAccessRequest.access_level,
+                SupplierAccessRequest.data_access, SupplierAccessRequest.start_date,
+                SupplierAccessRequest.end_date, SupplierAccessRequest.review_due_at,
+            )
+            .join(Supplier, Supplier.id == SupplierAccessRequest.supplier_id)
+            .where(
+                SupplierAccessRequest.asset_id.in_(relevant_asset_ids),
+                SupplierAccessRequest.status == "Approuvé",
+                SupplierAccessRequest.start_date <= today,
+                SupplierAccessRequest.end_date >= today,
+                Supplier.archived_at.is_(None),
+            )
+        )
+        for linked_asset_id, supplier_id, supplier_code, supplier_name, authorization_id, access_level, data_access, start_date, end_date, review_due_at in authorization_result.all():
+            authorized_access_by_asset.setdefault(linked_asset_id, []).append({
+                "authorization_id": authorization_id, "supplier_id": supplier_id,
+                "supplier_code": supplier_code, "supplier_name": supplier_name,
+                "access_level": access_level, "data_access": data_access,
+                "start_date": start_date, "end_date": end_date, "review_due_at": review_due_at,
+                "status": "Approuvé",
+            })
+            supplier_summary["active_authorizations"] += 1
+            if access_level == "Privilégié":
+                supplier_summary["authorized_privileged_access"] += 1
+            if data_access:
+                supplier_summary["authorized_data_access"] += 1
     source_suppliers = supplier_links_by_asset.get(asset_id, [])
+    source_authorizations = authorized_access_by_asset.get(asset_id, [])
     if not impacted:
         empty_summary = {"total": 0, "unacceptable": 0, "critical": 0, "high": 0, "moderate": 0, "low": 0, "by_status": {}}
         return {
-            "source": {"id": source.id, "reference": source.reference, "name": source.name, "linked_suppliers": source_suppliers},
+            "source": {"id": source.id, "reference": source.reference, "name": source.name, "linked_suppliers": source_suppliers, "active_supplier_authorizations": source_authorizations},
             "impacted_assets": [], "total_impacted": 0, "risk_summary": empty_summary,
             "supplier_summary": supplier_summary, "supplier_access_available": supplier_access_available,
         }
@@ -765,6 +797,7 @@ async def get_asset_impact(
             "direction": asset.direction, "application_id": asset.application_id,
             "dependency_distance": distance, "linked_risks": risks_by_asset.get(asset.id, []),
             "linked_suppliers": supplier_links_by_asset.get(asset.id, []),
+            "active_supplier_authorizations": authorized_access_by_asset.get(asset.id, []),
         })
     return {
         "source": {"id": source.id, "reference": source.reference, "name": source.name, "linked_suppliers": source_suppliers},
