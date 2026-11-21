@@ -102,6 +102,7 @@ async def list_actions(
     db: AsyncSession = Depends(get_db),
     current_user: User = require_permission("actions", "read"),
     risk_id: Optional[UUID] = Query(None, description="Filtrer par risque spécifique"),
+    iso_control_id: Optional[int] = Query(None, gt=0, description="Filtrer par contrôle ISO"),
     status_filter: Optional[ActionStatus] = Query(None, alias="status", description="Filtrer par statut"),
 ):
     """Liste toutes les actions, optionnellement filtrées par risque ou statut."""
@@ -110,6 +111,8 @@ async def list_actions(
     conditions = []
     if risk_id:
         conditions.append(ActionItem.risk_id == risk_id)
+    if iso_control_id:
+        conditions.append(ActionItem.iso_control_id == iso_control_id)
     if status_filter:
         conditions.append(ActionItem.status == status_filter)
         
