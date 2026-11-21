@@ -1,7 +1,6 @@
 """Add traceable supplier-to-asset relationships."""
 from alembic import op
 import sqlalchemy as sa
-import sqlalchemy as sa
 from sqlalchemy.dialects import postgresql
 
 revision = "0015_supplier_asset_links"
@@ -31,9 +30,12 @@ def upgrade() -> None:
             sa.CheckConstraint("status IN ('Actif', 'Suspendu', 'Terminé')", name="ck_supplier_asset_links_status"),
             sa.UniqueConstraint("supplier_id", "asset_id", "relationship_type", name="uq_supplier_asset_link"),
         )
-    op.create_index("ix_supplier_asset_links_supplier_id", "supplier_asset_links", ["supplier_id"])
-    op.create_index("ix_supplier_asset_links_asset_id", "supplier_asset_links", ["asset_id"])
-    op.create_index("ix_supplier_asset_links_asset_status", "supplier_asset_links", ["asset_id", "status"])
+    if "ix_supplier_asset_links_supplier_id" not in {item["name"] for item in sa.inspect(op.get_bind()).get_indexes("supplier_asset_links")}:
+        op.create_index("ix_supplier_asset_links_supplier_id", "supplier_asset_links", ["supplier_id"])
+    if "ix_supplier_asset_links_asset_id" not in {item["name"] for item in sa.inspect(op.get_bind()).get_indexes("supplier_asset_links")}:
+        op.create_index("ix_supplier_asset_links_asset_id", "supplier_asset_links", ["asset_id"])
+    if "ix_supplier_asset_links_asset_status" not in {item["name"] for item in sa.inspect(op.get_bind()).get_indexes("supplier_asset_links")}:
+        op.create_index("ix_supplier_asset_links_asset_status", "supplier_asset_links", ["asset_id", "status"])
 
 
 def downgrade() -> None:
