@@ -85,3 +85,5 @@ L'interface affiche un inventaire et des relations sous forme de liste. Elle ne 
 - Security review identified that asset-side risk-link listing must require both `assets:read` and `risks:read`; this additional backend check was added in commit `74abe1d`.
 - The inverse risk endpoint already requires `risks:read` and `assets:read`.
 - Latest CI results for commits after these fixes are pending; no full non-regression claim until green.
+
+- CI on `f7fffe5` exposed a second escaped-newline syntax error in `AssetsView.vue`; normalized the handler boundaries in `2b27479`. CI for this latest commit is pending.
