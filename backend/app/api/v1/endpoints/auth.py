@@ -431,6 +431,18 @@ async def refresh_tokens(
     if not user.is_active:
         raise HTTPException(status_code=403, detail="Compte désactivé.")
 
+    if user.is_locked:
+        raise HTTPException(
+            status_code=status.HTTP_423_LOCKED,
+            detail="Compte temporairement verrouillé. Réessayez plus tard.",
+        )
+
+    if user.must_change_password:
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="Changement de mot de passe obligatoire avant renouvellement de session.",
+        )
+
     # Revoke refresh tokens issued before the last password change.
     password_changed_at = user.password_changed_at
     token_issued_at = data.get("iat")
