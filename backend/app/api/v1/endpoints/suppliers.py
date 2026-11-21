@@ -410,8 +410,13 @@ async def create_supplier_access_request(
     current_user: User = require_permission("suppliers", "request_access"),
 ):
     supplier_result = await db.execute(select(Supplier).where(Supplier.id == supplier_id, Supplier.archived_at.is_(None)))
-    if supplier_result.scalar_one_or_none() is None:
+    supplier = supplier_result.scalar_one_or_none()
+    if supplier is None:
         raise HTTPException(status_code=404, detail="Fournisseur introuvable ou archivé")
+    if supplier.status not in ("Approuvé", "Approuvé sous conditions"):
+        raise HTTPException(status_code=422, detail="Le fournisseur doit être approuvé avant toute demande d’accès")
+    if data.start_date < date.today():
+        raise HTTPException(status_code=422, detail="Une demande d’accès ne peut pas être rétroactive")
     link_result = await db.execute(select(SupplierAssetLink).where(
         SupplierAssetLink.id == data.supplier_asset_link_id,
         SupplierAssetLink.supplier_id == supplier_id,
@@ -461,6 +466,18 @@ async def decide_supplier_access_request(
         raise HTTPException(status_code=409, detail="Cette demande a déjà été traitée")
     if access_request.requested_by_id == current_user.id:
         raise HTTPException(status_code=403, detail="Le demandeur ne peut pas approuver sa propre demande")
+    supplier_result = await db.execute(select(Supplier).where(Supplier.id == supplier_id, Supplier.archived_at.is_(None)))
+    supplier = supplier_result.scalar_one_or_none()
+    link_result = await db.execute(select(SupplierAssetLink).where(
+        SupplierAssetLink.id == access_request.supplier_asset_link_id,
+        SupplierAssetLink.status == "Actif",
+    ))
+    link = link_result.scalar_one_or_none()
+    if data.decision == "Approuvé":
+        if supplier is None or supplier.status not in ("Approuvé", "Approuvé sous conditions") or link is None:
+            raise HTTPException(status_code=422, detail="Le fournisseur ou la relation à l’actif n’est plus éligible")
+        if access_request.start_date < date.today() or access_request.end_date < date.today():
+            raise HTTPException(status_code=422, detail="La période demandée est échue ou rétroactive")
     access_request.status = data.decision
     access_request.decided_by_id = current_user.id
     access_request.decided_at = datetime.now(timezone.utc)
@@ -496,6 +513,32 @@ async def revoke_supplier_access_request(
     await db.commit()
     await db.refresh(access_request)
     await log_action(user_email=current_user.email, action="REVOKE_SUPPLIER_ACCESS", resource="supplier_access_requests", resource_id=str(access_request.id), details=f"Supplier access revoked: {data.reason}", event_type="SUPPLIER", request=request)
+    return access_request
+
+
+@router.post("/{supplier_id}/access-requests/{access_request_id}/expire", response_model=SupplierAccessRequestResponse)
+async def expire_supplier_access_request(
+    supplier_id: UUID,
+    access_request_id: UUID,
+    request: Request,
+    db: AsyncSession = Depends(get_db),
+    current_user: User = require_permission("suppliers", "expire_access"),
+):
+    result = await db.execute(select(SupplierAccessRequest).where(
+        SupplierAccessRequest.id == access_request_id,
+        SupplierAccessRequest.supplier_id == supplier_id,
+    ))
+    access_request = result.scalar_one_or_none()
+    if access_request is None:
+        raise HTTPException(status_code=404, detail="Autorisation introuvable")
+    if access_request.status not in ("Approuvé", "Suspendu"):
+        raise HTTPException(status_code=409, detail="Seule une autorisation approuvée ou suspendue peut expirer")
+    if access_request.end_date >= date.today():
+        raise HTTPException(status_code=409, detail="La date de fin de l’autorisation n’est pas encore dépassée")
+    access_request.status = "Expiré"
+    await db.commit()
+    await db.refresh(access_request)
+    await log_action(user_email=current_user.email, action="EXPIRE_SUPPLIER_ACCESS", resource="supplier_access_requests", resource_id=str(access_request.id), details=f"Supplier access expired on {access_request.end_date}", event_type="SUPPLIER", request=request)
     return access_request
 
 
