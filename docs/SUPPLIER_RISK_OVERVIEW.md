@@ -46,3 +46,25 @@ La migration `0019_supplier_risk_snapshots` crée une table d'instantanés immua
 - Une seconde capture du même mois est refusée avec HTTP 409; les instantanés ne sont pas écrasés.
 - Chaque enregistrement conserve les indicateurs JSON calculés, la date du mois, l'utilisateur ayant capturé et l'horodatage.
 - Cette historisation est déclenchée explicitement par un utilisateur autorisé; elle ne prétend pas être une tâche planifiée automatique.
+
+
+## Comparaison mensuelle et détection des évolutions
+
+**Endpoint :** `GET /api/v1/suppliers/overview/trends?limit=12`
+
+- Compare les deux derniers instantanés mensuels disponibles, quel que soit leur espacement.
+- Les indicateurs à sens défavorable explicite sont classés en amélioration, stabilité ou dégradation : fournisseurs critiques sans évaluation à jour, évaluations en retard, revues d'accès en retard et contrats avec clauses SSI manquantes.
+- Les échéances contractuelles, les accès privilégiés actifs et le nombre de risques liés sont affichés comme variations à analyser. Leur hausse n'est pas automatiquement assimilée à une dégradation.
+- Si l'historique ou une valeur manque, la comparaison affiche des données insuffisantes plutôt que de fabriquer un delta.
+- La comparaison ne calcule aucun score fournisseur et n'entraîne aucune modification automatique du registre central des risques.
+
+## Concentration des risques fournisseurs
+
+**Endpoint :** `GET /api/v1/suppliers/overview/concentration?limit=10`
+
+- Classe les fournisseurs actifs selon le niveau maximal des risques centraux qui leur sont associés, le nombre de risques distincts liés et le nombre d'autorisations privilégiées actives.
+- Présente la répartition des risques liés par niveau, sans recalculer les niveaux.
+- Un même risque lié plusieurs fois au même fournisseur n'est compté qu'une fois.
+- Les autorisations prises en compte sont approuvées et couvrent la date courante.
+- Ce classement est un outil de priorisation RSSI : il ne constitue pas une note globale de risque du fournisseur ni une décision automatique.
+- Permissions : `suppliers:read` et `risks:read`.
