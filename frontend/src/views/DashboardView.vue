@@ -70,7 +70,7 @@
 
     <!-- Pilotage TPRM partagé RSSI / Direction Générale -->
     <section class="tprm-dashboard" v-if="canReadTprm">
-      <div class="tprm-heading"><div><h2>Pilotage des risques fournisseurs (TPRM)</h2><p>Vue consolidée pour le RSSI et la Direction Générale — sans recalcul automatique des risques.</p></div><button class="action-btn secondary" @click="loadTprmDashboard" :disabled="tprmLoading">{{tprmLoading?'Actualisation…':'Actualiser TPRM'}}</button></div>
+      <div class="tprm-heading"><div><h2>Pilotage des risques fournisseurs (TPRM)</h2><p>Vue consolidée pour le RSSI et la Direction Générale — sans recalcul automatique des risques.</p></div><div class="tprm-actions"><button class="action-btn secondary" @click="loadTprmDashboard" :disabled="tprmLoading">{{tprmLoading?'Actualisation…':'Actualiser TPRM'}}</button><button class="action-btn primary" @click="printTprmReport">Exporter le rapport PDF</button></div></div>
       <p v-if="tprmError" class="error-banner">{{tprmError}}</p>
       <div v-if="tprmOverview" class="kpi-grid">
         <div class="kpi-card"><span class="kpi-value">{{tprmOverview.suppliers.total_active}}</span><span class="kpi-label">Fournisseurs actifs</span></div>
@@ -195,6 +195,7 @@ ChartJS.register(Title, Tooltip, Legend, ArcElement, CategoryScale, LinearScale,
 const authStore = useAuthStore();
 const canReadTprm = computed(() => authStore.canAccessModule('suppliers','read') && authStore.canAccessModule('risks','read'));
 const tprmOverview=ref(null),tprmTrends=ref(null),tprmConcentration=ref([]),tprmLoading=ref(false),tprmError=ref('');
+function printTprmReport(){window.print()}
 async function loadTprmDashboard(){
   if(!canReadTprm.value)return;
   tprmLoading.value=true;tprmError.value='';
@@ -465,7 +466,7 @@ h1 { color: #0f172a; font-size: 1.8rem; margin-bottom: 0.25rem; }
 .tag-app { background: #dbeafe; color: #1d4ed8; padding: 0.3rem 0.6rem; border-radius: 4px; font-size: 0.85rem; font-weight: 500; }
 
 /* Recent Risks Table */
-.tprm-dashboard{margin:1.5rem 0;padding:1.25rem;background:#fff;border:1px solid #e2e8f0;border-radius:12px}.tprm-heading{display:flex;justify-content:space-between;align-items:center;gap:1rem}.tprm-heading h2{font-size:1.3rem;color:#334155;margin:0 0 .35rem}.tprm-heading p,.tprm-muted{font-size:.85rem;color:#64748b}.tprm-list{list-style:none;padding:0;margin:0}.tprm-list li{display:flex;justify-content:space-between;gap:1rem;padding:.65rem 0;border-bottom:1px solid #e2e8f0}.tprm-list .deteriorating{color:#b91c1c;font-weight:600}.tprm-list .improving{color:#166534;font-weight:600}.tprm-table-wrap{overflow-x:auto}.tprm-dashboard .kpi-grid{margin-top:1rem}.tprm-dashboard .grid-layout{margin-top:1rem}.tprm-dashboard .card h3{font-size:1rem;margin:0 0 .75rem;color:#334155}
+.tprm-dashboard{margin:1.5rem 0;padding:1.25rem;background:#fff;border:1px solid #e2e8f0;border-radius:12px}.tprm-heading{display:flex;justify-content:space-between;align-items:center;gap:1rem}.tprm-actions{display:flex;gap:.5rem;flex-wrap:wrap}.tprm-heading h2{font-size:1.3rem;color:#334155;margin:0 0 .35rem}.tprm-heading p,.tprm-muted{font-size:.85rem;color:#64748b}.tprm-list{list-style:none;padding:0;margin:0}.tprm-list li{display:flex;justify-content:space-between;gap:1rem;padding:.65rem 0;border-bottom:1px solid #e2e8f0}.tprm-list .deteriorating{color:#b91c1c;font-weight:600}.tprm-list .improving{color:#166534;font-weight:600}.tprm-table-wrap{overflow-x:auto}.tprm-dashboard .kpi-grid{margin-top:1rem}.tprm-dashboard .grid-layout{margin-top:1rem}.tprm-dashboard .card h3{font-size:1rem;margin:0 0 .75rem;color:#334155}
 .recent-risks-section { background: white; border-radius: 12px; padding: 1.5rem; box-shadow: 0 2px 8px rgba(0,0,0,0.08); margin-top: 2rem;}
 .loading-state { display: flex; align-items: center; justify-content: center; gap: 0.5rem; padding: 2rem; color: #64748b; }
 .spinner-small { width: 20px; height: 20px; border: 3px solid #e2e8f0; border-top-color: #0ea5e9; border-radius: 50%; animation: spin 0.8s linear infinite; }
@@ -479,4 +480,5 @@ h1 { color: #0f172a; font-size: 1.8rem; margin-bottom: 0.25rem; }
 .badge.high { background: #f97316; }
 .badge.medium { background: #eab308; }
 .badge.low { background: #22c55e; }
+@media print{body *{visibility:hidden!important}.tprm-dashboard,.tprm-dashboard *{visibility:visible!important}.tprm-dashboard{position:absolute;left:0;top:0;width:100%;margin:0;padding:0;border:0;box-shadow:none}.tprm-dashboard button{display:none!important}.tprm-dashboard .grid-layout{grid-template-columns:1fr 1fr}.tprm-dashboard .kpi-grid{grid-template-columns:repeat(3,1fr)}.tprm-dashboard .card{break-inside:avoid;box-shadow:none;border:1px solid #cbd5e1}}
 </style>
