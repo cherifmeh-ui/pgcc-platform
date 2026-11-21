@@ -103,3 +103,12 @@ Tests unitaires ajoutés : chaîne de dépendances, actif non lié, chemins mult
 - L'interface affiche maintenant une visualisation SVG circulaire du graphe avec nœuds colorés par criticité, relations, recherche et filtre par type. Il s'agit d'une disposition déterministe, non d'un algorithme de placement automatique avancé.
 - Les relations peuvent être supprimées depuis le panneau de dépendances; la suppression est journalisée et limitée à une relation associée à l'actif sélectionné.
 - Les tests ajoutés ont été corrigés après CI : les fixtures utilisent désormais des UUID valides.
+
+
+## Graphe — navigation et analyse d'impact
+
+- Les nœuds SVG sont sélectionnables et mettent en évidence l'actif choisi.
+- Le panneau de sélection affiche le contexte disponible : type, criticité, cycle de vie, propriétaire et localisation.
+- Un raccourci permet de lancer l'analyse d'impact de l'actif sélectionné.
+- L'API du graphe inclut désormais le statut de cycle de vie, propriétaire et localisation, en plus des données de base.
+- La sélection est réinitialisée à l'ouverture du graphe pour éviter un état obsolète.
