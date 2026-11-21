@@ -72,6 +72,16 @@ PERMISSIONS: dict[str, dict[str, list[str]]] = {
         "export": [Role.ADMIN.value, Role.AUDITOR.value],
     },
     
+    # --- Gestion des fournisseurs et tiers (TPRM) ---
+    "suppliers": {
+        "read": [Role.ADMIN.value, Role.EXECUTIVE.value, Role.AUDITOR.value],
+        "create": [Role.ADMIN.value],
+        "update": [Role.ADMIN.value],
+        "archive": [Role.ADMIN.value],
+        "manage_contacts": [Role.ADMIN.value],
+        "export": [Role.ADMIN.value, Role.AUDITOR.value],
+    },
+    
     # --- Menaces & Vulnérabilités ---
     "threats": {
         "read": [Role.ADMIN.value, Role.EXECUTIVE.value, Role.AUDITOR.value],
