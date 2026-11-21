@@ -55,3 +55,13 @@ Le MVP ne transforme pas automatiquement les applications existantes en actifs :
 ## 6. Validation
 
 Le workflow GitHub Actions `Backend checks` (compilation Python, tests unitaires et build frontend) a été observé en succès sur la version initiale de ce MVP. Les derniers changements de permissions et tests doivent être confirmés par le workflow déclenché sur le commit courant.
+
+
+## 7. Intégration au registre des risques — première tranche
+
+- Migration `0007_asset_risk_links` et modèle `AssetRiskLink` : liaison explicite many-to-many Asset/Risk.
+- API : `GET/POST /api/v1/assets/{asset_id}/risks`, `DELETE /api/v1/assets/{asset_id}/risks/{risk_id}`.
+- API inverse de consultation : `GET /api/v1/risks/{risk_id}/assets`.
+- Les associations comportent un contexte facultatif, auteur et date; mutations journalisées.
+- Migration `0008_asset_application_cardinality` retire la contrainte 1:1 entre Asset et Application; une application peut désormais être associée à plusieurs actifs techniques.
+- Les routes existantes de risques et actifs sont conservées. Les tests de schéma sont étendus. La validation runtime/CI reste à confirmer sur le HEAD courant.
