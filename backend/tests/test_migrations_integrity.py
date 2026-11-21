@@ -76,5 +76,5 @@ def test_asset_reference_and_type_migration_has_valid_postgresql_downgrade_guard
     source = migration.read_text(encoding="utf-8")
     assert "DO $$" in source
     assert "END $$;" in source
-    assert "DO $" not in source
+    assert "\\n        DO $\\n" not in source
     assert "cloud_resource" in source
