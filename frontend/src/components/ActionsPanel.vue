@@ -89,7 +89,7 @@
                   <button type="button" class="verification-toggle" @click="openVerification(act)">Vérification d'efficacité · {{ verificationHistory[act.id]?.length || 0 }}</button>
                   <div v-if="verificationActionId === act.id" class="verification-form">
                     <article v-for="record in (verificationHistory[act.id] || [])" :key="record.id" class="verification-record">
-                      <strong>{{ record.outcome }}</strong> · {{ formatIsoAssessmentDate(record.verified_at) }}
+                      <strong>{{ verificationOutcomeLabel(record.outcome) }}</strong> · {{ formatIsoAssessmentDate(record.verified_at) }}
                       <p>{{ record.notes }}</p>
                     </article>
                     <label>Résultat
@@ -203,6 +203,13 @@ async function loadControlAssessments(refCode) {
 }
 function formatIsoAssessmentDate(value) {
   return value ? new Date(value).toLocaleDateString('fr-FR') : '—';
+}
+function verificationOutcomeLabel(outcome) {
+  return {
+    Effective: 'Efficace',
+    Ineffective: 'Inefficace',
+    'Follow-up required': 'Suivi complémentaire requis',
+  }[outcome] || outcome;
 }
 
 async function openVerification(action) {
