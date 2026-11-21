@@ -272,3 +272,5 @@ The initial code-level review found that DOCX extraction joined paragraphs/table
 - Added a regression test that scans backend endpoint source files for literal `require_permission(module, action)` declarations and verifies every pair exists in the centralized `PERMISSIONS` matrix.
 - This catches endpoints using an undeclared module/action that would otherwise fail closed unexpectedly.
 - This is a consistency check, not a complete authorization proof: role-level behavior and routes protected by other mechanisms still require separate tests.
+
+- The RBAC audit test itself initially had a malformed regex literal; CI caught the collection-time syntax error. The regex was simplified using a triple-quoted raw string and the fix is on the branch. Validation of that latest test revision is pending.
