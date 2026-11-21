@@ -7,7 +7,7 @@ from uuid import UUID
 
 from fastapi import APIRouter, Depends, HTTPException, Query, Request, UploadFile, File, status
 from fastapi.responses import Response
-from pydantic import BaseModel, Field
+from pydantic import BaseModel, Field, field_validator
 from sqlalchemy import select, func
 from sqlalchemy.orm import aliased
 from sqlalchemy.ext.asyncio import AsyncSession
@@ -37,6 +37,14 @@ RelationshipType = Literal[
 
 class AssetFields(BaseModel):
     reference: str = Field(min_length=1, max_length=50)
+
+    @field_validator("reference")
+    @classmethod
+    def normalize_reference(cls, value: str) -> str:
+        normalized = value.strip()
+        if not normalized:
+            raise ValueError("La référence ne peut pas être vide")
+        return normalized
     name: str = Field(min_length=1, max_length=200)
     description: str | None = None
     asset_type: AssetType = "other"
@@ -72,6 +80,16 @@ class AssetCreate(AssetFields):
 
 class AssetUpdate(BaseModel):
     reference: str | None = Field(default=None, min_length=1, max_length=50)
+
+    @field_validator("reference")
+    @classmethod
+    def normalize_reference(cls, value: str | None) -> str | None:
+        if value is None:
+            return None
+        normalized = value.strip()
+        if not normalized:
+            raise ValueError("La référence ne peut pas être vide")
+        return normalized
     name: str | None = Field(default=None, min_length=1, max_length=200)
     description: str | None = None
     asset_type: AssetType | None = None
