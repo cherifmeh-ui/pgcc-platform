@@ -68,3 +68,11 @@ La migration `0019_supplier_risk_snapshots` crée une table d'instantanés immua
 - Les autorisations prises en compte sont approuvées et couvrent la date courante.
 - Ce classement est un outil de priorisation RSSI : il ne constitue pas une note globale de risque du fournisseur ni une décision automatique.
 - Permissions : `suppliers:read` et `risks:read`.
+
+
+## Pilotage RSSI / Direction Générale et rapport PDF
+
+- Le tableau de bord stratégique consomme les indicateurs consolidés TPRM, les tendances mensuelles et le classement des fournisseurs concentrant les risques.
+- Les rôles RSSI/administrateur et Direction Générale accèdent à cette vue selon les permissions serveur `suppliers:read` et `risks:read`.
+- Le bouton **Exporter le rapport PDF** ouvre la fonction d'impression du navigateur, avec une feuille de style dédiée qui isole la synthèse TPRM. L'utilisateur peut choisir « Enregistrer au format PDF » dans la boîte de dialogue d'impression.
+- Il s'agit d'une génération côté navigateur via impression, et non d'un fichier PDF produit par le serveur. Aucun service ou paquet PDF supplémentaire n'est requis.
