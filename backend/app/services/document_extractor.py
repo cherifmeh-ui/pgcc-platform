@@ -6,6 +6,7 @@ from pypdf import PdfReader
 from docx import Document as DocxDocument
 
 class DocumentExtractor:
+    MAX_EXTRACTED_CHARS = 2_000_000
     
     @staticmethod
     def extract_text(file_bytes: bytes, filename: str) -> Tuple[str, str]:
@@ -24,9 +25,8 @@ class DocumentExtractor:
                 raise ValueError(f"Format non supporté : .{ext}.")
                 
         except Exception as e:
-            print(f"❌ Erreur extraction {filename}: {str(e)}")
-            # Ne pas lever d'exception bloquante ici, retourner une erreur propre
-            raise ValueError(f"Echec extraction : {str(e)[:80]}...")
+            # Avoid logging untrusted filenames or parser details to stdout.
+            raise ValueError("Échec de l'extraction du document. Vérifiez son format et son intégrité.") from e
 
 def _extract_pdf_limited(data: bytes, max_pages: int = 50) -> str:
     """Extraction PDF avec limite de pages pour éviter timeouts."""
@@ -57,7 +57,10 @@ def _extract_pdf_limited(data: bytes, max_pages: int = 50) -> str:
     if total_pages > max_pages:
         suffix = f"\n\n[NOTE : Document tronqué après {max_pages} pages sur {total_pages} totales]"
         
-    return '\n\n'.join(text_parts) + suffix
+    extracted = '\n\n'.join(text_parts) + suffix
+    if len(extracted) > DocumentExtractor.MAX_EXTRACTED_CHARS:
+        extracted = extracted[:DocumentExtractor.MAX_EXTRACTED_CHARS] + "\n\n[NOTE : Texte tronqué à la limite de sécurité.]"
+    return extracted
 
 def _extract_docx_safe(data: bytes) -> str:
     """Extraction Word robuste."""
@@ -67,7 +70,10 @@ def _extract_docx_safe(data: bytes) -> str:
     if not paragraphs:
         raise ValueError("Document Word vide ou illisible.")
         
-    return '\n\n'.join(paragraphs)
+    extracted = '\n\n'.join(paragraphs)
+    if len(extracted) > DocumentExtractor.MAX_EXTRACTED_CHARS:
+        extracted = extracted[:DocumentExtractor.MAX_EXTRACTED_CHARS] + "\n\n[NOTE : Texte tronqué à la limite de sécurité.]"
+    return extracted
 
 def _validate_docx_archive(data: bytes, max_entries: int = 1000, max_uncompressed: int = 50 * 1024 * 1024) -> None:
     """Reject malformed or suspiciously large DOCX ZIP containers before parsing."""
