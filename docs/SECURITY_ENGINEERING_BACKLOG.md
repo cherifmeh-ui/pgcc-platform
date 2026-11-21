@@ -118,3 +118,12 @@ Status: active engineering review. This is a static review backlog, not a securi
 - Action assignee validation currently matches active users by email, but `assigned_to` remains a free-text column. Plan a migration to replace or supplement it with a foreign key to `users.id` and retain a display field only if needed.
 - Compliance matrix counters use names `partial_count` and `uncovered_count`, while the underlying statuses are `À vérifier` and `Non évalué`. This is declarative indicator logic, not a verified compliance assessment; rename/clarify counters and add tests before exposing a compliance percentage as a KPI.
 - Document indexing is synchronous. Its endpoint returns HTTP 200; the service still needs a background-job architecture before returning 202.
+
+
+## Authentication session review (2026-11-21)
+
+- Refresh tokens are JWTs with a seven-day lifetime and are exchanged for new token pairs, but refresh-token rotation is not persisted or enforced. A previously issued refresh token remains usable until expiration, so theft/reuse detection and session revocation are not implemented.
+- User state and password-change timestamp are checked during refresh, but there is no per-session registry, device/session management, or revocation on logout.
+- Implement a persistent session/token-family model before claiming rotation or reuse detection. Store only a cryptographic hash of refresh tokens (or token identifiers), enforce one-time rotation transactionally, revoke the token family on reuse, and provide revocation on password change, account disable, role change, and logout.
+- Do not add a logout endpoint that only deletes client-side tokens and imply server-side revocation; it must revoke the server-side session.
+- Existing password_changed_at invalidates tokens issued before the password change; preserve this behavior and test timezone/iat boundary conditions.
