@@ -1,5 +1,8 @@
 # backend/app/services/security_logger.py
 from typing import Optional
+import logging
+
+logger = logging.getLogger(__name__)
 
 from fastapi import Request
 
@@ -43,6 +46,14 @@ async def log_action(
     resolved_event_type = event_type or _infer_event_type(resource, action)
     resolved_ip = ip_address or get_client_ip(request)
     resolved_user_agent = get_user_agent(request)
+    # Bound user-controlled fields before persistence to prevent log amplification.
+    safe_details = details[:2000] if details else None
+    safe_action = action[:100]
+    safe_resource = resource[:100] if resource else None
+    safe_resource_id = resource_id[:255] if resource_id else None
+    safe_event_type = resolved_event_type[:50]
+    safe_user_email = user_email[:255] if user_email else None
+    safe_ip = resolved_ip[:45] if resolved_ip else None
 
     async with AsyncSessionLocal() as session:
         try:
@@ -63,7 +74,7 @@ async def log_action(
             return new_log
         except Exception as exc:
             await session.rollback()
-            print(f"❌ Erreur journal de sécurité: {exc}")
+            logger.warning(\n                "Security audit logging failed (event_type=%s, resource=%s, action=%s)",\n                safe_event_type, safe_resource, safe_action,\n            )
             return None
 
 
