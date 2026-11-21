@@ -126,3 +126,15 @@ Tests unitaires ajoutés : chaîne de dépendances, actif non lié, chemins mult
 - Tests : inventaire partiellement renseigné et inventaire vide.
 
 - Le graphe permet désormais de filtrer les nœuds par type d'actif et criticité, en complément de la recherche et du filtre de relations.
+
+
+## Import CSV contrôlé
+
+- `POST /assets/import/preview` valide un CSV UTF-8, limité à 1 Mo, sans écrire en base.
+- Colonnes autorisées : champs du modèle de création d'actif; les colonnes inconnues sont rejetées.
+- Validation Pydantic des lignes, détection des doublons dans le fichier et dans l'inventaire existant (référence, hostname, numéro de série, insensible à la casse).
+- Prévisualisation des 20 premières lignes et liste des erreurs par numéro de ligne.
+- `POST /assets/import/confirm` relit et revalide le fichier, puis effectue l'insertion en transaction. Toute contrainte ou erreur annule l'ensemble; aucun actif existant n'est écrasé.
+- Permission requise : `assets:create`; l'import réussi est journalisé.
+- Interface : sélection du CSV, prévalidation, erreurs, aperçu, confirmation explicite et rafraîchissement de l'inventaire.
+- Tests ajoutés pour les doublons et colonnes inconnues.
