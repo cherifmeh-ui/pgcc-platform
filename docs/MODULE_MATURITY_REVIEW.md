@@ -237,3 +237,5 @@ The initial code-level review found that DOCX extraction joined paragraphs/table
 - Unlink now verifies that both the asset and risk exist before looking up/removing the association, avoiding ambiguous missing-link responses for orphan IDs.
 - Unit and API-level mock tests cover eligibility and missing-entity paths.
 - **Remaining validation:** PostgreSQL constraint behavior, transaction rollback and route permission tests still need integration validation.
+
+- API regression tests now exercise both rejected asset-risk link creation cases: retired lifecycle status and a non-null retirement marker, including assertions that no association is persisted.
