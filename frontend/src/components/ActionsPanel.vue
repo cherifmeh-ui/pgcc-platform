@@ -223,7 +223,11 @@ function formatDate(isoStr) {
 
 function isOverdue(isoStr) {
   if (!isoStr) return false;
-  return new Date(isoStr) < new Date();
+  const due = new Date(isoStr);
+  if (Number.isNaN(due.getTime())) return false;
+  // A date-only deadline remains valid through the end of that calendar day.
+  due.setHours(23, 59, 59, 999);
+  return due < new Date();
 }
 </script>
 
