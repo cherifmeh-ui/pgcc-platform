@@ -57,7 +57,7 @@
     </div>
 
     <!-- Table Grid Moderne -->
-    <div v-else-if="matrixData" class="table-container card-modern">\n      <p class="methodology-note">{{ matrixData.methodology }}</p>
+    <div v-else-if="matrixData" class="table-container card-modern">\n      <div class="compliance-table-toolbar"><span>{{ filteredRows.length }} contrôle(s)</span><button type="button" class="btn-export" @click="exportMatrixCsv" :disabled="filteredRows.length === 0">Exporter CSV</button></div>\n      <p class="methodology-note">{{ matrixData.methodology }}</p>
       <table class="iso-table modern">
         <thead>
           <tr>
@@ -229,6 +229,28 @@ function getStatusIcon(status) {
   }
 }
 
+function exportMatrixCsv() {
+  const headers = ['Référence', 'Titre', 'Domaine', 'Statut', 'Risques liés'];
+  const escapeCsv = (value) => {
+    let text = String(value ?? '');
+    if (/^[=+@\\-]/.test(text)) text = "'" + text;
+    return '"' + text.replace(/"/g, '""') + '"';
+  };
+  const lines = [headers, ...filteredRows.value.map(row => [
+    row.ref_code, row.title, row.domain, row.status, row.linked_risks_count
+  ])].map(row => row.map(escapeCsv).join(';'));
+  const csv = '\\uFEFF' + lines.join('\\r\\n');
+  const blob = new Blob([csv], { type: 'text/csv;charset=utf-8;' });
+  const url = URL.createObjectURL(blob);
+  const link = document.createElement('a');
+  link.href = url;
+  link.download = 'pgcc-matrice-conformite-iso27002.csv';
+  document.body.appendChild(link);
+  link.click();
+  link.remove();
+  URL.revokeObjectURL(url);
+}
+
 function getScoreClass(score) {
   if (score >= 80) return 'score-high';
   if (score >= 50) return 'score-med';
@@ -315,6 +337,10 @@ onMounted(fetchMatrix);
 </script>
 
 <style scoped>
+.compliance-table-toolbar { display:flex; justify-content:space-between; align-items:center; gap:1rem; margin-bottom:1rem; color:#64748b; font-size:.9rem; }
+.btn-export { border:1px solid #cbd5e1; background:#fff; color:#334155; padding:.5rem .8rem; border-radius:8px; cursor:pointer; font-weight:600; }
+.btn-export:hover:not(:disabled) { background:#f1f5f9; }
+.btn-export:disabled { opacity:.5; cursor:not-allowed; }
 .empty-filter-state { text-align: center !important; padding: 2rem !important; color: #64748b; font-style: italic; }
 .methodology-note { margin: 0 0 1rem; padding: 0.75rem 1rem; border-left: 4px solid #f59e0b; background: #fffbeb; color: #92400e; font-size: 0.9rem; line-height: 1.5; }
 /* Styles Page Principale (Inchangés) */
