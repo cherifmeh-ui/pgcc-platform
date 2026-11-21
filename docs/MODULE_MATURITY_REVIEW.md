@@ -332,3 +332,13 @@ The initial code-level review found that DOCX extraction joined paragraphs/table
 - `localStorage` is readable by JavaScript and increases token-exfiltration impact from an XSS. Production architecture should evaluate HttpOnly/Secure/SameSite cookies (with CSRF protections), short-lived access tokens, server-side session/refresh-token hashes, atomic rotation, reuse detection, logout and revoke-all.
 - Frontend logout currently removes local tokens only; it cannot revoke server-side refresh sessions until the session model/API exists.
 - This is an architectural security gap, not a cosmetic frontend change; keep it as a Phase 0 release gate.
+
+
+### 24. Persisted refresh-session implementation (initial backend slice)
+
+- Added `refresh_token_sessions` persistence with SHA-256 hashes of JWT `jti` values (raw refresh tokens are not stored), expiry, revocation timestamp, and replacement hash.
+- Refresh now locks the matching session row, validates ownership/expiry/revocation, revokes the old session, and persists the replacement in one transaction.
+- Reuse of a revoked token triggers revocation of the user's active refresh sessions.
+- Added logout endpoint to revoke the presented refresh session.
+- Initial login after MFA enrollment and mandatory-password-change completion persist refresh sessions.
+- Remaining: PostgreSQL concurrency integration tests, frontend logout integration, cookie/CSRF architecture decision, revoke-all endpoint, migration runtime validation.
