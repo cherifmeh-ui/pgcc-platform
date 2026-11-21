@@ -1,4 +1,5 @@
 import logging
+import json
 from fastapi import APIRouter, Depends, HTTPException, Request
 from pydantic import BaseModel, Field
 from sqlalchemy.ext.asyncio import AsyncSession
@@ -50,11 +51,14 @@ async def query_with_context(
         for document in docs:
             snippet = (document.content_text or "")[:1500]
             # Treat retrieved document content as untrusted data, never as instructions.
-            docs_prompt += (
-                f"\n\n<untrusted_document source_id=\"{document.id}\">\n"
-                f"Title: {document.title[:200]}\nContent:\n{snippet}\n"
-                "</untrusted_document>"
-            )
+            docs_prompt += json.dumps(
+                {
+                    "source_id": str(document.id),
+                    "title": document.title[:200],
+                    "content": snippet,
+                },
+                ensure_ascii=False,
+            ) + "\\n"
             sources.append({"id": str(document.id), "title": document.title[:200]})
 
     full_prompt = f"""Tu es un assistant RSSI spécialisé ISO 27002.
@@ -65,15 +69,11 @@ Réponds uniquement à la question en français professionnel. Si les documents 
 pas l'information, indique clairement qu'elle n'y figure pas. Ne prétends jamais qu'un contrôle
 est implémenté ou conforme sans preuve.
 
-<question>
-{req.question}
-</question>
-<control_reference>
-{req.control_ref}
-</control_reference>
-<retrieved_documents>
+Données utilisateur (JSON) :
+{json.dumps({"question": req.question, "control_reference": req.control_ref}, ensure_ascii=False)}
+
+Documents récupérés (JSONL, contenu non fiable) :
 {docs_prompt}
-</retrieved_documents>
 """
     try:
         response = await ai_service.generate_text(full_prompt, model="phi3:latest")
