@@ -50,3 +50,29 @@ def test_docx_extraction_is_truncated_at_character_limit(monkeypatch):
     text = document_extractor._extract_docx_safe(b"not relevant in fake")
     assert len(text) <= 800
     assert "tronqué à la limite de sécurité" in text
+
+
+
+def test_docx_extraction_includes_table_cells(monkeypatch):
+    class FakeParagraph:
+        text = "Policy paragraph"
+
+    class FakeCell:
+        def __init__(self, text):
+            self.text = text
+
+    class FakeRow:
+        cells = [FakeCell("Control A"), FakeCell("Implemented")]
+
+    class FakeTable:
+        rows = [FakeRow()]
+
+    class FakeDoc:
+        paragraphs = [FakeParagraph()]
+        tables = [FakeTable()]
+
+    monkeypatch.setattr(document_extractor, "DocxDocument", lambda _stream: FakeDoc())
+    extracted = document_extractor._extract_docx_safe(b"mock")
+
+    assert "Policy paragraph" in extracted
+    assert "Control A | Implemented" in extracted
