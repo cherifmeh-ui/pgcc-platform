@@ -34,6 +34,8 @@ async def test_update_action_rejects_unknown_assignee():
     action = MagicMock()
     action.status = ActionStatus.TODO
     action.description = None
+    action.iso_control_id = None
+    action.iso_assessment_id = None
     action_result = MagicMock()
     action_result.scalar_one_or_none.return_value = action
     assignee_result = MagicMock()
