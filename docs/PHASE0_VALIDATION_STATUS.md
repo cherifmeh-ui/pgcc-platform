@@ -235,3 +235,10 @@ Repository/static hardening is substantially progressed, but the remaining gates
 - The migration static test was also corrected to parse the actual typed Alembic function signatures (`def upgrade() -> None` / `def downgrade() -> None`).
 - Commits: `5d624a7` migration fix; `d8d2775` test correction.
 - CI must rerun; no green PostgreSQL runtime result yet.
+
+
+### Migration 0004 follow-up — baseline FK detection and test parser
+
+- Migration 0004 now detects existing action ISO foreign keys by constrained columns and referenced table, not only by the constraint name. This avoids creating duplicate FKs when SQLAlchemy baseline creates equivalent constraints with PostgreSQL-generated names.
+- Corrected static test parsing to match Alembic's typed function declarations (`def upgrade() -> None`).
+- Runtime CI for the latest migration corrections is pending.
