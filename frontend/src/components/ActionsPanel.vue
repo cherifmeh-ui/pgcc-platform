@@ -39,7 +39,13 @@
 
           <!-- Liste des Actions Existantes -->
           <div class="actions-list">
-            <h3>Tâches en cours ({{ filteredActions.length }})</h3>
+            <h3>Actions ({{ filteredActions.length }})</h3>
+            <div class="action-filters" role="group" aria-label="Filtrer les actions">
+              <button type="button" :class="{ active: actionFilter === 'all' }" @click="actionFilter = 'all'">Toutes ({{ riskActions.length }})</button>
+              <button type="button" :class="{ active: actionFilter === 'open' }" @click="actionFilter = 'open'">Ouvertes ({{ riskActions.filter(a => a.status !== 'Terminé').length }})</button>
+              <button type="button" :class="{ active: actionFilter === 'overdue' }" @click="actionFilter = 'overdue'">En retard ({{ overdueActions.length }})</button>
+              <button type="button" :class="{ active: actionFilter === 'done' }" @click="actionFilter = 'done'">Terminées ({{ riskActions.filter(a => a.status === 'Terminé').length }})</button>
+            </div>
             
             <div v-if="loading" class="loading-state">Chargement...</div>
             
@@ -107,9 +113,15 @@ const newAction = reactive({
 });
 
 // Filtrage (afficher seulement celles liées au risque actuel)
-const filteredActions = computed(() => 
-  actions.value.filter(a => a.risk_id === props.riskId)
-);
+const actionFilter = ref("all");
+const riskActions = computed(() => actions.value.filter(a => a.risk_id === props.riskId));
+const overdueActions = computed(() => riskActions.value.filter(a => a.status !== "Terminé" && isOverdue(a.due_date)));
+const filteredActions = computed(() => {
+  if (actionFilter.value === "overdue") return overdueActions.value;
+  if (actionFilter.value === "open") return riskActions.value.filter(a => a.status !== "Terminé");
+  if (actionFilter.value === "done") return riskActions.value.filter(a => a.status === "Terminé");
+  return riskActions.value;
+});
 
 // Charger les actions quand le panel s'ouvre ou que le riskId change
 watch([() => props.isOpen, () => props.riskId], ([open, id]) => {
@@ -242,6 +254,12 @@ function isOverdue(isoStr) {
 .form-row { display: grid; grid-template-columns: 1fr 1fr 1fr; gap: 0.5rem; margin-bottom: 0.5rem; }
 .btn-primary { background: #0ea5e9; color: white; border: none; padding: 0.6rem 1.2rem; border-radius: 6px; cursor: pointer; font-weight: 600; width: 100%; }
 .btn-primary:disabled { opacity: 0.6; }
+
+/* Action filters */
+.action-filters { display: flex; gap: .4rem; flex-wrap: wrap; margin: .5rem 0 1rem; }
+.action-filters button { border: 1px solid #cbd5e1; background: white; color: #334155; border-radius: 999px; padding: .35rem .7rem; cursor: pointer; font-size: .8rem; }
+.action-filters button.active { background: #0f172a; color: white; border-color: #0f172a; }
+.action-filters button:hover { border-color: #64748b; }
 
 /* Task List */
 .task-ul { list-style: none; padding: 0; margin: 0; }
