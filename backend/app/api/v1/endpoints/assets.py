@@ -670,13 +670,13 @@ async def get_asset_impact(
     )
     impacted = _compute_asset_impact(asset_id, rel_result.all())
     if not impacted:
-        empty_summary = {"total": 0, "critical": 0, "high": 0, "moderate": 0, "low": 0, "by_status": {}}
+        empty_summary = {"total": 0, "unacceptable": 0, "critical": 0, "high": 0, "moderate": 0, "low": 0, "by_status": {}}
         return {"source": {"id": source.id, "reference": source.reference, "name": source.name}, "impacted_assets": [], "total_impacted": 0, "risk_summary": empty_summary}
     impacted_ids = [item[0] for item in impacted]
     asset_result = await db.execute(select(Asset).where(Asset.id.in_(impacted_ids)))
     assets_by_id = {asset.id: asset for asset in asset_result.scalars().all()}
     risks_by_asset: dict[UUID, list[dict]] = {}
-    risk_summary = {"total": 0, "critical": 0, "high": 0, "moderate": 0, "low": 0, "by_status": {}}
+    risk_summary = {"total": 0, "unacceptable": 0, "critical": 0, "high": 0, "moderate": 0, "low": 0, "by_status": {}}
     if role_has_permission((current_user.role or "").lower(), "risks", "read"):
         risk_result = await db.execute(
             select(AssetRiskLink.asset_id, Risk.id, Risk.ref, Risk.title, Risk.risk_level, Risk.status)
@@ -693,7 +693,7 @@ async def get_asset_impact(
         risk_summary["total"] = len(unique_risks)
         for risk in unique_risks.values():
             level = risk["risk_level"]
-            bucket = "critical" if level >= 16 else "high" if level >= 10 else "moderate" if level >= 5 else "low"
+            bucket = "unacceptable" if level >= 20 else "critical" if level >= 15 else "high" if level >= 10 else "moderate" if level >= 5 else "low"
             risk_summary[bucket] += 1
             status_key = str(risk["status"] or "Non renseigné")
             risk_summary["by_status"][status_key] = risk_summary["by_status"].get(status_key, 0) + 1
