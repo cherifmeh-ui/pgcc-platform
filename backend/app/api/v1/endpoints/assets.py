@@ -286,8 +286,9 @@ async def get_asset_inventory_quality(
     missing_criticality = sum(not (asset.criticality or "").strip() for asset in assets)
     missing_direction = sum(not (asset.direction or "").strip() for asset in assets)
     now = datetime.now(timezone.utc)
-    overdue_support = sum(asset.end_of_support_date is not None and asset.end_of_support_date < now for asset in assets)
-    support_ending_90_days = sum(asset.end_of_support_date is not None and now <= asset.end_of_support_date <= now + timedelta(days=90) for asset in assets)
+    support_dates = [asset.end_of_support_date.replace(tzinfo=timezone.utc) if asset.end_of_support_date is not None and asset.end_of_support_date.tzinfo is None else asset.end_of_support_date for asset in assets]
+    overdue_support = sum(date is not None and date < now for date in support_dates)
+    support_ending_90_days = sum(date is not None and now <= date <= now + timedelta(days=90) for date in support_dates)
     return {
         "total_active": total,
         "missing_owner": missing_owner,
