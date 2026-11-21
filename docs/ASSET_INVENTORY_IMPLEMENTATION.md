@@ -140,3 +140,14 @@ Tests unitaires ajoutés : chaîne de dépendances, actif non lié, chemins mult
 - Tests ajoutés pour les doublons et colonnes inconnues.
 
 - Endpoint `GET /assets/import/template` et bouton de téléchargement du modèle CSV avec un exemple de ligne.
+
+## Pagination, filtres et export — tranche suivante
+
+- GET /assets/page fournit une pagination serveur avec total, page, taille et nombre de pages; ordre stable par nom, référence et UUID.
+- Filtres serveur combinables : recherche (nom, référence, hostname, FQDN), type, criticité, cycle de vie, direction, propriétaire, classification, localisation et inclusion optionnelle des actifs retirés.
+- GET /assets/export.csv reprend les mêmes filtres, exporte l'ensemble des résultats correspondants et journalise l'export.
+- L'export CSV neutralise les préfixes susceptibles d'être interprétés comme des formules par les tableurs.
+- La permission dédiée assets:export est réservée aux rôles Admin et Auditor; Executive ne peut pas extraire en masse les données techniques sensibles.
+- Les endpoints historiques GET /assets/ et leurs paramètres limit/offset sont conservés pour compatibilité.
+- L'interface utilise la pagination serveur, les filtres avancés et l'export CSV.
+- L'analyse d'impact expose une synthèse des risques distincts par niveau et statut, uniquement si le rôle dispose de risks:read; les risques sont dédupliqués dans les totaux lorsqu'ils concernent plusieurs actifs.
