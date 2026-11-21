@@ -67,6 +67,12 @@ class RefreshRequest(BaseModel):
     refresh_token: str
 
 
+class ChangePasswordRequiredResponse(BaseModel):
+    change_password_required: bool = True
+    change_password_token: str
+    user: dict
+
+
 class TokenPairResponse(BaseModel):
     access_token: str
     refresh_token: str
@@ -219,7 +225,7 @@ async def start_enrollment(
     )
 
 
-@router.post("/confirm-mfa", response_model=TokenPairResponse)
+@router.post("/confirm-mfa", response_model=TokenPairResponse | ChangePasswordRequiredResponse)
 async def confirm_mfa(
     payload: ConfirmMfaRequest,
     request: Request,
@@ -309,6 +315,27 @@ async def confirm_mfa(
     user.locked_until = None
 
     await db.commit()
+
+    if user.must_change_password:
+        change_password_token = create_change_password_token(subject=user.email, role=user.role)
+        await log_action(
+            user_email=user.email,
+            action="MFA_SUCCESS_PASSWORD_CHANGE_REQUIRED",
+            resource="auth",
+            details="MFA réussi; changement obligatoire du mot de passe requis",
+            event_type="AUTH",
+            request=request,
+        )
+        return ChangePasswordRequiredResponse(
+            change_password_token=change_password_token,
+            user={
+                "email": user.email,
+                "full_name": user.full_name,
+                "role": user.role,
+                "must_change_password": True,
+                "mfa_enabled": True,
+            },
+        )
 
     access_token = create_access_token(subject=user.email, role=user.role)
     refresh_token = create_refresh_token(subject=user.email)
