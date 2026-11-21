@@ -46,20 +46,24 @@
     </section>
 
     <!-- SECTION 2 : SUIVI DES PLANS D'ACTION (NOUVEAU) -->
-    <section class="pac-kpi-section" v-if="reportData && reportData.pac_stats.total > 0">
+    <section class="pac-kpi-section" v-if="actionsLoaded && actionStats.total > 0">
       <h2>Suivi des Plans d'Action Correctifs</h2>
       <div class="kpi-grid">
         <div class="kpi-card overdue-alert">
-          <span class="kpi-value">{{ reportData.pac_stats.overdue }}</span>
-          <span class="kpi-label">Tâches En Retard<br/>(Deadline dépassée)</span>
+          <span class="kpi-value">{{ actionStats.overdue }}</span>
+          <span class="kpi-label">Actions en retard<br/>(Deadline dépassée)</span>
         </div>
         <div class="kpi-card progress-active">
-          <span class="kpi-value">{{ reportData.pac_stats.in_progress }}</span>
-          <span class="kpi-label">Tâches En Cours<br/>(Traitement actif)</span>
+          <span class="kpi-value">{{ actionStats.inProgress }}</span>
+          <span class="kpi-label">Actions en cours<br/>(Traitement actif)</span>
+        </div>
+        <div class="kpi-card blocked-alert">
+          <span class="kpi-value">{{ actionStats.blocked }}</span>
+          <span class="kpi-label">Actions bloquées</span>
         </div>
         <div class="kpi-card success-rate">
-          <span class="kpi-value">{{ reportData.pac_completion_rate }}%</span>
-          <span class="kpi-label">Taux de Réalisation<br/>(Terminé / Total)</span>
+          <span class="kpi-value">{{ actionStats.completionRate }}%</span>
+          <span class="kpi-label">Taux de réalisation<br/>(Terminé / Total)</span>
         </div>
       </div>
     </section>
@@ -178,6 +182,8 @@ const generatingReport = ref(false);
 const apiError = ref(null);
 const recentRisks = ref([]);
 const reportData = ref(null); // Données du endpoint /reports/dg-summary
+const actionsLoaded = ref(false);
+const actionStats = reactive({ total: 0, overdue: 0, inProgress: 0, blocked: 0, done: 0, completionRate: 0 });
 
 // Calcul des stats depuis la liste complète (pour les KPIs rapides sans appel IA)
 const stats = reactive({
@@ -280,6 +286,27 @@ async function fetchAllRisks() {
   }
 }
 
+async function fetchActionStats() {
+  try {
+    const { data } = await apiClient.get('/actions/');
+    if (!Array.isArray(data)) throw new Error("Format invalide");
+    const now = new Date();
+    const total = data.length;
+    const done = data.filter(a => a.status === "Terminé").length;
+    actionStats.total = total;
+    actionStats.done = done;
+    actionStats.inProgress = data.filter(a => a.status === "En cours").length;
+    actionStats.blocked = data.filter(a => a.status === "Bloqué").length;
+    actionStats.overdue = data.filter(a => a.status !== "Terminé" && a.due_date && new Date(a.due_date) < now).length;
+    actionStats.completionRate = total ? Math.round((done / total) * 100) : 0;
+  } catch (err) {
+    console.error("Erreur chargement indicateurs plans d'action:", err);
+    actionStats.total = 0;
+  } finally {
+    actionsLoaded.value = true;
+  }
+}
+
 async function generateReport() {
   generatingReport.value = true;
   apiError.value = null;
@@ -323,7 +350,7 @@ function formatDate(isoString) {
   }
 }
 
-onMounted(fetchAllRisks);
+onMounted(() => { fetchAllRisks(); fetchActionStats(); });
 </script>
 
 <style scoped>
@@ -373,7 +400,8 @@ h1 { color: #0f172a; font-size: 1.8rem; margin-bottom: 0.25rem; }
 .pac-kpi-section { margin-bottom: 2rem; }
 .overdue-alert .kpi-value { color: #ef4444; } /* Rouge vif */
 .progress-active .kpi-value { color: #f97316; } /* Orange */
-.success-rate .kpi-value { color: #22c55e; } /* Vert */
+.success-rate .kpi-value { color: #22c55e; }
+.blocked-alert .kpi-value { color: #dc2626; } /* Vert */
 
 /* Charts */
 .chart-card { height: 350px; display: flex; flex-direction: column; }
