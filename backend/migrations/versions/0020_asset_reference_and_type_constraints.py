@@ -34,19 +34,24 @@ def upgrade() -> None:
             END IF;
         END $$;
     """)
-    op.drop_index("uq_assets_reference_ci", table_name="assets")
+    if "uq_assets_reference_ci" in {item["name"] for item in sa.inspect(op.get_bind()).get_indexes("assets")}:
+        if "uq_assets_reference_ci" in {item["name"] for item in sa.inspect(op.get_bind()).get_indexes("assets")}:
+        op.drop_index("uq_assets_reference_ci", table_name="assets")
     op.create_index(
         "uq_assets_reference_ci",
         "assets",
         [sa.text("lower(btrim(reference))")],
         unique=True,
     )
-    op.create_check_constraint(
-        "ck_assets_reference_nonblank",
-        "assets",
-        "btrim(reference) <> ''",
-    )
-    op.drop_constraint("ck_assets_asset_type", "assets", type_="check")
+    if "ck_assets_reference_nonblank" not in {item["name"] for item in sa.inspect(op.get_bind()).get_check_constraints("assets")}:
+        op.create_check_constraint(
+            "ck_assets_reference_nonblank",
+            "assets",
+            "btrim(reference) <> ''",
+        )
+    if "ck_assets_asset_type" in {item["name"] for item in sa.inspect(op.get_bind()).get_check_constraints("assets")}:
+        if "ck_assets_asset_type" in {item["name"] for item in sa.inspect(op.get_bind()).get_check_constraints("assets")}:
+        op.drop_constraint("ck_assets_asset_type", "assets", type_="check")
     op.create_check_constraint(
         "ck_assets_asset_type",
         "assets",
@@ -74,7 +79,8 @@ def downgrade() -> None:
         "asset_type IN ('process', 'information', 'application', 'hardware', "
         "'software', 'infrastructure', 'network', 'service', 'facility', 'other')",
     )
-    op.drop_constraint("ck_assets_reference_nonblank", "assets", type_="check")
+    if "ck_assets_reference_nonblank" in {item["name"] for item in sa.inspect(op.get_bind()).get_check_constraints("assets")}:
+        op.drop_constraint("ck_assets_reference_nonblank", "assets", type_="check")
     op.drop_index("uq_assets_reference_ci", table_name="assets")
     op.create_index(
         "uq_assets_reference_ci",
