@@ -2,9 +2,9 @@ import pytest
 from pydantic import ValidationError
 
 from app.api.v1.endpoints.suppliers import (
-    SupplierCreate, SupplierUpdate, SupplierContactCreate,
+    SupplierCreate, SupplierUpdate, SupplierContactCreate, SupplierContractCreate, SupplierContractUpdate,
 )
-from app.models.supplier import Supplier, SupplierContact
+from app.models.supplier import Supplier, SupplierContact, SupplierContract
 from app.utils.rbac import role_has_permission
 
 
@@ -67,3 +67,31 @@ def test_supplier_contact_read_is_restricted_to_admin_and_auditor():
     assert role_has_permission("auditor", "suppliers", "read_contacts")
     assert not role_has_permission("executive", "suppliers", "read_contacts")
     assert not role_has_permission("viewer", "suppliers", "read_contacts")
+
+def test_supplier_contract_validates_dates_and_normalizes_identity():
+    contract = SupplierContractCreate(reference="  CTF-2026-01 ", title="  Support SI ", start_date="2026-01-01", end_date="2026-12-31")
+    assert contract.reference == "CTF-2026-01"
+    assert contract.title == "Support SI"
+    assert contract.notice_period_days == 90
+    with pytest.raises(ValidationError):
+        SupplierContractCreate(reference="C-1", title="Contrat", start_date="2026-12-31", end_date="2026-01-01")
+
+
+def test_supplier_contract_update_rejects_invalid_notice_period():
+    with pytest.raises(ValidationError):
+        SupplierContractUpdate(notice_period_days=5000)
+
+
+def test_supplier_contract_model_links_supplier_and_document():
+    assert SupplierContract.__tablename__ == "supplier_contracts"
+    assert any(c.name == "ck_supplier_contracts_dates" for c in SupplierContract.__table__.constraints)
+    foreign_keys = {fk.parent.name: fk for fk in SupplierContract.__table__.foreign_keys}
+    assert foreign_keys["supplier_id"].ondelete == "RESTRICT"
+    assert foreign_keys["document_id"].ondelete == "RESTRICT"
+
+
+def test_supplier_contract_permissions_separate_read_and_write():
+    assert role_has_permission("admin", "suppliers", "manage_contracts")
+    assert role_has_permission("auditor", "suppliers", "read_contracts")
+    assert not role_has_permission("executive", "suppliers", "read_contracts")
+    assert not role_has_permission("auditor", "suppliers", "manage_contracts")
