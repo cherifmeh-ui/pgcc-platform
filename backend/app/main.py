@@ -1,6 +1,8 @@
 # backend/app/main.py
 from contextlib import asynccontextmanager
 
+from sqlalchemy import text
+
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 
@@ -14,9 +16,12 @@ from app.api.v1.endpoints.auth import router as auth_router
 async def lifespan(app: FastAPI):
     from app.models import user, security_log, risk  # noqa: F401
 
-    async with engine.begin() as conn:
-        await conn.run_sync(Base.metadata.create_all)
-    print("✅ PGCC | tables créées/vérifiées (Phase 2)")
+    if settings.ENVIRONMENT.lower() == "development":
+        async with engine.begin() as conn:
+            await conn.run_sync(Base.metadata.create_all)
+        print("PGCC | development schema ensured via create_all")
+    else:
+        print("PGCC | production schema must be managed through Alembic migrations")
     yield
     print("🛑 PGCC | arrêt")
 
@@ -55,11 +60,17 @@ async def root():
 
 @app.get("/health", include_in_schema=False)
 async def health():
+    try:
+        async with engine.connect() as conn:
+            await conn.execute(text("SELECT 1"))
+        db_status = "connected"
+    except Exception:
+        db_status = "unavailable"
     return {
         "status": "healthy",
         "service": "pgcc-backend",
         "phase": 4,
         "environment": settings.ENVIRONMENT,
         "ai_enabled": settings.AI_ENABLED,
-        "db": "branchée",
+        "db": db_status,
     }
