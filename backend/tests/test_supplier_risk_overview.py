@@ -1,7 +1,7 @@
 from datetime import date, datetime, timezone
 from uuid import uuid4
 
-from app.services.supplier_risk_overview import build_supplier_risk_overview, compare_supplier_risk_snapshots
+from app.services.supplier_risk_overview import build_supplier_risk_overview, compare_supplier_risk_snapshots, build_supplier_risk_concentration
 
 
 def test_supplier_risk_overview_deduplicates_risks_and_counts_only_current_access():
@@ -130,3 +130,43 @@ def test_monthly_snapshot_comparison_handles_missing_history_and_missing_values(
         "reason": "Aucun instantané mensuel disponible.",
         "metrics": [],
     }
+
+
+def test_supplier_risk_concentration_deduplicates_risks_and_counts_privileged_access():
+    supplier_a, supplier_b = uuid4(), uuid4()
+    shared_risk = uuid4()
+    rows = [
+        {"supplier_id": supplier_a, "supplier_code": "SUP-A", "supplier_name": "Alpha",
+         "criticality": "Critique", "risk_id": shared_risk, "risk_level": 18},
+        {"supplier_id": supplier_a, "supplier_code": "SUP-A", "supplier_name": "Alpha",
+         "criticality": "Critique", "risk_id": shared_risk, "risk_level": 18},
+        {"supplier_id": supplier_a, "supplier_code": "SUP-A", "supplier_name": "Alpha",
+         "criticality": "Critique", "risk_id": uuid4(), "risk_level": 7},
+        {"supplier_id": supplier_b, "supplier_code": "SUP-B", "supplier_name": "Beta",
+         "criticality": "Élevée", "risk_id": uuid4(), "risk_level": 21},
+    ]
+    result = build_supplier_risk_concentration(
+        rows,
+        [
+            {"supplier_id": supplier_a, "access_level": "Privilégié"},
+            {"supplier_id": supplier_a, "access_level": "Privilégié"},
+            {"supplier_id": supplier_b, "access_level": "Standard"},
+        ],
+    )
+    assert result[0]["supplier_id"] == str(supplier_b)
+    alpha = next(item for item in result if item["supplier_id"] == str(supplier_a))
+    assert alpha["linked_risk_count"] == 2
+    assert alpha["highest_linked_risk_level"] == 18
+    assert alpha["risk_levels"]["critique"] == 1
+    assert alpha["active_privileged_accesses"] == 2
+
+
+def test_supplier_risk_concentration_does_not_invent_a_score_for_unrated_risks():
+    result = build_supplier_risk_concentration(
+        [{"supplier_id": "s-1", "supplier_code": "S1", "supplier_name": "Supplier",
+          "criticality": "Moyenne", "risk_id": "r-1", "risk_level": None}],
+        [],
+    )
+    assert result[0]["highest_linked_risk_level"] is None
+    assert result[0]["linked_risk_count"] == 1
+    assert sum(result[0]["risk_levels"].values()) == 0
