@@ -73,3 +73,8 @@ Le workflow GitHub Actions `Backend checks` (compilation Python, tests unitaires
 - `RisksView.vue` : action dédiée permet d'afficher les actifs associés à un risque via l'endpoint inverse; affichage des caractéristiques essentielles et du contexte.
 - Les fonctions existantes de CRUD actifs/risques, matrice, export CSV, assistant IA et plan d'action sont conservées.
 - Les validations frontend build et CI sur le commit UI sont en cours.
+
+
+## Détection des cycles dans les dépendances
+
+L'API refuse désormais une nouvelle relation `depends_on` lorsqu'elle créerait un cycle dans le graphe de dépendances. Le contrôle parcourt les relations existantes et vérifie si la cible atteint déjà la source. Les autres types de relations restent libres de représenter des liens bidirectionnels ou non hiérarchiques. Des tests unitaires couvrent le cycle détecté, une branche sans cycle et un graphe préexistant cyclique.
