@@ -170,3 +170,13 @@ Les règles, destinataires et fréquence doivent être configurables et éviter 
 8. IA contextualisée et assistance.
 
 Chaque étape doit être intégrée sans casser les routes, modèles, migrations, tests ou vues déjà en place.
+
+
+## 6. Intégration Asset ↔ Risk livrée (première tranche)
+
+- Lien explicite many-to-many via `asset_risk_links`.
+- Consultation depuis un actif et depuis un risque.
+- Association/désassociation autorisée via la permission `assets:update`; consultation selon `assets:read` et `risks:read`.
+- Contexte de liaison, auteur et horodatage conservés.
+- Mutations auditées dans le journal de sécurité.
+- Aucun calcul de score de risque n'est déclenché automatiquement par la criticité d'un actif : cette règle métier nécessite une décision et une méthode validée.
