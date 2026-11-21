@@ -33,8 +33,8 @@ from app.utils.rbac import PERMISSIONS
 def test_endpoint_permissions_are_declared_in_rbac_matrix():
     endpoints_dir = Path(__file__).parents[1] / "app" / "api" / "v1" / "endpoints"
     declaration_pattern = re.compile(
-        r"""require_permission\\(\\s*["']([^"']+)["']"""
-        r"""(?:\\s*,\\s*["']([^"']+)["'])?\\s*\\)"""
+        r"""require_permission\\(\\s*['"]([^'"]+)['"]"""
+        r"""(?:\\s*,\\s*['"]([^'"]+)['"])?\\s*\\)"""
     )
     undeclared = []
     for endpoint_file in endpoints_dir.glob("*.py"):
