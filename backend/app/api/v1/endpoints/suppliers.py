@@ -778,8 +778,14 @@ async def link_supplier_asset(
     current_user: User = require_permission("suppliers", "manage_assets"),
 ):
     supplier_result = await db.execute(select(Supplier).where(Supplier.id == supplier_id, Supplier.archived_at.is_(None)))
-    if supplier_result.scalar_one_or_none() is None:
+    supplier = supplier_result.scalar_one_or_none()
+    if supplier is None:
         raise HTTPException(status_code=404, detail="Fournisseur introuvable ou archivé")
+    if supplier.status in ("Suspendu", "Terminé"):
+        raise HTTPException(
+            status_code=409,
+            detail="Impossible de créer une relation actif avec un fournisseur suspendu ou terminé.",
+        )
     asset_result = await db.execute(select(Asset).where(Asset.id == data.asset_id))
     asset = asset_result.scalar_one_or_none()
     if asset is None:
