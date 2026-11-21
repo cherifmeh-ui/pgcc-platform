@@ -126,3 +126,10 @@ Repository/static hardening is substantially progressed, but the remaining gates
 - Auth store logout now clears localStorage before Pinia `$reset()` to prevent stale credentials being reloaded into memory.
 - Password change revokes existing active refresh sessions; refresh policy denial revokes active sessions.
 - Frontend build and PostgreSQL runtime integration remain unverified.
+
+
+### Latest logout credential cleanup
+
+- Explicit logout and forced logout now clear Axios default `Authorization` header as well as localStorage credentials.
+- Current HEAD: `c4df80cdcd3d2e041f85340f3e59b66749e3e25e`.
+- CI status for this exact HEAD: pending; prior Backend checks succeeded on `01bafc8`.
