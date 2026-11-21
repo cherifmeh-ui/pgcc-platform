@@ -22,3 +22,16 @@
 ### Suite
 
 Contrats et pièces justificatives, évaluations versionnées, accès tiers et relations explicites avec actifs/risques seront ajoutés dans des tranches indépendantes avec migrations et tests dédiés.
+
+
+## Tranche 2 — Contrats et clauses SSI
+
+- Modèle SupplierContract relié au fournisseur par FK RESTRICT.
+- Référence contractuelle unique par fournisseur, insensible à la casse.
+- Dates contrôlées côté API et base; préavis borné; renouvellement explicite.
+- Clauses SSI suivies individuellement : confidentialité, notification d'incident, droit d'audit, continuité, réversibilité, localisation, sous-traitance, restitution/destruction.
+- Référence facultative au document existant (documents.id) : aucun stockage binaire ni duplication documentaire.
+- API : lecture paginée, création et modification; aucune suppression physique.
+- Permissions dédiées : lecture Admin/Auditor, gestion Admin.
+- Migration Alembic 0013_supplier_contracts; downgrade limité à la nouvelle table.
+- Pas d'automatisation de statut ni d'alertes avant mise en place d'un service de notifications et de règles de date validées.
