@@ -29,7 +29,7 @@ class ActionItem(Base):
     # Lien vers le risque parent
     risk_id = Column(
         PG_UUID(as_uuid=True), 
-        ForeignKey("risks.id", ondelete="RESTRICT"), 
+        ForeignKey("risks.id", ondelete="CASCADE"), 
         nullable=False,
         index=True
     )
