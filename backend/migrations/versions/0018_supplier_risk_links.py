@@ -24,7 +24,6 @@ def upgrade() -> None:
     )
     op.create_index("ix_supplier_risk_links_supplier_id", "supplier_risk_links", ["supplier_id"])
     op.create_index("ix_supplier_risk_links_risk_id", "supplier_risk_links", ["risk_id"])
-    op.create_index("ix_supplier_risk_links_risk", "supplier_risk_links", ["risk_id"])
 
 
 def downgrade() -> None:
