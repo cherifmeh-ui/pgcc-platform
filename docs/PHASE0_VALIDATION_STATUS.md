@@ -200,3 +200,12 @@ Repository/static hardening is substantially progressed, but the remaining gates
 - Reviewed compose configuration: development mounts and floating PostgreSQL image tag are not production-ready. No runtime Docker or PostgreSQL validation was performed.
 - Updated `docs/PHASE0_SECURITY_REVIEW_FINDINGS.md` with the findings.
 - CI for commit `53ebf90` was observed in progress at the time of checkpoint; do not infer success until completed.
+
+
+### Refresh-token transaction review — 2026-11-21
+
+- Source inspection confirms replay revocation is committed before the HTTP 401 is raised, avoiding rollback of the revocation on request exception.
+- User row lock is acquired before refresh-session row lock, providing a consistent lock order in the refresh endpoint.
+- Added static regression checks for commit-before-rejection on replay and lock ordering in `backend/tests/test_migrations_integrity.py` (commit `95f96e5`).
+- CI for `9f7814a` (push and PR) completed successfully. CI for `95f96e5` has not yet been observed.
+- These source/static checks do **not** prove PostgreSQL concurrency behavior. Real DB-backed concurrent requests remain an exit gate.
