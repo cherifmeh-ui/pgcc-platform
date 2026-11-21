@@ -35,7 +35,7 @@ class Risk(Base):
         index=True,
     )
 
-    actions = relationship("ActionItem", back_populates="risk", cascade="all, delete-orphan")
+    actions = relationship("ActionItem", back_populates="risk")
     status = Column(String(50), nullable=False, default="Ouvert", index=True)
     treatment_plan = Column(Text, nullable=True)
 
