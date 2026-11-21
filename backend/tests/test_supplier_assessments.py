@@ -87,9 +87,9 @@ async def test_assessment_evaluator_cannot_validate_own_assessment():
     from fastapi import HTTPException
     from app.api.v1.endpoints.suppliers import validate_supplier_assessment, SupplierAssessmentValidation
 
-    supplier_id = UUID("00000000-0000-0000-000000000010")
-    assessment_id = UUID("00000000-0000-0000-000000000011")
-    evaluator_id = UUID("00000000-0000-0000-000000000012")
+    supplier_id = UUID("00000000-0000-0000-0000-000000000010")
+    assessment_id = UUID("00000000-0000-0000-0000-000000000011")
+    evaluator_id = UUID("00000000-0000-0000-0000-000000000012")
     assessment = MagicMock(
         id=assessment_id, supplier_id=supplier_id, status="À valider",
         assessed_by_id=evaluator_id, risk_level="Moyen",
