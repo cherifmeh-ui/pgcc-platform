@@ -94,7 +94,8 @@ const emit = defineEmits(['close']);
 // État Local
 const loading = ref(false);
 const saving = ref(false);
-const actions = ref([]);\nconst assignees = ref([]);
+const actions = ref([]);
+const assignees = ref([]);
 
 // Formulaire création
 const newAction = reactive({
@@ -265,7 +266,8 @@ function isOverdue(isoStr) {
 .deadline.overdue { color: #ef4444; font-weight: bold; }
 
 .task-actions { display: flex; gap: 0.5rem; }
-.icon-btn:disabled { cursor: not-allowed; opacity: .35; }\n.icon-btn { background: none; border: none; cursor: pointer; font-size: 1.1rem; padding: 0.2rem; opacity: 0.7; transition: all 0.2s; }
+.icon-btn:disabled { cursor: not-allowed; opacity: .35; }
+.icon-btn { background: none; border: none; cursor: pointer; font-size: 1.1rem; padding: 0.2rem; opacity: 0.7; transition: all 0.2s; }
 .icon-btn:hover { opacity: 1; transform: scale(1.1); }
 .icon-btn.done:hover { color: #22c55e; }
 .icon-btn.edit:hover { color: #3b82f6; }
