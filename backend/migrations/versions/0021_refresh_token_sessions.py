@@ -24,7 +24,6 @@ def upgrade() -> None:
         sa.UniqueConstraint("token_jti_hash", name="uq_refresh_token_sessions_jti_hash"),
     )
     op.create_index("ix_refresh_token_sessions_user_id", "refresh_token_sessions", ["user_id"])
-    op.create_index("ix_refresh_token_sessions_token_jti_hash", "refresh_token_sessions", ["token_jti_hash"])
     op.create_index("ix_refresh_token_sessions_expires_at", "refresh_token_sessions", ["expires_at"])
     op.create_index("ix_refresh_token_sessions_user_active", "refresh_token_sessions", ["user_id", "revoked_at", "expires_at"])
 
