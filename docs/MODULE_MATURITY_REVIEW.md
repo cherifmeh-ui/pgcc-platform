@@ -377,3 +377,10 @@ The initial code-level review found that DOCX extraction joined paragraphs/table
 - Both explicit logout and forced logout after refresh failure now clear Axios' default Authorization header in addition to persisted tokens.
 - This avoids stale bearer credentials remaining attached to subsequent API requests in the same page lifecycle.
 - Current-head validation pending.
+
+
+### 30. Refresh-token expiry claim validation
+
+- Session persistence now validates that JWT `exp` is numeric before converting it to a timestamp.
+- Boolean values are explicitly rejected (`bool` subclasses `int` in Python); malformed signed claims cannot cause a persistence-path TypeError/KeyError.
+- Added tests for missing, string, and boolean expiry values.
