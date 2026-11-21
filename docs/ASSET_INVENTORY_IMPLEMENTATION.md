@@ -87,3 +87,5 @@ L'endpoint `GET /assets/{asset_id}/impact` retourne l'actif source, les actifs q
 L'interface Cartographie expose une action **Impact** sur chaque actif et affiche les résultats, la distance et les risques associés. La fonction de parcours utilise un ensemble visité pour éviter les doublons et terminer même si des cycles préexistants sont rencontrés.
 
 Tests unitaires ajoutés : chaîne de dépendances, actif non lié, chemins multiples et cycle préexistant.
+
+- Les risques associés dans la réponse d'analyse d'impact ne sont retournés que si l'utilisateur dispose de `risks:read`; l'analyse des actifs reste disponible avec `assets:read`.
