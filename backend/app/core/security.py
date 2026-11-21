@@ -70,7 +70,7 @@ def _create_token(
         "jti": uuid.uuid4().hex,
     }
     if extra_claims:
-        reserved_claims = {"sub", "type", "iat", "exp", "jti", "role"}
+        reserved_claims = {"sub", "type", "iat", "exp", "jti"}
         if reserved_claims.intersection(extra_claims):
             raise ValueError("Extra claims cannot override reserved JWT claims.")
         payload.update(extra_claims)
@@ -78,6 +78,8 @@ def _create_token(
 
 
 def create_access_token(subject, role: str, extra_claims=None) -> str:
+    if extra_claims and "role" in extra_claims:
+        raise ValueError("Extra claims cannot override reserved JWT claims.")
     return _create_token(
         subject, "access", settings.ACCESS_TOKEN_EXPIRE_MINUTES,
         {"role": role, **(extra_claims or {})},
