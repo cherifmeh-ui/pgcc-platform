@@ -216,3 +216,20 @@ async def delete_risk(
     )
 
     return {"message": f"Risque {risk_ref} supprimé"}
+
+
+@router.get("/owners")
+async def list_risk_owners(
+    db: AsyncSession = Depends(get_db),
+    current_user: User = require_permission("risks", "read"),
+):
+    """Return minimal active-user data for assigning risk ownership."""
+    result = await db.execute(
+        select(User.id, User.full_name, User.department)
+        .where(User.is_active.is_(True))
+        .order_by(User.full_name.asc())
+    )
+    return [
+        {"id": str(user.id), "full_name": user.full_name, "department": user.department}
+        for user in result.all()
+    ]
