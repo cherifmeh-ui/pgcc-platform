@@ -226,3 +226,20 @@ class SupplierAccessReview(Base):
     resulting_access_level = Column(String(20), nullable=False)
     resulting_data_access = Column(Boolean, nullable=False)
     next_review_at = Column(Date, nullable=True)
+
+
+class SupplierRiskLink(Base):
+    """Traceable link from a supplier dependency to an existing enterprise risk."""
+    __tablename__ = "supplier_risk_links"
+    __table_args__ = (
+        CheckConstraint("relationship_type IN ('Dépendance opérationnelle', 'Hébergement', 'Maintenance', 'Accès aux données', 'Accès privilégié', 'Sous-traitance', 'Autre')", name="ck_supplier_risk_links_type"),
+        UniqueConstraint("supplier_id", "risk_id", name="uq_supplier_risk_link"),
+        Index("ix_supplier_risk_links_risk", "risk_id"),
+    )
+    id = Column(PG_UUID(as_uuid=True), primary_key=True, default=uuid4)
+    supplier_id = Column(PG_UUID(as_uuid=True), ForeignKey("suppliers.id", ondelete="RESTRICT"), nullable=False, index=True)
+    risk_id = Column(PG_UUID(as_uuid=True), ForeignKey("risks.id", ondelete="RESTRICT"), nullable=False, index=True)
+    relationship_type = Column(String(40), nullable=False)
+    relationship_context = Column(String(2000), nullable=False)
+    created_by_id = Column(PG_UUID(as_uuid=True), ForeignKey("users.id", ondelete="RESTRICT"), nullable=False)
+    created_at = Column(DateTime(timezone=True), server_default=func.now(), nullable=False)
