@@ -27,3 +27,16 @@ Stamping records migration state; it does not modify the schema.
 Production startup no longer runs `create_all()`. Schema changes must be applied through Alembic before deploying the application version that requires them.
 
 The initial migration downgrade is intentionally disabled to avoid accidental deletion of all application tables. Subsequent revisions should provide explicit, reviewed upgrade/downgrade operations.
+
+## Phase 0 integrity checks
+
+A static graph test now checks that migration revision identifiers are unique, the history has exactly one root (`0001_initial`), parent revisions exist, and the current history remains linear. It also protects the intentionally non-destructive baseline downgrade.
+
+These checks **do not validate actual PostgreSQL schema creation or upgrade behavior**. Phase 0 still requires disposable PostgreSQL integration runs for:
+- empty database `alembic upgrade head`;
+- inspection of the resulting schema against model metadata;
+- legacy database baseline/stamp procedure;
+- upgrade from a representative previous revision;
+- backup/restore and recovery rehearsal.
+
+The baseline uses `Base.metadata.create_all()` and is transitional. Before production, replace it with a reviewed, deterministic schema baseline or keep the transitional approach only with documented schema equivalence checks and controlled model imports.
