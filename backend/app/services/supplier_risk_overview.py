@@ -57,7 +57,21 @@ def build_supplier_risk_overview(
         if item.get("status") == "Approuvé"
         and item.get("start_date") <= today <= item.get("end_date")
     ]
-    required_security_clauses = (\n        "clause_confidentiality", "clause_incident_notification",\n        "clause_audit_right", "clause_business_continuity",\n        "clause_reversibility", "clause_data_location",\n        "clause_subcontracting", "clause_data_return_destruction",\n    )\n    active_contracts = [item for item in contracts if item.get("status") in ("Actif", "À renouveler")]\n    contracts_with_missing_security_clauses = sum(\n        1 for item in active_contracts\n        if any(not item.get(clause, False) for clause in required_security_clauses)\n    )\n    expiring_contracts = sum(
+    required_security_clauses = (
+        "clause_confidentiality", "clause_incident_notification",
+        "clause_audit_right", "clause_business_continuity",
+        "clause_reversibility", "clause_data_location",
+        "clause_subcontracting", "clause_data_return_destruction",
+    )
+    active_contracts = [
+        item for item in contracts
+        if item.get("status") in ("Actif", "À renouveler")
+    ]
+    contracts_with_missing_security_clauses = sum(
+        1 for item in active_contracts
+        if any(not item.get(clause, False) for clause in required_security_clauses)
+    )
+    expiring_contracts = sum(
         1 for item in contracts
         if item.get("status") in ("Actif", "À renouveler")
         and item.get("end_date") is not None
