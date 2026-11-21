@@ -190,3 +190,13 @@ def test_refresh_rotation_locks_user_before_refresh_session():
     user_lock = refresh.index("select(User).where(User.email == email).with_for_update()")
     session_lock = refresh.index("select(RefreshTokenSession).where(RefreshTokenSession.token_jti_hash == token_hash).with_for_update()")
     assert user_lock < session_lock
+
+
+def test_asset_reference_index_upgrade_and_downgrade_are_symmetrical():
+    migration = MIGRATIONS_DIR / "0020_asset_reference_and_type_constraints.py"
+    source = migration.read_text(encoding="utf-8")
+    upgrade = source.split("def upgrade():", 1)[1].split("def downgrade():", 1)[0]
+    downgrade = source.split("def downgrade():", 1)[1]
+    assert 'sa.text("lower(btrim(reference))")' in upgrade
+    assert 'sa.text("lower(reference)")' in downgrade
+    assert "Cannot downgrade asset type constraint" in downgrade
