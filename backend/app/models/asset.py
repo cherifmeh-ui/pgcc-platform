@@ -125,7 +125,7 @@ class AssetRiskLink(Base):
         PG_UUID(as_uuid=True), ForeignKey("assets.id", ondelete="RESTRICT"), nullable=False, index=True
     )
     risk_id = Column(
-        PG_UUID(as_uuid=True), ForeignKey("risks.id", ondelete="CASCADE"), nullable=False, index=True
+        PG_UUID(as_uuid=True), ForeignKey("risks.id", ondelete="RESTRICT"), nullable=False, index=True
     )
     relationship_context = Column(String(500), nullable=True)
     created_at = Column(DateTime(timezone=True), server_default=func.now(), nullable=False)
