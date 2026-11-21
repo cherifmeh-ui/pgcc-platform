@@ -249,11 +249,13 @@ async def preview_asset_csv_import(
     rows = []
     errors = []
     invalid_row_numbers = set()
+    parsed_row_count = 0
     seen_refs, seen_hostnames, seen_serials = set(), set(), set()
     for row_number, raw_row in enumerate(reader, start=2):
         values = {key.strip(): (value.strip() if isinstance(value, str) else value) for key, value in raw_row.items() if key}
         if not any(values.values()):
             continue
+        parsed_row_count += 1
         try:
             asset = AssetCreate.model_validate(values)
             normalized = asset.model_dump(mode="json")
@@ -301,7 +303,8 @@ async def preview_asset_csv_import(
             if conflicts:
                 errors.append({"row": row["row"], "error": "; ".join(sorted(set(conflicts)))})
                 invalid_row_numbers.add(row["row"])
-    return {"filename": file.filename, "rows_valid": len(rows) - len(invalid_row_numbers), "rows_parsed": len(rows), "errors": errors, "preview": rows[:20], "validated_rows": rows, "can_import": len(rows) > 0 and not errors}
+    valid_row_count = sum(1 for row in rows if row["row"] not in invalid_row_numbers)
+    return {"filename": file.filename, "rows_valid": valid_row_count, "rows_parsed": parsed_row_count, "errors": errors, "preview": rows[:20], "validated_rows": rows, "can_import": parsed_row_count > 0 and not errors}
 
 
 @router.post("/import/confirm", status_code=status.HTTP_201_CREATED)
@@ -349,6 +352,143 @@ async def get_asset_dependency_graph(
         "edges": [{"id": relation.id, "source": relation.source_asset_id, "target": relation.target_asset_id, "relationship_type": relation.relationship_type, "description": relation.description} for relation in relations],
         "node_count": len(assets), "edge_count": len(relations),
     }
+
+
+@router.get("/page")
+async def list_assets_page(
+    q: str | None = Query(default=None, max_length=100),
+    asset_type: AssetType | None = None,
+    criticality: Level | None = None,
+    lifecycle_status: Lifecycle | None = None,
+    direction: str | None = Query(default=None, max_length=100),
+    owner: str | None = Query(default=None, max_length=150),
+    classification: str | None = Query(default=None, max_length=100),
+    location: str | None = Query(default=None, max_length=200),
+    include_retired: bool = False,
+    page: int = Query(default=1, ge=1),
+    page_size: int = Query(default=25, ge=1, le=200),
+    db: AsyncSession = Depends(get_db),
+    current_user: User = require_permission("assets", "read"),
+):
+    """Return a stable, count-bearing page of inventory records."""
+    filters = []
+    if not include_retired:
+        filters.append(Asset.retired_at.is_(None))
+    if q and q.strip():
+        pattern = f"%{q.strip()}%"
+        filters.append(
+            Asset.name.ilike(pattern) | Asset.reference.ilike(pattern)
+            | Asset.hostname.ilike(pattern) | Asset.fqdn.ilike(pattern)
+        )
+    if asset_type:
+        filters.append(Asset.asset_type == asset_type)
+    if criticality:
+        filters.append(Asset.criticality == criticality)
+    if lifecycle_status:
+        filters.append(Asset.lifecycle_status == lifecycle_status)
+    if direction and direction.strip():
+        filters.append(Asset.direction.ilike(direction.strip()))
+    if owner and owner.strip():
+        filters.append(Asset.owner.ilike(f"%{owner.strip()}%"))
+    if classification and classification.strip():
+        filters.append(Asset.classification == classification)
+    if location and location.strip():
+        filters.append(Asset.location.ilike(f"%{location.strip()}%"))
+
+    total_result = await db.execute(select(func.count(Asset.id)).where(*filters))
+    total = total_result.scalar_one()
+    stmt = (
+        select(Asset).where(*filters)
+        .order_by(Asset.name.asc(), Asset.reference.asc(), Asset.id.asc())
+        .limit(page_size).offset((page - 1) * page_size)
+    )
+    result = await db.execute(stmt)
+    items = result.scalars().all()
+    return {
+        "items": items,
+        "total": total,
+        "page": page,
+        "page_size": page_size,
+        "pages": (total + page_size - 1) // page_size,
+    }
+
+
+def _csv_safe_value(value):
+    """Prevent spreadsheet formula execution when opening exported CSV files."""
+    if value is None:
+        return ""
+    text_value = str(value)
+    if text_value.startswith(("=", "+", "-", "@", "\t", "\r")):
+        return "'" + text_value
+    return text_value
+
+
+@router.get("/export.csv")
+async def export_assets_csv(
+    request: Request,
+    q: str | None = Query(default=None, max_length=100),
+    asset_type: AssetType | None = None,
+    criticality: Level | None = None,
+    lifecycle_status: Lifecycle | None = None,
+    direction: str | None = Query(default=None, max_length=100),
+    owner: str | None = Query(default=None, max_length=150),
+    classification: str | None = Query(default=None, max_length=100),
+    location: str | None = Query(default=None, max_length=200),
+    include_retired: bool = False,
+    db: AsyncSession = Depends(get_db),
+    current_user: User = require_permission("assets", "read"),
+):
+    """Export the filtered inventory as UTF-8 CSV with spreadsheet formula protection."""
+    filters = []
+    if not include_retired:
+        filters.append(Asset.retired_at.is_(None))
+    if q and q.strip():
+        pattern = f"%{q.strip()}%"
+        filters.append(
+            Asset.name.ilike(pattern) | Asset.reference.ilike(pattern)
+            | Asset.hostname.ilike(pattern) | Asset.fqdn.ilike(pattern)
+        )
+    if asset_type:
+        filters.append(Asset.asset_type == asset_type)
+    if criticality:
+        filters.append(Asset.criticality == criticality)
+    if lifecycle_status:
+        filters.append(Asset.lifecycle_status == lifecycle_status)
+    if direction and direction.strip():
+        filters.append(Asset.direction.ilike(direction.strip()))
+    if owner and owner.strip():
+        filters.append(Asset.owner.ilike(f"%{owner.strip()}%"))
+    if classification and classification.strip():
+        filters.append(Asset.classification == classification)
+    if location and location.strip():
+        filters.append(Asset.location.ilike(f"%{location.strip()}%"))
+
+    result = await db.execute(
+        select(Asset).where(*filters).order_by(Asset.name.asc(), Asset.reference.asc(), Asset.id.asc())
+    )
+    assets = result.scalars().all()
+    columns = ["reference", "name", "asset_type", "owner", "custodian", "direction",
+               "location", "lifecycle_status", "criticality", "confidentiality",
+               "integrity", "availability", "classification", "application_id",
+               "hostname", "ip_address", "fqdn", "operating_system", "version",
+               "manufacturer", "model", "serial_number", "discovery_source",
+               "source_reference", "last_inventory_date", "end_of_support_date",
+               "retired_at"]
+    output = io.StringIO(newline="")
+    writer = csv.writer(output)
+    writer.writerow(columns)
+    for asset in assets:
+        writer.writerow([_csv_safe_value(getattr(asset, column)) for column in columns])
+    await log_action(
+        user_email=current_user.email, action="EXPORT", resource="assets",
+        details=f"CSV asset inventory export: {len(assets)} records",
+        event_type="ASSET", request=request,
+    )
+    return Response(
+        content="\ufeff" + output.getvalue(),
+        media_type="text/csv; charset=utf-8",
+        headers={"Content-Disposition": 'attachment; filename="pgcc_assets_inventory.csv"'},
+    )
 
 
 @router.get("/", response_model=list[AssetResponse])
