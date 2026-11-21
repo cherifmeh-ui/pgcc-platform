@@ -24,6 +24,12 @@
 
     <!-- Tableau des Documents -->
     <div v-else-if="!loading" class="table-container card-modern">
+      <div class="document-filters">
+        <input v-model="searchQuery" type="search" placeholder="Rechercher titre, fichier, auteur..." aria-label="Rechercher dans les documents" />
+        <select v-model="typeFilter" aria-label="Filtrer par type"><option value="">Tous les types</option><option v-for="type in documentTypes" :key="type" :value="type">{{ type }}</option></select>
+        <select v-model="indexFilter" aria-label="Filtrer par indexation"><option value="">Tous les statuts</option><option value="indexed">Indexés</option><option value="pending">À indexer</option></select>
+        <span class="filter-count">{{ filteredDocuments.length }} / {{ documents.length }}</span>
+      </div>
       <table class="docs-table modern">
         <thead>
           <tr>
@@ -37,7 +43,7 @@
           </tr>
         </thead>
         <tbody>
-          <tr v-for="doc in documents" :key="doc.id" class="table-row-hover">
+          <tr v-for="doc in filteredDocuments" :key="doc.id" class="table-row-hover">
             <td><span class="type-badge" :class="'badge-' + normalizeType(doc.doc_type)">{{ doc.doc_type }}</span></td>
             <td class="title-cell"><strong>{{ doc.title }}</strong></td>
             <td><code>{{ doc.filename }}</code></td>
@@ -55,6 +61,7 @@
               <button v-if="canDelete" @click="deleteDoc(doc.id)" class="action-btn del" title="Supprimer">🗑️</button>
             </td>
           </tr>
+        <tr v-if="filteredDocuments.length === 0"><td colspan="7" class="no-results">Aucun document ne correspond aux filtres.</td></tr>
         </tbody>
       </table>
     </div>
@@ -152,6 +159,19 @@ import apiClient from '@/services/api';
 const authStore = useAuthStore();
 const loading = ref(false);
 const documents = ref([]);
+const searchQuery = ref("");
+const typeFilter = ref("");
+const indexFilter = ref("");
+const documentTypes = computed(() => [...new Set(documents.value.map(doc => doc.doc_type).filter(Boolean))].sort());
+const filteredDocuments = computed(() => {
+  const query = searchQuery.value.trim().toLocaleLowerCase();
+  return documents.value.filter(doc => {
+    const matchesQuery = !query || [doc.title, doc.filename, doc.author, doc.doc_type].some(value => String(value || "").toLocaleLowerCase().includes(query));
+    const matchesType = !typeFilter.value || doc.doc_type === typeFilter.value;
+    const matchesIndex = !indexFilter.value || (indexFilter.value === "indexed" ? doc.is_indexed : !doc.is_indexed);
+    return matchesQuery && matchesType && matchesIndex;
+  });
+});
 const showUploadModal = ref(false);
 const uploading = ref(false);
 const isDragging = ref(false);
@@ -381,6 +401,11 @@ h1 { color: #0f172a; font-size: 1.8rem; margin-bottom: 0.25rem; }
 /* Table Styles */
 .card-modern { background: white; border-radius: 12px; box-shadow: 0 2px 8px rgba(0,0,0,0.08); overflow: hidden; }
 .table-container { width: 100%; }
+.document-filters { display: flex; gap: 0.75rem; align-items: center; padding: 1rem; border-bottom: 1px solid #e2e8f0; flex-wrap: wrap; }
+.document-filters input, .document-filters select { min-height: 40px; padding: 0.5rem 0.75rem; border: 1px solid #cbd5e1; border-radius: 8px; background: #fff; color: #334155; }
+.document-filters input { flex: 1; min-width: 220px; }
+.filter-count { color: #64748b; font-size: 0.85rem; margin-left: auto; }
+.no-results { text-align: center; padding: 2rem; color: #64748b; }
 .docs-table.modern { width: 100%; border-collapse: collapse; }
 .docs-table.modern th, .docs-table.modern td { padding: 1rem 1.5rem; text-align: left; border-bottom: 1px solid #f1f5f9; vertical-align: middle; }
 .docs-table.modern th { background: #f8fafc; font-weight: 600; color: #475569; font-size: 0.85rem; text-transform: uppercase; letter-spacing: 0.5px; position: sticky; top: 0; z-index: 10; }
