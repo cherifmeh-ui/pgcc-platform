@@ -142,3 +142,10 @@ Repository/static hardening is substantially progressed, but the remaining gates
 - Added `backend/tests/test_refresh_token_sessions.py`: verifies SHA-256 JTI hash stability, invalid JTI rejection, session persistence of user/hash/expiry, absence of raw JWT in session representation, and expected refresh-token decode type.
 - No local test runner is available through the GitHub connector; CI is the source of test execution evidence.
 - PostgreSQL migration/runtime and concurrency tests remain outstanding.
+
+
+### Logout endpoint unit coverage
+
+- Added tests for invalid-token logout idempotency (no DB operation) and valid-token revocation path (DB update + commit).
+- Current HEAD: `1796197a8bb409878838c6a29e550779692cff79`.
+- CI status for `d60c9af` is in progress; runs for the current logout tests are queued.
