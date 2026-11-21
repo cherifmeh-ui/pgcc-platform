@@ -84,5 +84,5 @@ def test_asset_reference_has_case_insensitive_unique_index():
     indexes = {index.name: index for index in Asset.__table__.indexes}
     assert "uq_assets_reference_ci" in indexes
     assert indexes["uq_assets_reference_ci"].unique is True
-    assert "btrim" in str(indexes["uq_assets_reference_ci"].expressions).lower()
+    assert "btrim" in str(indexes["uq_assets_reference_ci"].expressions[0]).lower()
     assert any(c.name == "ck_assets_reference_nonblank" for c in Asset.__table__.constraints)
