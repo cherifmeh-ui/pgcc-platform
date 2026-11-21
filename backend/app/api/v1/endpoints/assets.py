@@ -253,9 +253,13 @@ async def preview_asset_csv_import(
         refs = [row["data"]["reference"] for row in rows]
         hostnames = [row["data"]["hostname"] for row in rows if row["data"].get("hostname")]
         serials = [row["data"]["serial_number"] for row in rows if row["data"].get("serial_number")]
-        existing_result = await db.execute(select(Asset).where(
-            (func.lower(Asset.reference).in_([v.casefold() for v in refs])) | (func.lower(Asset.hostname).in_([v.casefold() for v in hostnames])) | (func.lower(Asset.serial_number).in_([v.casefold() for v in serials])
-        ))
+        existing_result = await db.execute(
+            select(Asset).where(
+                (func.lower(Asset.reference).in_([v.casefold() for v in refs]))
+                | (func.lower(Asset.hostname).in_([v.casefold() for v in hostnames]))
+                | (func.lower(Asset.serial_number).in_([v.casefold() for v in serials]))
+            )
+        )
         existing = existing_result.scalars().all()
         for row in rows:
             data = row["data"]
