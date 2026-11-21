@@ -143,3 +143,27 @@ class SupplierAssessment(Base):
     validated_at = Column(DateTime(timezone=True), nullable=True)
     created_at = Column(DateTime(timezone=True), server_default=func.now(), nullable=False)
     updated_at = Column(DateTime(timezone=True), server_default=func.now(), onupdate=func.now(), nullable=False)
+
+
+class SupplierAssetLink(Base):
+    """Traceable relationship between a supplier and an inventoried asset."""
+    __tablename__ = "supplier_asset_links"
+    __table_args__ = (
+        CheckConstraint("relationship_type IN ('Héberge', 'Maintient', 'Administre', 'Accède', 'Fournit', 'Autre')", name="ck_supplier_asset_links_type"),
+        CheckConstraint("access_level IN ('Aucun', 'Standard', 'Privilégié')", name="ck_supplier_asset_links_access"),
+        CheckConstraint("status IN ('Actif', 'Suspendu', 'Terminé')", name="ck_supplier_asset_links_status"),
+        UniqueConstraint("supplier_id", "asset_id", "relationship_type", name="uq_supplier_asset_link"),
+        Index("ix_supplier_asset_links_asset_status", "asset_id", "status"),
+    )
+    id = Column(PG_UUID(as_uuid=True), primary_key=True, default=uuid4)
+    supplier_id = Column(PG_UUID(as_uuid=True), ForeignKey("suppliers.id", ondelete="RESTRICT"), nullable=False, index=True)
+    asset_id = Column(PG_UUID(as_uuid=True), ForeignKey("assets.id", ondelete="RESTRICT"), nullable=False, index=True)
+    relationship_type = Column(String(20), nullable=False)
+    access_level = Column(String(20), nullable=False, default="Aucun", server_default="Aucun")
+    data_access = Column(Boolean, nullable=False, default=False, server_default="false")
+    scope = Column(String(1000), nullable=True)
+    status = Column(String(20), nullable=False, default="Actif", server_default="Actif")
+    review_due_at = Column(Date, nullable=True)
+    created_by_id = Column(PG_UUID(as_uuid=True), ForeignKey("users.id", ondelete="RESTRICT"), nullable=False)
+    created_at = Column(DateTime(timezone=True), server_default=func.now(), nullable=False)
+    updated_at = Column(DateTime(timezone=True), server_default=func.now(), onupdate=func.now(), nullable=False)
