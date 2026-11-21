@@ -2,7 +2,7 @@
 from fastapi import APIRouter, Depends, HTTPException
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy import select
-from pydantic import BaseModel, Field, field_validator
+from pydantic import BaseModel, Field, field_validator, model_validator
 from typing import List, Dict, Any
 from datetime import datetime, timezone
 import hashlib
@@ -67,6 +67,15 @@ class EvidenceCreate(BaseModel):
     collected_at: datetime | None = None
     valid_until: datetime | None = None
     notes: str | None = Field(default=None, max_length=10000)
+
+    @model_validator(mode="after")
+    def validate_dates(self):
+        if self.valid_until and self.collected_at:
+            collected = self.collected_at.replace(tzinfo=timezone.utc) if self.collected_at.tzinfo is None else self.collected_at
+            valid_until = self.valid_until.replace(tzinfo=timezone.utc) if self.valid_until.tzinfo is None else self.valid_until
+            if valid_until < collected:
+                raise ValueError("La date de validité doit être postérieure à la collecte.")
+        return self
 
 class EvidenceVerify(BaseModel):
     verification_status: str
