@@ -10,7 +10,8 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.api.deps import require_permission
 from app.core.database import get_db
-from app.models.asset import Asset, AssetRelationship
+from app.models.asset import Asset, AssetRelationship, AssetRiskLink
+from app.models.risk import Risk
 from app.models.application import Application
 from app.models.user import User
 from app.services.security_logger import log_action
@@ -100,6 +101,23 @@ class AssetResponse(AssetFields):
     created_at: datetime
     updated_at: datetime
     retired_at: datetime | None
+
+    class Config:
+        from_attributes = True
+
+
+class AssetRiskLinkCreate(BaseModel):
+    risk_id: UUID
+    relationship_context: str | None = Field(default=None, max_length=500)
+
+
+class AssetRiskLinkResponse(BaseModel):
+    id: UUID
+    asset_id: UUID
+    risk_id: UUID
+    relationship_context: str | None
+    created_at: datetime
+    created_by: str | None
 
     class Config:
         from_attributes = True
@@ -307,3 +325,63 @@ async def create_asset_relationship(
         event_type="ASSET", request=request,
     )
     return relationship
+
+
+@router.get("/{asset_id}/risks", response_model=list[AssetRiskLinkResponse])
+async def list_asset_risk_links(
+    asset_id: UUID,
+    db: AsyncSession = Depends(get_db),
+    current_user: User = require_permission("assets", "read"),
+):
+    asset_result = await db.execute(select(Asset.id).where(Asset.id == asset_id))
+    if asset_result.scalar_one_or_none() is None:
+        raise HTTPException(status_code=404, detail="Actif introuvable")
+    result = await db.execute(
+        select(AssetRiskLink).where(AssetRiskLink.asset_id == asset_id).order_by(AssetRiskLink.created_at.desc())
+    )
+    return result.scalars().all()
+
+
+@router.post("/{asset_id}/risks", response_model=AssetRiskLinkResponse, status_code=status.HTTP_201_CREATED)
+async def link_asset_to_risk(
+    asset_id: UUID,
+    data: AssetRiskLinkCreate,
+    request: Request,
+    db: AsyncSession = Depends(get_db),
+    current_user: User = require_permission("assets", "update"),
+):
+    asset_result = await db.execute(select(Asset).where(Asset.id == asset_id))
+    asset = asset_result.scalar_one_or_none()
+    if asset is None:
+        raise HTTPException(status_code=404, detail="Actif introuvable")
+    risk_result = await db.execute(select(Risk).where(Risk.id == data.risk_id))
+    risk = risk_result.scalar_one_or_none()
+    if risk is None:
+        raise HTTPException(status_code=404, detail="Risque introuvable")
+    link = AssetRiskLink(asset_id=asset_id, risk_id=data.risk_id, relationship_context=data.relationship_context, created_by=current_user.email)
+    db.add(link)
+    try:
+        await db.commit()
+    except Exception:
+        await db.rollback()
+        raise HTTPException(status_code=409, detail="Association actif/risque déjà existante ou contrainte invalide")
+    await db.refresh(link)
+    await log_action(user_email=current_user.email, action="LINK_RISK", resource="asset_risk_links", resource_id=str(link.id), details=f"Asset {asset.reference} linked to risk {risk.ref}", event_type="ASSET_RISK", request=request)
+    return link
+
+
+@router.delete("/{asset_id}/risks/{risk_id}", status_code=status.HTTP_204_NO_CONTENT)
+async def unlink_asset_from_risk(
+    asset_id: UUID,
+    risk_id: UUID,
+    request: Request,
+    db: AsyncSession = Depends(get_db),
+    current_user: User = require_permission("assets", "update"),
+):
+    result = await db.execute(select(AssetRiskLink).where(AssetRiskLink.asset_id == asset_id, AssetRiskLink.risk_id == risk_id))
+    link = result.scalar_one_or_none()
+    if link is None:
+        raise HTTPException(status_code=404, detail="Association actif/risque introuvable")
+    await db.delete(link)
+    await db.commit()
+    await log_action(user_email=current_user.email, action="UNLINK_RISK", resource="asset_risk_links", resource_id=f"{asset_id}:{risk_id}", details="Asset-risk association removed", event_type="ASSET_RISK", request=request)
