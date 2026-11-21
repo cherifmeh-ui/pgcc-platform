@@ -165,3 +165,10 @@ Repository/static hardening is substantially progressed, but the remaining gates
 - Cross-tab frontend refresh coordination remains an identified residual: tabs may race a single-use refresh token and trigger replay revocation. Documented for resolution before Phase 0 auth closure.
 - Current HEAD: `e48998ca25c9c0d317366e21beb55a479af8ff1`.
 - CI for commits `16627da`, `d040494`, and latest documentation commit is pending/in progress; most recent completed run on `c970fab` succeeded.
+
+
+### User-row locking correction
+
+- CI exposed that the earlier lock patch had applied to refresh but not forced password-change; static assertion failed on `16627da` and `d040494`.
+- Corrected password-change query to use `SELECT ... FOR UPDATE` in `9a45c31`.
+- CI for `23d2136` was running at the checkpoint; latest code commit `9a45c31` is pending validation.
