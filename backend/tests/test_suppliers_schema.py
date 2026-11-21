@@ -347,3 +347,27 @@ def test_supplier_asset_link_eligibility_allows_other_statuses():
     from app.api.v1.endpoints.suppliers import _supplier_allows_new_asset_link
     for status in ("À qualifier", "En évaluation", "Approuvé", "Approuvé sous conditions"):
         assert _supplier_allows_new_asset_link(status)
+
+@pytest.mark.asyncio
+async def test_terminate_supplier_asset_link_blocked_with_open_access_request():
+    from app.api.v1.endpoints.suppliers import terminate_supplier_asset_link
+    from uuid import UUID
+
+    supplier_id = UUID("00000000-0000-0000-0000-000000000010")
+    link_id = UUID("00000000-0000-0000-0000-000000000011")
+    link = MagicMock(id=link_id, supplier_id=supplier_id, status="Actif")
+    link_result = MagicMock()
+    link_result.scalar_one_or_none.return_value = link
+    open_access_result = MagicMock()
+    open_access_result.scalar_one_or_none.return_value = UUID("00000000-0000-0000-0000-000000000012")
+    db = AsyncMock()
+    db.execute.side_effect = [link_result, open_access_result]
+
+    with pytest.raises(Exception) as exc:
+        await terminate_supplier_asset_link(
+            supplier_id=supplier_id, link_id=link_id, request=MagicMock(),
+            db=db, current_user=MagicMock(email="admin@example.test"),
+        )
+    assert getattr(exc.value, "status_code", None) == 409
+    assert "autorisation d'accès" in exc.value.detail
+    db.commit.assert_not_awaited()
