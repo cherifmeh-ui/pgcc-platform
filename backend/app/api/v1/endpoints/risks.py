@@ -208,8 +208,7 @@ async def delete_risk(
     risk_ref = risk.ref
     risk_title = risk.title
 
-    # Do not cascade-delete treatment actions or their history. Until a formal
-    # archive workflow exists, risks with linked actions cannot be hard-deleted.
+    # Preserve both corrective-action history and asset-risk traceability.
     action_count_result = await db.execute(
         select(func.count(ActionItem.id)).where(ActionItem.risk_id == risk.id)
     )
@@ -217,6 +216,15 @@ async def delete_risk(
         raise HTTPException(
             status_code=status.HTTP_409_CONFLICT,
             detail="Ce risque possède des plans d'action associés. La suppression est refusée afin de préserver la traçabilité. Utilisez une procédure d'archivage.",
+        )
+
+    asset_link_count_result = await db.execute(
+        select(func.count(AssetRiskLink.id)).where(AssetRiskLink.risk_id == risk.id)
+    )
+    if asset_link_count_result.scalar_one() > 0:
+        raise HTTPException(
+            status_code=status.HTTP_409_CONFLICT,
+            detail="Ce risque est associé à un ou plusieurs actifs. Supprimez explicitement les associations ou utilisez une procédure d'archivage.",
         )
 
     await db.delete(risk)
