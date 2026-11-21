@@ -54,6 +54,23 @@ class ActionResponse(ActionBase):
 
 # --- ENDPOINTS CRUD ---
 
+
+@router.get("/assignees")
+async def list_action_assignees(
+    db: AsyncSession = Depends(get_db),
+    current_user: User = require_permission("actions", "read"),
+):
+    """Return minimal active-user data for action assignment."""
+    result = await db.execute(
+        select(User.id, User.email, User.full_name, User.department)
+        .where(User.is_active.is_(True))
+        .order_by(User.full_name.asc())
+    )
+    return [
+        {"id": str(user.id), "email": user.email, "full_name": user.full_name, "department": user.department}
+        for user in result.all()
+    ]
+
 @router.get("/", response_model=List[ActionResponse])
 async def list_actions(
     db: AsyncSession = Depends(get_db),
