@@ -68,3 +68,11 @@ L'interface affiche un inventaire et des relations sous forme de liste. Elle ne 
 5. Améliorer l'UI pour visualiser risques liés et dépendances.
 6. Graphe visuel et analyse d'impact, en lot distinct.
 
+
+
+## Interface d'intégration — implémentation initiale
+
+- `AssetsView.vue` : panneau Relations affiche désormais les risques associés, contexte, liaison et dissociation (si permission update); le chargement est conditionné à la permission de lecture Risques.
+- `RisksView.vue` : action dédiée permet d'afficher les actifs associés à un risque via l'endpoint inverse; affichage des caractéristiques essentielles et du contexte.
+- Les fonctions existantes de CRUD actifs/risques, matrice, export CSV, assistant IA et plan d'action sont conservées.
+- Les validations frontend build et CI sur le commit UI sont en cours.
