@@ -16,3 +16,10 @@ def test_asset_risk_link_listing_requires_risk_read():
     assert role_has_permission("viewer", "risks", "read")
     assert not role_has_permission("limited", "risks", "read")
     assert not role_has_permission("limited", "assets", "read")
+
+
+def test_asset_export_is_restricted_to_admin_and_auditor():
+    assert role_has_permission("admin", "assets", "export")
+    assert role_has_permission("auditor", "assets", "export")
+    assert not role_has_permission("executive", "assets", "export")
+    assert not role_has_permission("viewer", "assets", "export")
