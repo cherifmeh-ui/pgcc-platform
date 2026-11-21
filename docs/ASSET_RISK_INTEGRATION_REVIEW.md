@@ -76,3 +76,12 @@ L'interface affiche un inventaire et des relations sous forme de liste. Elle ne 
 - `RisksView.vue` : action dédiée permet d'afficher les actifs associés à un risque via l'endpoint inverse; affichage des caractéristiques essentielles et du contexte.
 - Les fonctions existantes de CRUD actifs/risques, matrice, export CSV, assistant IA et plan d'action sont conservées.
 - Les validations frontend build et CI sur le commit UI sont en cours.
+
+
+## Revalidation — 21/11/2026
+
+- CI sur commit `8e8c6fd` : backend job passed, frontend build failed due to a literal escaped newline inserted in `RisksView.vue`.
+- Corrected the malformed sequence in commit `f7fffe5`; new CI was triggered.
+- Security review identified that asset-side risk-link listing must require both `assets:read` and `risks:read`; this additional backend check was added in commit `74abe1d`.
+- The inverse risk endpoint already requires `risks:read` and `assets:read`.
+- Latest CI results for commits after these fixes are pending; no full non-regression claim until green.
