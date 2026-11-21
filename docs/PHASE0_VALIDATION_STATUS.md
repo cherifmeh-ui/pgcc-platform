@@ -251,3 +251,12 @@ Repository/static hardening is substantially progressed, but the remaining gates
 - Added static regression test for baseline overlap guards.
 - Commit `cbc4156`: migration correction; `99d4f41`: test.
 - Runtime PostgreSQL validation pending.
+
+
+### CI failure: syntax error in migration 0006
+
+- The previous automated guard insertion left two `op.create_index` statements under an `if` without the required indentation. This caused Alembic's migration graph loading to fail before database execution.
+- Corrected indentation in revision `0006_asset_inventory`.
+- Added a static test parsing every migration with Python AST, preventing syntax errors from reaching the Alembic runtime.
+- Commits: `1521f96` (syntax correction), `44ee3a2` (AST test).
+- CI rerun pending.
