@@ -3,8 +3,9 @@ from pydantic import ValidationError
 
 from app.api.v1.endpoints.suppliers import (
     SupplierCreate, SupplierUpdate, SupplierContactCreate, SupplierContractCreate, SupplierContractUpdate,
+    SupplierAccessRequestCreate, SupplierAccessDecision, SupplierAccessRevocation,
 )
-from app.models.supplier import Supplier, SupplierContact, SupplierContract, SupplierAssetLink
+from app.models.supplier import Supplier, SupplierContact, SupplierContract, SupplierAssetLink, SupplierAccessRequest
 from app.utils.rbac import role_has_permission
 
 
@@ -124,3 +125,46 @@ def test_supplier_asset_reverse_lookup_uses_supplier_permissions():
     assert not role_has_permission("executive", "suppliers", "read_assets")
     assert role_has_permission("admin", "suppliers", "manage_assets")
     assert not role_has_permission("auditor", "suppliers", "manage_assets")
+
+
+def test_supplier_access_request_validates_finite_dates_and_review_window():
+    request = SupplierAccessRequestCreate(
+        supplier_asset_link_id="00000000-0000-0000-0000-000000000001",
+        access_level="Privilégié", justification="Maintenance planifiée", scope="Administration du serveur",
+        start_date="2026-11-22", end_date="2026-12-22", review_due_at="2026-12-01",
+    )
+    assert request.access_level == "Privilégié"
+    with pytest.raises(ValidationError):
+        SupplierAccessRequestCreate(
+            supplier_asset_link_id="00000000-0000-0000-0000-000000000001",
+            access_level="Standard", justification="Maintenance planifiée", scope="Périmètre",
+            start_date="2026-11-22", end_date="2026-11-21", review_due_at="2026-11-22",
+        )
+    with pytest.raises(ValidationError):
+        SupplierAccessRequestCreate(
+            supplier_asset_link_id="00000000-0000-0000-0000-000000000001",
+            access_level="Standard", justification="Maintenance planifiée", scope="Périmètre",
+            start_date="2026-11-22", end_date="2026-12-22", review_due_at="2027-01-01",
+        )
+
+
+def test_supplier_access_decision_and_revocation_require_comments():
+    assert SupplierAccessDecision(decision="Approuvé", comment="Validé après revue").decision == "Approuvé"
+    assert SupplierAccessRevocation(reason="Fin de prestation").reason == "Fin de prestation"
+    with pytest.raises(ValidationError):
+        SupplierAccessDecision(decision="Refusé", comment="  ")
+    with pytest.raises(ValidationError):
+        SupplierAccessRevocation(reason="  ")
+
+
+def test_supplier_access_request_model_integrity_and_permissions():
+    assert SupplierAccessRequest.__tablename__ == "supplier_access_requests"
+    assert any(c.name == "ck_supplier_access_requests_decision_trace" for c in SupplierAccessRequest.__table__.constraints)
+    assert any(c.name == "ck_supplier_access_requests_review_window" for c in SupplierAccessRequest.__table__.constraints)
+    assert role_has_permission("admin", "suppliers", "read_access_requests")
+    assert role_has_permission("auditor", "suppliers", "read_access_requests")
+    assert role_has_permission("admin", "suppliers", "request_access")
+    assert role_has_permission("admin", "suppliers", "decide_access")
+    assert role_has_permission("admin", "suppliers", "revoke_access")
+    assert not role_has_permission("auditor", "suppliers", "decide_access")
+    assert not role_has_permission("executive", "suppliers", "read_access_requests")
