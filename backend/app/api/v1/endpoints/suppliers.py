@@ -222,6 +222,32 @@ class SupplierContactResponse(BaseModel):
 
 
 
+class SupplierAssetLinkCreate(BaseModel):
+    asset_id: UUID
+    relationship_type: Literal["Héberge", "Maintient", "Administre", "Accède", "Fournit", "Autre"]
+    access_level: Literal["Aucun", "Standard", "Privilégié"] = "Aucun"
+    data_access: bool = False
+    scope: str | None = Field(default=None, max_length=1000)
+    review_due_at: date | None = None
+
+
+class SupplierAssetLinkResponse(BaseModel):
+    model_config = ConfigDict(from_attributes=True)
+    id: UUID
+    supplier_id: UUID
+    asset_id: UUID
+    relationship_type: str
+    access_level: str
+    data_access: bool
+    scope: str | None
+    status: str
+    review_due_at: date | None
+    created_by_id: UUID
+    created_at: datetime
+    updated_at: datetime
+
+
+
 @router.get("/{supplier_id}/assets", response_model=list[SupplierAssetLinkResponse])
 async def list_supplier_assets(
     supplier_id: UUID,
@@ -514,31 +540,6 @@ class SupplierAssessmentValidation(BaseModel):
     decision: AssessmentDecision
     validation_comment: str = Field(min_length=5, max_length=4000)
     next_review_at: date | None = None
-
-
-class SupplierAssetLinkCreate(BaseModel):
-    asset_id: UUID
-    relationship_type: Literal["Héberge", "Maintient", "Administre", "Accède", "Fournit", "Autre"]
-    access_level: Literal["Aucun", "Standard", "Privilégié"] = "Aucun"
-    data_access: bool = False
-    scope: str | None = Field(default=None, max_length=1000)
-    review_due_at: date | None = None
-
-
-class SupplierAssetLinkResponse(BaseModel):
-    model_config = ConfigDict(from_attributes=True)
-    id: UUID
-    supplier_id: UUID
-    asset_id: UUID
-    relationship_type: str
-    access_level: str
-    data_access: bool
-    scope: str | None
-    status: str
-    review_due_at: date | None
-    created_by_id: UUID
-    created_at: datetime
-    updated_at: datetime
 
 
 class SupplierAssessmentResponse(BaseModel):
