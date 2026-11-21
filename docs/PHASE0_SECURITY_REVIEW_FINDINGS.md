@@ -113,3 +113,12 @@ Do not close Phase 0 until evidence is attached for:
 - This hybrid baseline can overlap later revisions when models imported by the baseline already contain fields added in later migrations (notably ActionItem ISO links). Conditional checks are being added to make clean upgrades resilient.
 - Downgrade symmetry is not fully guaranteed: because baseline metadata can include schema introduced by later revisions, downgrading a later revision may remove columns that were also created by baseline metadata. The baseline is intentionally non-downgradable, but the intermediate downgrade path still needs disposable-DB validation and a documented support policy.
 - Long-term recommendation: replace metadata-driven baseline with explicit schema DDL or a carefully generated frozen baseline, and keep later revisions strictly additive/differential. Do not perform this redesign in the stabilization branch without a dedicated migration strategy.
+
+
+## Root cause confirmed: baseline metadata is globally loaded
+
+- `backend/migrations/env.py` imports every current model into `Base.metadata` before migrations run.
+- Revision `0001_initial` calls `Base.metadata.create_all()` without an explicit historical table list. Therefore the baseline may create tables introduced by later revisions, producing duplicate-table/column/index/constraint failures when later revisions run.
+- Conditional guards added to revisions 0002/0004/0006 mitigate specific overlaps but are not a complete migration-chain strategy.
+- Recommended stabilization strategy: determine the exact legacy baseline schema and make revision 0001 create only that frozen schema (explicit table list or explicit DDL); then validate upgrade from 0001 through head and downgrade on a disposable PostgreSQL instance. Avoid broadly adding `IF NOT EXISTS` to all migrations because that can conceal schema drift and missing constraints.
+- This is a blocking Phase 0 migration issue until clean upgrade and downgrade are demonstrated.
