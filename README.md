@@ -40,6 +40,16 @@ Le projet suit une architecture moderne, scalable et conteneurisée.
 *   **Orchestration :** Docker Compose.
 *   **Services :** Postgres (DB), Backend (API), Frontend (SPA), Ollama (Host Machine).
 
+## 🧭 Architecture cible et documentation
+
+La référence d'architecture pour les évolutions futures est documentée dans :
+
+- [Architecture cible](docs/ARCHITECTURE_TARGET.md)
+- [Modèle de données cible](docs/TARGET_DATA_MODEL.md)
+- [Interactions entre modules](docs/MODULE_INTERACTIONS.md)
+
+Ces documents définissent l'orientation modulaire de PGCC et la roadmap. Ils ne remplacent pas l'analyse du code existant avant une migration.
+
 ## 📂 Structure du Projet
 
 ```text
