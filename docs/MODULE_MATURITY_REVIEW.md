@@ -288,3 +288,11 @@ The initial code-level review found that DOCX extraction joined paragraphs/table
 - Recommended future implementation: persist refresh-token `jti` or a token-family identifier, atomically rotate on refresh, revoke the previous token, and support logout/revoke-all. Add concurrency and replay tests before production deployment.
 
 - JWT hardening was adjusted after CI showed the internal `role` claim is legitimately used by pre-auth and access-token constructors. Reserved standard claims are blocked in the shared builder; `create_access_token` separately rejects caller-supplied role overrides while preserving the trusted role parameter.
+
+### 20. Forced password-change workflow after MFA
+
+- Fixed the MFA confirmation endpoint to return a typed `change_password_token` instead of issuing ordinary access/refresh tokens when `must_change_password` is set.
+- Added a frontend change-password step that submits the token and only stores a normal session after successful password change.
+- Initial MFA enrollment recovery codes are now included in this one-time response and displayed for secure saving before the user continues.
+- Added token-type regression coverage.
+- CI validation of these backend/frontend changes is pending.
