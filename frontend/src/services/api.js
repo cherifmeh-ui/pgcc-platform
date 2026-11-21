@@ -68,6 +68,9 @@ apiClient.interceptors.response.use(
 
     const refreshToken = localStorage.getItem('pgcc_refresh_token');
     if (!refreshToken) {
+      const authError = new Error('Session expirée : refresh token absent.');
+      processQueue(authError, null);
+      isRefreshing = false;
       logoutAndRedirect();
       return Promise.reject(error);
     }
