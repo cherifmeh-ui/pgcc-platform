@@ -72,3 +72,10 @@ Static review found a schema/model mismatch: the SQLAlchemy model accepted `clou
 ### Practical completion estimate
 
 Repository/static hardening is substantially progressed, but the remaining gates are high-value runtime and security validation. A percentage would be misleading; use the checklist below as the release gate rather than commit count.
+
+
+### Additional refresh-token hardening
+
+- Refresh policy now rejects JWTs missing the `iat` (issued-at) claim, even if signature and type are otherwise valid.
+- Regression test added.
+- This is defense-in-depth only; server-side refresh-token persistence, rotation and revocation remain required before production.
