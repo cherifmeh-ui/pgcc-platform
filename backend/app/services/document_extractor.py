@@ -25,7 +25,9 @@ class DocumentExtractor:
                 raise ValueError(f"Format non supporté : .{ext}.")
                 
         except Exception as e:
-            # Avoid logging untrusted filenames or parser details to stdout.
+            # Keep unsupported-format errors actionable without leaking parser details.
+            if ext not in {"pdf", "docx"}:
+                raise ValueError(f"Format non supporté : .{ext}.") from None
             raise ValueError("Échec de l'extraction du document. Vérifiez son format et son intégrité.") from e
 
 def _extract_pdf_limited(data: bytes, max_pages: int = 50) -> str:
