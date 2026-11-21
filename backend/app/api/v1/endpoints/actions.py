@@ -13,6 +13,8 @@ from app.models.action_item import ActionItem, ActionStatus, Priority
 from app.models.risk import Risk
 from app.models.iso_control import IsoControl
 from app.models.iso_control_assessment import IsoControlAssessment
+from app.models.action_verification import ActionVerification
+from app.models.document import Document
 from app.models.user import User
 from app.services.security_logger import log_action
 from app.services.action_lifecycle import validate_action_transition
@@ -74,6 +76,39 @@ class ActionResponse(ActionBase):
     created_at: datetime
     updated_at: datetime
     
+    class Config:
+        from_attributes = True
+
+class ActionVerificationCreate(BaseModel):
+    outcome: str
+    notes: str = Field(min_length=1, max_length=10000)
+    evidence_document_id: Optional[UUID] = None
+
+    @field_validator("outcome")
+    @classmethod
+    def validate_outcome(cls, value: str) -> str:
+        if value not in {"Effective", "Ineffective", "Follow-up required"}:
+            raise ValueError("Résultat de vérification invalide.")
+        return value
+
+    @field_validator("notes")
+    @classmethod
+    def validate_notes(cls, value: str) -> str:
+        value = value.strip()
+        if not value:
+            raise ValueError("Les observations de vérification sont obligatoires.")
+        return value
+
+
+class ActionVerificationResponse(BaseModel):
+    id: UUID
+    action_id: UUID
+    verified_by_id: UUID
+    evidence_document_id: Optional[UUID]
+    outcome: str
+    notes: str
+    verified_at: datetime
+
     class Config:
         from_attributes = True
 
@@ -184,6 +219,62 @@ async def create_action(
         event_type="GRC_ACTION", request=request,
     )
     return action
+
+
+@router.get("/{action_id}/verifications", response_model=List[ActionVerificationResponse])
+async def list_action_verifications(
+    action_id: UUID,
+    db: AsyncSession = Depends(get_db),
+    current_user: User = require_permission("actions", "read"),
+):
+    action_result = await db.execute(select(ActionItem).where(ActionItem.id == action_id))
+    if action_result.scalar_one_or_none() is None:
+        raise HTTPException(status_code=404, detail="Action non trouvée.")
+    result = await db.execute(
+        select(ActionVerification)
+        .where(ActionVerification.action_id == action_id)
+        .order_by(ActionVerification.verified_at.desc())
+    )
+    return result.scalars().all()
+
+
+@router.post("/{action_id}/verifications", response_model=ActionVerificationResponse, status_code=status.HTTP_201_CREATED)
+async def verify_action_effectiveness(
+    action_id: UUID,
+    data: ActionVerificationCreate,
+    request: Request,
+    db: AsyncSession = Depends(get_db),
+    current_user: User = require_permission("actions", "update"),
+):
+    action_result = await db.execute(select(ActionItem).where(ActionItem.id == action_id))
+    action = action_result.scalar_one_or_none()
+    if action is None:
+        raise HTTPException(status_code=404, detail="Action non trouvée.")
+    if action.status != ActionStatus.DONE:
+        raise HTTPException(status_code=409, detail="La vérification d'efficacité est possible uniquement après clôture de l'action.")
+    if data.evidence_document_id:
+        document_result = await db.execute(select(Document).where(Document.id == data.evidence_document_id))
+        document = document_result.scalar_one_or_none()
+        if document is None:
+            raise HTTPException(status_code=404, detail="Document de preuve introuvable.")
+        if not document.file_data:
+            raise HTTPException(status_code=422, detail="Le document ne possède pas de fichier source.")
+    verification = ActionVerification(
+        action_id=action.id,
+        verified_by_id=current_user.id,
+        evidence_document_id=data.evidence_document_id,
+        outcome=data.outcome,
+        notes=data.notes,
+    )
+    db.add(verification)
+    await db.commit()
+    await db.refresh(verification)
+    await log_action(
+        user_email=current_user.email, action="VERIFY_EFFECTIVENESS", resource="action_verifications",
+        resource_id=str(verification.id), details=f"Action {action.id}: {data.outcome}",
+        event_type="GRC_ACTION", request=request,
+    )
+    return verification
 
 
 @router.put("/{action_id}", response_model=ActionResponse)
