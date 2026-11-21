@@ -877,6 +877,80 @@ async def create_supplier(
     return supplier
 
 
+
+@router.get("/overview/risk")
+async def get_supplier_risk_overview(
+    db: AsyncSession = Depends(get_db),
+    current_user: User = require_permission("suppliers", "read"),
+):
+    """Return aggregate TPRM indicators without changing central risk scores."""
+    if not role_has_permission((current_user.role or "").lower(), "risks", "read"):
+        raise HTTPException(status_code=403, detail="La permission risks:read est requise pour consulter la synthèse consolidée.")
+
+    from app.services.supplier_risk_overview import build_supplier_risk_overview
+
+    supplier_rows = await db.execute(
+        select(Supplier.id, Supplier.criticality, Supplier.archived_at)
+    )
+    suppliers = [
+        {"id": row.id, "criticality": row.criticality, "archived": row.archived_at is not None}
+        for row in supplier_rows.all()
+    ]
+    active_supplier_ids = [item["id"] for item in suppliers if not item["archived"]]
+    if not active_supplier_ids:
+        return build_supplier_risk_overview([], [], [], [], [])
+
+    risk_rows = await db.execute(
+        select(
+            SupplierRiskLink.risk_id, Risk.risk_level, Risk.status,
+        )
+        .join(Risk, Risk.id == SupplierRiskLink.risk_id)
+        .where(SupplierRiskLink.supplier_id.in_(active_supplier_ids))
+    )
+    supplier_risks = [
+        {"risk_id": row.risk_id, "risk_level": row.risk_level, "status": row.status}
+        for row in risk_rows.all()
+    ]
+
+    assessment_rows = await db.execute(
+        select(
+            SupplierAssessment.supplier_id, SupplierAssessment.status,
+            SupplierAssessment.next_review_at, SupplierAssessment.created_at,
+        )
+        .where(SupplierAssessment.supplier_id.in_(active_supplier_ids))
+    )
+    assessments = [
+        {"supplier_id": row.supplier_id, "status": row.status,
+         "next_review_at": row.next_review_at, "created_at": row.created_at}
+        for row in assessment_rows.all()
+    ]
+
+    access_rows = await db.execute(
+        select(
+            SupplierAccessRequest.status, SupplierAccessRequest.access_level,
+            SupplierAccessRequest.start_date, SupplierAccessRequest.end_date,
+            SupplierAccessRequest.review_due_at,
+        )
+        .where(SupplierAccessRequest.supplier_id.in_(active_supplier_ids))
+    )
+    access_requests = [
+        {"status": row.status, "access_level": row.access_level,
+         "start_date": row.start_date, "end_date": row.end_date,
+         "review_due_at": row.review_due_at}
+        for row in access_rows.all()
+    ]
+
+    contract_rows = await db.execute(
+        select(SupplierContract.status, SupplierContract.end_date)
+        .where(SupplierContract.supplier_id.in_(active_supplier_ids))
+    )
+    contracts = [{"status": row.status, "end_date": row.end_date} for row in contract_rows.all()]
+
+    return build_supplier_risk_overview(
+        suppliers, supplier_risks, assessments, access_requests, contracts
+    )
+
+
 @router.get("/{supplier_id}", response_model=SupplierResponse)
 async def get_supplier(
     supplier_id: UUID,
