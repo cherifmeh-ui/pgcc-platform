@@ -23,6 +23,8 @@ def test_refresh_allowed_for_active_unlocked_user_with_current_password():
         is_active=True,
         is_locked=False,
         must_change_password=False,
+        role="viewer",
+        mfa_enabled=False,
         password_changed_at=datetime.fromtimestamp(100, timezone.utc),
         token_issued_at=101,
     ) is None
@@ -33,6 +35,32 @@ def test_refresh_allowed_when_no_password_change_timestamp():
         is_active=True,
         is_locked=False,
         must_change_password=False,
+        role="viewer",
+        mfa_enabled=False,
+        password_changed_at=None,
+        token_issued_at=101,
+    ) is None
+
+
+def test_refresh_denied_for_privileged_role_without_mfa():
+    assert refresh_denial_reason(
+        is_active=True,
+        is_locked=False,
+        must_change_password=False,
+        role="admin",
+        mfa_enabled=False,
+        password_changed_at=None,
+        token_issued_at=101,
+    ) == "MFA obligatoire pour ce rôle."
+
+
+def test_refresh_allowed_for_privileged_role_with_mfa():
+    assert refresh_denial_reason(
+        is_active=True,
+        is_locked=False,
+        must_change_password=False,
+        role="executive",
+        mfa_enabled=True,
         password_changed_at=None,
         token_issued_at=101,
     ) is None
