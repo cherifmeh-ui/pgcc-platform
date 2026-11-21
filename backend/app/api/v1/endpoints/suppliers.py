@@ -10,10 +10,11 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.api.deps import require_permission
 from app.core.database import get_db
-from app.models.supplier import Supplier, SupplierContact, SupplierContract
+from app.models.supplier import Supplier, SupplierContact, SupplierContract, SupplierAssessment
 from app.models.document import Document
 from app.models.user import User
 from app.services.security_logger import log_action
+from app.services.supplier_assessment import calculate_assessment_score, validate_questionnaire, validate_answers
 
 router = APIRouter(prefix="/suppliers", tags=["Fournisseurs et tiers (TPRM)"])
 
@@ -383,6 +384,90 @@ async def update_supplier_contact(
     await log_action(user_email=current_user.email, action="UPDATE_CONTACT", resource="supplier_contacts", resource_id=str(contact.id), details=f"Supplier contact updated for supplier {supplier_id}", event_type="SUPPLIER", request=request)
     return contact
 
+
+AssessmentType = Literal["Initiale", "Périodique", "Renouvellement", "Incident", "Changement majeur"]
+AssessmentDecision = Literal["Approuvé", "Approuvé sous conditions", "Refusé"]
+
+
+class AssessmentQuestion(BaseModel):
+    id: str = Field(min_length=1, max_length=80)
+    label: str = Field(min_length=1, max_length=500)
+    weight: int = Field(ge=1, le=10)
+    max_score: int = Field(default=5, ge=1, le=5)
+    required: bool = True
+
+
+class AssessmentAnswer(BaseModel):
+    question_id: str = Field(min_length=1, max_length=80)
+    score: int = Field(ge=0, le=5)
+    comment: str | None = Field(default=None, max_length=4000)
+    evidence_document_id: UUID | None = None
+
+
+class SupplierAssessmentCreate(BaseModel):
+    assessment_type: AssessmentType = "Initiale"
+    scope: str = Field(min_length=5, max_length=4000)
+    questionnaire_version: str = Field(min_length=1, max_length=50)
+    questionnaire_snapshot: list[AssessmentQuestion] = Field(min_length=1, max_length=100)
+    next_review_at: date | None = None
+
+    @field_validator("scope", "questionnaire_version")
+    @classmethod
+    def trim_assessment_text(cls, value: str) -> str:
+        value = value.strip()
+        if not value:
+            raise ValueError("Ce champ ne peut pas être vide")
+        return value
+
+    @field_validator("questionnaire_snapshot")
+    @classmethod
+    def unique_question_ids(cls, value):
+        ids = [item.id for item in value]
+        if len(ids) != len(set(ids)):
+            raise ValueError("Les identifiants de questions doivent être uniques")
+        return value
+
+
+class SupplierAssessmentAnswers(BaseModel):
+    answers: list[AssessmentAnswer] = Field(max_length=100)
+
+    @field_validator("answers")
+    @classmethod
+    def unique_answer_ids(cls, value):
+        ids = [item.question_id for item in value]
+        if len(ids) != len(set(ids)):
+            raise ValueError("Une question ne peut recevoir qu'une réponse")
+        return value
+
+
+class SupplierAssessmentValidation(BaseModel):
+    decision: AssessmentDecision
+    validation_comment: str = Field(min_length=5, max_length=4000)
+    next_review_at: date | None = None
+
+
+class SupplierAssessmentResponse(BaseModel):
+    model_config = ConfigDict(from_attributes=True)
+    id: UUID
+    supplier_id: UUID
+    assessment_type: AssessmentType
+    scope: str
+    questionnaire_version: str
+    questionnaire_snapshot: list[dict]
+    answers: list[dict]
+    status: str
+    score: float | None
+    risk_level: str | None
+    decision: str | None
+    assessed_by_id: UUID
+    validated_by_id: UUID | None
+    next_review_at: date | None
+    submitted_at: datetime | None
+    validated_at: datetime | None
+    created_at: datetime
+    updated_at: datetime
+
+
 @router.get("/{supplier_id}/contracts", response_model=list[SupplierContractResponse])
 async def list_supplier_contracts(
     supplier_id: UUID,
@@ -473,4 +558,159 @@ async def update_supplier_contract(
     await log_action(user_email=current_user.email, action="UPDATE_CONTRACT", resource="supplier_contracts", resource_id=str(contract.id), details=f"Contract updated: {contract.reference}", event_type="SUPPLIER", request=request)
     return contract
 
+
+
+
+@router.get("/{supplier_id}/assessments", response_model=list[SupplierAssessmentResponse])
+async def list_supplier_assessments(
+    supplier_id: UUID,
+    limit: int = Query(default=50, ge=1, le=200),
+    offset: int = Query(default=0, ge=0),
+    db: AsyncSession = Depends(get_db),
+    current_user: User = require_permission("suppliers", "read_assessments"),
+):
+    supplier = await db.execute(select(Supplier.id).where(Supplier.id == supplier_id))
+    if supplier.scalar_one_or_none() is None:
+        raise HTTPException(status_code=404, detail="Fournisseur introuvable")
+    result = await db.execute(
+        select(SupplierAssessment).where(SupplierAssessment.supplier_id == supplier_id)
+        .order_by(SupplierAssessment.created_at.desc(), SupplierAssessment.id)
+        .limit(limit).offset(offset)
+    )
+    return result.scalars().all()
+
+
+@router.post("/{supplier_id}/assessments", response_model=SupplierAssessmentResponse, status_code=status.HTTP_201_CREATED)
+async def create_supplier_assessment(
+    supplier_id: UUID,
+    data: SupplierAssessmentCreate,
+    request: Request,
+    db: AsyncSession = Depends(get_db),
+    current_user: User = require_permission("suppliers", "assess"),
+):
+    supplier = await db.execute(select(Supplier).where(Supplier.id == supplier_id, Supplier.archived_at.is_(None)))
+    if supplier.scalar_one_or_none() is None:
+        raise HTTPException(status_code=404, detail="Fournisseur introuvable ou archivé")
+    snapshot = [question.model_dump() for question in data.questionnaire_snapshot]
+    try:
+        validate_questionnaire(snapshot)
+    except ValueError as exc:
+        raise HTTPException(status_code=422, detail=str(exc))
+    assessment = SupplierAssessment(
+        supplier_id=supplier_id,
+        assessment_type=data.assessment_type,
+        scope=data.scope,
+        questionnaire_version=data.questionnaire_version,
+        questionnaire_snapshot=snapshot,
+        answers=[],
+        assessed_by_id=current_user.id,
+        next_review_at=data.next_review_at,
+    )
+    db.add(assessment)
+    await db.commit()
+    await db.refresh(assessment)
+    await log_action(user_email=current_user.email, action="CREATE_ASSESSMENT", resource="supplier_assessments", resource_id=str(assessment.id), details=f"Assessment created for supplier {supplier_id}, questionnaire {assessment.questionnaire_version}", event_type="SUPPLIER", request=request)
+    return assessment
+
+
+@router.put("/{supplier_id}/assessments/{assessment_id}/answers", response_model=SupplierAssessmentResponse)
+async def save_supplier_assessment_answers(
+    supplier_id: UUID,
+    assessment_id: UUID,
+    data: SupplierAssessmentAnswers,
+    request: Request,
+    db: AsyncSession = Depends(get_db),
+    current_user: User = require_permission("suppliers", "assess"),
+):
+    result = await db.execute(select(SupplierAssessment).where(
+        SupplierAssessment.id == assessment_id,
+        SupplierAssessment.supplier_id == supplier_id,
+    ))
+    assessment = result.scalar_one_or_none()
+    if assessment is None:
+        raise HTTPException(status_code=404, detail="Évaluation fournisseur introuvable")
+    if assessment.status != "Brouillon":
+        raise HTTPException(status_code=409, detail="Une évaluation soumise ne peut plus être modifiée")
+    if assessment.assessed_by_id != current_user.id:
+        raise HTTPException(status_code=403, detail="Seul l'évaluateur désigné peut modifier ses réponses")
+    answers = [answer.model_dump(mode="json") for answer in data.answers]
+    try:
+        validate_answers(assessment.questionnaire_snapshot, answers, require_all_required=False)
+    except ValueError as exc:
+        raise HTTPException(status_code=422, detail=str(exc))
+    evidence_ids = [answer["evidence_document_id"] for answer in answers if answer.get("evidence_document_id")]
+    if evidence_ids:
+        docs = await db.execute(select(Document.id).where(Document.id.in_(evidence_ids)))
+        if len(docs.scalars().all()) != len(set(evidence_ids)):
+            raise HTTPException(status_code=422, detail="Une ou plusieurs preuves documentaires sont introuvables")
+    assessment.answers = answers
+    await db.commit()
+    await db.refresh(assessment)
+    await log_action(user_email=current_user.email, action="UPDATE_ASSESSMENT_ANSWERS", resource="supplier_assessments", resource_id=str(assessment.id), details=f"Assessment answers updated for supplier {supplier_id}", event_type="SUPPLIER", request=request)
+    return assessment
+
+
+@router.post("/{supplier_id}/assessments/{assessment_id}/submit", response_model=SupplierAssessmentResponse)
+async def submit_supplier_assessment(
+    supplier_id: UUID,
+    assessment_id: UUID,
+    request: Request,
+    db: AsyncSession = Depends(get_db),
+    current_user: User = require_permission("suppliers", "assess"),
+):
+    result = await db.execute(select(SupplierAssessment).where(
+        SupplierAssessment.id == assessment_id,
+        SupplierAssessment.supplier_id == supplier_id,
+    ))
+    assessment = result.scalar_one_or_none()
+    if assessment is None:
+        raise HTTPException(status_code=404, detail="Évaluation fournisseur introuvable")
+    if assessment.status != "Brouillon" or assessment.assessed_by_id != current_user.id:
+        raise HTTPException(status_code=409, detail="Évaluation non modifiable ou évaluateur non autorisé")
+    try:
+        validate_answers(assessment.questionnaire_snapshot, assessment.answers, require_all_required=True)
+        score, risk_level = calculate_assessment_score(assessment.questionnaire_snapshot, assessment.answers)
+    except ValueError as exc:
+        raise HTTPException(status_code=422, detail=str(exc))
+    assessment.score = score
+    assessment.risk_level = risk_level
+    assessment.status = "À valider"
+    assessment.submitted_at = datetime.now(timezone.utc)
+    await db.commit()
+    await db.refresh(assessment)
+    await log_action(user_email=current_user.email, action="SUBMIT_ASSESSMENT", resource="supplier_assessments", resource_id=str(assessment.id), details=f"Assessment submitted with score {score} and risk {risk_level}", event_type="SUPPLIER", request=request)
+    return assessment
+
+
+@router.post("/{supplier_id}/assessments/{assessment_id}/validate", response_model=SupplierAssessmentResponse)
+async def validate_supplier_assessment(
+    supplier_id: UUID,
+    assessment_id: UUID,
+    data: SupplierAssessmentValidation,
+    request: Request,
+    db: AsyncSession = Depends(get_db),
+    current_user: User = require_permission("suppliers", "validate_assessment"),
+):
+    result = await db.execute(select(SupplierAssessment).where(
+        SupplierAssessment.id == assessment_id,
+        SupplierAssessment.supplier_id == supplier_id,
+    ))
+    assessment = result.scalar_one_or_none()
+    if assessment is None:
+        raise HTTPException(status_code=404, detail="Évaluation fournisseur introuvable")
+    if assessment.status != "À valider":
+        raise HTTPException(status_code=409, detail="Seule une évaluation soumise peut être validée")
+    if assessment.assessed_by_id == current_user.id:
+        raise HTTPException(status_code=403, detail="L'évaluateur ne peut pas valider sa propre évaluation")
+    if data.decision == "Approuvé" and assessment.risk_level in ("Élevé", "Critique"):
+        raise HTTPException(status_code=422, detail="Un niveau de risque élevé ou critique exige une décision conditionnelle ou un refus")
+    assessment.decision = data.decision
+    assessment.validated_by_id = current_user.id
+    assessment.validated_at = datetime.now(timezone.utc)
+    assessment.next_review_at = data.next_review_at or assessment.next_review_at
+    assessment.status = "Validée"
+    await db.commit()
+    await db.refresh(assessment)
+    await log_action(user_email=current_user.email, action="VALIDATE_ASSESSMENT", resource="supplier_assessments", resource_id=str(assessment.id), details=f"Assessment validated: {data.decision}; {data.validation_comment}", event_type="SUPPLIER", request=request)
+    return assessment
 
