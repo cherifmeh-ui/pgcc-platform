@@ -97,3 +97,11 @@ Do not close Phase 0 until evidence is attached for:
 - Corrected downgrade to restore the exact pre-0020 index expression `lower(reference)`, preserving upgrade/downgrade symmetry.
 - Added a static regression test asserting both index expressions and the guarded downgrade for cloud_resource values.
 - Runtime PostgreSQL migration/downgrade validation is still required.
+
+
+## PostgreSQL migration CI failure — baseline dependency
+
+- The first PostgreSQL clean-upgrade CI run failed in revision `0001_initial`: SQLAlchemy metadata creation could not resolve `action_items.iso_assessment_id` to `iso_control_assessments.id` because the baseline did not import the assessment model.
+- Corrected baseline imports to register `iso_control_assessment` before metadata `create_all`.
+- Revision `0002_iso_assessments` now checks whether the table already exists and creates missing indexes, avoiding duplicate-table failure when the initial metadata baseline creates the table. This supports clean DB upgrade and previously migrated databases where 0002 originally created the table.
+- CI must confirm this migration path. Downgrade semantics remain to be exercised against disposable PostgreSQL.
