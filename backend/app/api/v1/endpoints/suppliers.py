@@ -10,7 +10,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.api.deps import require_permission
 from app.core.database import get_db
-from app.models.supplier import Supplier, SupplierContact, SupplierContract, SupplierAssessment, SupplierAssetLink, SupplierAccessRequest, SupplierAccessReview, SupplierRiskLink
+from app.models.supplier import Supplier, SupplierContact, SupplierContract, SupplierAssessment, SupplierAssetLink, SupplierAccessRequest, SupplierAccessReview, SupplierRiskLink, SupplierRiskSnapshot
 from app.models.asset import Asset
 from app.models.risk import Risk
 from app.utils.rbac import role_has_permission
@@ -969,6 +969,66 @@ async def get_supplier_risk_overview(
     return build_supplier_risk_overview(
         suppliers, supplier_risks, assessments, access_requests, contracts
     )
+
+
+@router.post("/overview/snapshots/capture", status_code=status.HTTP_201_CREATED)
+async def capture_supplier_risk_snapshot(
+    db: AsyncSession = Depends(get_db),
+    current_user: User = require_permission("suppliers", "manage_risks"),
+):
+    """Capture one immutable snapshot for the current calendar month."""
+    snapshot_month = date.today().replace(day=1)
+    existing = await db.execute(
+        select(SupplierRiskSnapshot.id).where(
+            SupplierRiskSnapshot.snapshot_month == snapshot_month
+        )
+    )
+    if existing.scalar_one_or_none() is not None:
+        raise HTTPException(status_code=409, detail="Un instantané existe déjà pour ce mois.")
+    indicators = await get_supplier_risk_overview(db=db, current_user=current_user)
+    snapshot = SupplierRiskSnapshot(
+        snapshot_month=snapshot_month,
+        indicators=indicators,
+        captured_by_id=current_user.id,
+    )
+    db.add(snapshot)
+    try:
+        await db.commit()
+    except Exception:
+        await db.rollback()
+        raise HTTPException(status_code=409, detail="Un instantané mensuel existe déjà ou une contrainte est invalide.")
+    await db.refresh(snapshot)
+    return {
+        "id": snapshot.id,
+        "snapshot_month": snapshot.snapshot_month,
+        "indicators": snapshot.indicators,
+        "created_at": snapshot.created_at,
+    }
+
+
+@router.get("/overview/snapshots")
+async def list_supplier_risk_snapshots(
+    limit: int = Query(default=24, ge=1, le=60),
+    db: AsyncSession = Depends(get_db),
+    current_user: User = require_permission("suppliers", "read"),
+):
+    """List historical monthly supplier risk indicators."""
+    if not role_has_permission((current_user.role or "").lower(), "risks", "read"):
+        raise HTTPException(status_code=403, detail="La permission risks:read est requise.")
+    result = await db.execute(
+        select(SupplierRiskSnapshot)
+        .order_by(SupplierRiskSnapshot.snapshot_month.desc())
+        .limit(limit)
+    )
+    return [
+        {
+            "id": item.id,
+            "snapshot_month": item.snapshot_month,
+            "indicators": item.indicators,
+            "created_at": item.created_at,
+        }
+        for item in result.scalars().all()
+    ]
 
 
 @router.get("/{supplier_id}", response_model=SupplierResponse)
