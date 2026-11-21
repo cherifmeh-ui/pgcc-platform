@@ -225,3 +225,5 @@ The initial code-level review found that DOCX extraction joined paragraphs/table
 - Supplier-asset link termination now refuses to close a relationship while any associated access request remains `Demandé`, `Approuvé`, or `Suspendu`; the access workflow must be explicitly revoked/closed first. Regression test added.
 
 - Supplier status changes to `Suspendu` or `Terminé` now require active supplier-asset links to be terminated and open access requests/approvals to be revoked or closed first. This prevents status-only suspension from leaving access approvals active; a regression test covers the open-request case.
+
+- Supplier access requests and approvals now reject retired assets using both lifecycle status and the `retired_at` marker, protecting against inconsistent historical rows. The eligibility rule is isolated and unit-tested with valid asset lifecycle values.
