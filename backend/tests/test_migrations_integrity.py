@@ -162,3 +162,9 @@ def test_refresh_and_password_change_lock_user_row_before_session_mutations():
     refresh = source.split('@router.post("/refresh"', 1)[1].split('@router.post("/logout"', 1)[0]
     assert "select(User).where(User.email == email).with_for_update()" in change_password
     assert "select(User).where(User.email == email).with_for_update()" in refresh
+
+
+def test_refresh_session_model_is_registered_in_development_create_all():
+    main = MIGRATIONS_DIR.parent.parent / "app" / "main.py"
+    source = main.read_text(encoding="utf-8")
+    assert "refresh_token_session" in source
