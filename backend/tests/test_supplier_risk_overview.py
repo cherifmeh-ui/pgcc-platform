@@ -11,7 +11,8 @@ def test_supplier_risk_overview_deduplicates_risks_and_counts_only_current_acces
     result = build_supplier_risk_overview(
         suppliers=[
             {"id": supplier_a, "criticality": "Critique"},
-            {"id": supplier_b, "criticality": "Moyenne"},\n            {"id": uuid4(), "criticality": "Critique", "status": "Terminé"},
+            {"id": supplier_b, "criticality": "Moyenne"},
+            {"id": uuid4(), "criticality": "Critique", "status": "Terminé"},
         ],
         supplier_risks=[
             {"risk_id": risk_id, "risk_level": 18, "status": "En traitement"},
@@ -35,7 +36,9 @@ def test_supplier_risk_overview_deduplicates_risks_and_counts_only_current_acces
     assert result["access"]["active_authorizations"] == 1
     assert result["access"]["privileged_active"] == 1
     assert result["access"]["overdue_reviews"] == 1
-    assert result["contracts"]["expiring_within_90_days"] == 1\n    assert result["contracts"]["with_missing_security_clauses"] == 1\n    assert result["suppliers"]["total_active"] == 2
+    assert result["contracts"]["expiring_within_90_days"] == 1
+    assert result["contracts"]["with_missing_security_clauses"] == 1
+    assert result["suppliers"]["total_active"] == 2
 
 
 def test_supplier_risk_overview_flags_critical_supplier_without_valid_assessment():
