@@ -45,8 +45,8 @@ def _extract_pdf_limited(data: bytes, max_pages: int = 50) -> str:
             if page_text and page_text.strip():
                 cleaned = ' '.join(page_text.split())
                 text_parts.append(cleaned)
-        except Exception as e_page:
-             print(f"⚠️ Skip page {page_num + 1} : {e_page}")
+        except Exception:
+             # Skip malformed page without exposing parser details or document data.
              continue 
 
     if not text_parts:
