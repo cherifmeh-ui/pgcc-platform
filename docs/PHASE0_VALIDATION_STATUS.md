@@ -268,3 +268,11 @@ Repository/static hardening is substantially progressed, but the remaining gates
 - Review identified baseline overlap in revisions 0009–0011: asset filter indexes and the asset-risk FK/index can already exist from model metadata. Revisions 0009 and 0011 now guard indexes; 0010 inspects the existing FK delete rule and only alters it when required.
 - Static regression checks added for revisions 0007 and 0009–0011.
 - Runtime PostgreSQL CI remains required; these edits are not yet declared validated.
+
+
+### Migration review 0009–0013
+
+- Revisions 0009–0011 were reviewed and guarded against indexes/FK objects already created by the SQLAlchemy baseline.
+- Revisions 0012 (supplier register/contact) and 0013 (supplier contracts) were updated to conditionally create tables and indexes and to guard downgrade table drops.
+- Added static migration regression tests for revisions 0009–0013.
+- Runtime CI is pending. The hybrid baseline still risks schema drift; guards are a stabilization measure, not a replacement for a frozen baseline.
