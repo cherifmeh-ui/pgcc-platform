@@ -834,6 +834,17 @@ async def terminate_supplier_asset_link(
         raise HTTPException(status_code=404, detail="Relation fournisseur-actif introuvable")
     if link.status == "Terminé":
         raise HTTPException(status_code=409, detail="Cette relation est déjà terminée")
+    open_access = await db.execute(
+        select(SupplierAccessRequest.id).where(
+            SupplierAccessRequest.supplier_asset_link_id == link_id,
+            SupplierAccessRequest.status.in_(("Demandé", "Approuvé", "Suspendu")),
+        ).limit(1)
+    )
+    if open_access.scalar_one_or_none() is not None:
+        raise HTTPException(
+            status_code=409,
+            detail="Relation impossible à terminer : une demande ou autorisation d'accès reste ouverte. Révoquez ou clôturez-la d'abord.",
+        )
     link.status = "Terminé"
     await db.commit()
     await db.refresh(link)
