@@ -14,7 +14,7 @@ from app.models.supplier import Supplier, SupplierContact, SupplierContract, Sup
 from app.models.document import Document
 from app.models.user import User
 from app.services.security_logger import log_action
-from app.services.supplier_assessment import calculate_assessment_score, validate_questionnaire, validate_answers
+from app.services.supplier_assessment import calculate_assessment_score, get_questionnaire_snapshot, validate_questionnaire, validate_answers
 
 router = APIRouter(prefix="/suppliers", tags=["Fournisseurs et tiers (TPRM)"])
 
@@ -408,7 +408,6 @@ class SupplierAssessmentCreate(BaseModel):
     assessment_type: AssessmentType = "Initiale"
     scope: str = Field(min_length=5, max_length=4000)
     questionnaire_version: str = Field(min_length=1, max_length=50)
-    questionnaire_snapshot: list[AssessmentQuestion] = Field(min_length=1, max_length=100)
     next_review_at: date | None = None
 
     @field_validator("scope", "questionnaire_version")
@@ -417,14 +416,6 @@ class SupplierAssessmentCreate(BaseModel):
         value = value.strip()
         if not value:
             raise ValueError("Ce champ ne peut pas être vide")
-        return value
-
-    @field_validator("questionnaire_snapshot")
-    @classmethod
-    def unique_question_ids(cls, value):
-        ids = [item.id for item in value]
-        if len(ids) != len(set(ids)):
-            raise ValueError("Les identifiants de questions doivent être uniques")
         return value
 
 
@@ -591,8 +582,8 @@ async def create_supplier_assessment(
     supplier = await db.execute(select(Supplier).where(Supplier.id == supplier_id, Supplier.archived_at.is_(None)))
     if supplier.scalar_one_or_none() is None:
         raise HTTPException(status_code=404, detail="Fournisseur introuvable ou archivé")
-    snapshot = [question.model_dump() for question in data.questionnaire_snapshot]
     try:
+        snapshot = get_questionnaire_snapshot(data.questionnaire_version)
         validate_questionnaire(snapshot)
     except ValueError as exc:
         raise HTTPException(status_code=422, detail=str(exc))
