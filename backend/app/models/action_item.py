@@ -26,6 +26,10 @@ class ActionItem(Base):
 
     id = Column(PG_UUID(as_uuid=True), primary_key=True, default=uuid4)
     
+    # Optional traceability to an ISO 27002 control assessment
+    iso_control_id = Column(Integer, ForeignKey("iso_controls.id", ondelete="RESTRICT"), nullable=True, index=True)
+    iso_assessment_id = Column(PG_UUID(as_uuid=True), ForeignKey("iso_control_assessments.id", ondelete="RESTRICT"), nullable=True, index=True)
+
     # Lien vers le risque parent
     risk_id = Column(
         PG_UUID(as_uuid=True), 
