@@ -526,10 +526,14 @@ async def decide_supplier_access_request(
     db: AsyncSession = Depends(get_db),
     current_user: User = require_permission("suppliers", "decide_access"),
 ):
-    result = await db.execute(select(SupplierAccessRequest).where(
-        SupplierAccessRequest.id == access_request_id,
-        SupplierAccessRequest.supplier_id == supplier_id,
-    ))
+    result = await db.execute(
+        select(SupplierAccessRequest)
+        .where(
+            SupplierAccessRequest.id == access_request_id,
+            SupplierAccessRequest.supplier_id == supplier_id,
+        )
+        .with_for_update()
+    )
     access_request = result.scalar_one_or_none()
     if access_request is None:
         raise HTTPException(status_code=404, detail="Demande d'accès introuvable")
@@ -1523,10 +1527,14 @@ async def save_supplier_assessment_answers(
     db: AsyncSession = Depends(get_db),
     current_user: User = require_permission("suppliers", "assess"),
 ):
-    result = await db.execute(select(SupplierAssessment).where(
-        SupplierAssessment.id == assessment_id,
-        SupplierAssessment.supplier_id == supplier_id,
-    ))
+    result = await db.execute(
+        select(SupplierAssessment)
+        .where(
+            SupplierAssessment.id == assessment_id,
+            SupplierAssessment.supplier_id == supplier_id,
+        )
+        .with_for_update()
+    )
     assessment = result.scalar_one_or_none()
     if assessment is None:
         raise HTTPException(status_code=404, detail="Évaluation fournisseur introuvable")
