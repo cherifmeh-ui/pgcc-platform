@@ -260,3 +260,11 @@ Repository/static hardening is substantially progressed, but the remaining gates
 - Added a static test parsing every migration with Python AST, preventing syntax errors from reaching the Alembic runtime.
 - Commits: `1521f96` (syntax correction), `44ee3a2` (AST test).
 - CI rerun pending.
+
+
+### Migration CI findings — revisions 0007–0011
+
+- PostgreSQL CI detected duplicate table `asset_risk_links` in revision 0007. The migration now guards table creation and index creation, and downgrade checks for table/index presence.
+- Review identified baseline overlap in revisions 0009–0011: asset filter indexes and the asset-risk FK/index can already exist from model metadata. Revisions 0009 and 0011 now guard indexes; 0010 inspects the existing FK delete rule and only alters it when required.
+- Static regression checks added for revisions 0007 and 0009–0011.
+- Runtime PostgreSQL CI remains required; these edits are not yet declared validated.
