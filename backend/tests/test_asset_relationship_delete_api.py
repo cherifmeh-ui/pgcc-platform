@@ -37,7 +37,7 @@ async def test_delete_relationship_removes_only_relationship_linked_to_asset(mon
     relationship = MagicMock(
         id=RELATION_ID,
         source_asset_id=ASSET_ID,
-        target_asset_id=UUID("00000000-0000-0000-000000000003"),
+        target_asset_id=UUID("00000000-0000-0000-0000-000000000003"),
     )
     result = MagicMock()
     result.scalar_one_or_none.return_value = relationship
