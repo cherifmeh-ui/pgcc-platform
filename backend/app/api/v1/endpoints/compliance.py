@@ -118,6 +118,9 @@ class ComplianceMatrixRow(BaseModel):
     latest_assessment_maturity: int | None = None
     latest_assessment_applicability: str | None = None
     latest_assessed_at: datetime | None = None
+    evidence_count: int = 0
+    verified_evidence_count: int = 0
+    expired_evidence_count: int = 0
     
 class MatrixResponse(BaseModel):
     total_controls: int
@@ -129,6 +132,9 @@ class MatrixResponse(BaseModel):
     applicable_count: int
     average_maturity: float | None
     maturity_score: float | None
+    evidence_count: int
+    verified_evidence_count: int
+    expired_evidence_count: int
     rows: List[ComplianceMatrixRow]
     methodology: str
 
@@ -345,7 +351,7 @@ async def get_compliance_matrix(
         controls = ctrl_query.scalars().all()
         
         if not controls:
-             return MatrixResponse(total_controls=0, covered_count=0, partial_count=0, uncovered_count=0, overall_score=0.0, evaluated_count=0, applicable_count=0, average_maturity=None, maturity_score=None, rows=[], methodology="Score déclaratif : seuls les contrôles marqués manuellement sont comptés comme couverts; les liens textuels sont des indicateurs à vérifier.")
+             return MatrixResponse(total_controls=0, covered_count=0, partial_count=0, uncovered_count=0, overall_score=0.0, evaluated_count=0, applicable_count=0, average_maturity=None, maturity_score=None, evidence_count=0, verified_evidence_count=0, expired_evidence_count=0, rows=[], methodology="Score déclaratif : seuls les contrôles marqués manuellement sont comptés comme couverts; les liens textuels sont des indicateurs à vérifier.")
 
         # 2. Fetch relevant risks/actions to determine coverage
         risk_query = await db.execute(select(Risk))
@@ -353,6 +359,17 @@ async def get_compliance_matrix(
         
         action_query = await db.execute(select(ActionItem).where(ActionItem.status == ActionStatus.DONE))
         done_actions = action_query.scalars().all()
+
+        evidence_query = await db.execute(select(IsoControlEvidence))
+        evidence_by_control = {}
+        now_utc = datetime.now(timezone.utc)
+        for evidence in evidence_query.scalars().all():
+            metrics = evidence_by_control.setdefault(evidence.control_id, {"count": 0, "verified": 0, "expired": 0})
+            metrics["count"] += 1
+            if evidence.verification_status == "Verified":
+                metrics["verified"] += 1
+            if evidence.valid_until and evidence.valid_until < now_utc:
+                metrics["expired"] += 1
 
         assessment_query = await db.execute(
             select(IsoControlAssessment).order_by(IsoControlAssessment.assessed_at.desc(), IsoControlAssessment.id.desc())
@@ -376,11 +393,15 @@ async def get_compliance_matrix(
                 if latest.applicability == "Applicable":
                     applicable_count += 1
                     maturity_values.append(latest.maturity_level)
+            evidence_metrics = evidence_by_control.get(c.id, {"count": 0, "verified": 0, "expired": 0})
             assessment_fields = {
                 "latest_assessment_status": latest.implementation_status if latest else None,
                 "latest_assessment_maturity": latest.maturity_level if latest else None,
                 "latest_assessment_applicability": latest.applicability if latest else None,
                 "latest_assessed_at": latest.assessed_at if latest else None,
+                "evidence_count": evidence_metrics["count"],
+                "verified_evidence_count": evidence_metrics["verified"],
+                "expired_evidence_count": evidence_metrics["expired"],
             }
             ref = c.ref_code.lower().strip() # e.g., "a.8.9"
             found_links = 0
@@ -437,6 +458,9 @@ async def get_compliance_matrix(
             applicable_count=applicable_count,
             average_maturity=round(sum(maturity_values) / len(maturity_values), 2) if maturity_values else None,
             maturity_score=maturity_score,
+            evidence_count=sum(item["count"] for item in evidence_by_control.values()),
+            verified_evidence_count=sum(item["verified"] for item in evidence_by_control.values()),
+            expired_evidence_count=sum(item["expired"] for item in evidence_by_control.values()),
             rows=rows,
             methodology="Score déclaratif : seuls les contrôles marqués manuellement sont comptés comme couverts; les liens textuels sont des indicateurs à vérifier."
         )
