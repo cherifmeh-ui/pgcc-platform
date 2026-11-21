@@ -17,6 +17,7 @@
 
     <section class="risk-matrix-card">
       <div class="matrix-header"><div><h2>Matrice des risques</h2><p>Impact × Probabilité · Cliquez sur une cellule pour filtrer.</p></div><button v-if="matrixFilter" @click="matrixFilter = null">Réinitialiser</button></div>
+      <div class="matrix-axis-row"><span>Impact 5</span><span>Impact 4</span><span>Impact 3</span><span>Impact 2</span><span>Impact 1</span></div>
       <div class="matrix-grid">
         <button v-for="cell in matrixCells" :key="cell.impact + '-' + cell.likelihood" class="matrix-cell" :class="[getRiskClass(cell.score), { selected: matrixFilter && matrixFilter.impact === cell.impact && matrixFilter.likelihood === cell.likelihood }]" @click="toggleMatrixFilter(cell)" :title="'Impact ' + cell.impact + ' × Probabilité ' + cell.likelihood + ' = ' + cell.score"><small>{{ cell.score }}</small><strong>{{ cell.count }}</strong></button>
       </div><div class="matrix-x-label">PROBABILITÉ (1 → 5) · IMPACT (5 → 1)</div>
@@ -82,8 +83,8 @@
           <tr v-if="loading">
             <td colspan="8" class="loading-row">Chargement...</td>
           </tr>
-          <tr v-if="!loading && risks.length === 0">
-            <td colspan="7" class="empty-state">Aucun risque ne correspond aux filtres.</td>
+          <tr v-if="!loading && filteredRisks.length === 0">
+            <td colspan="8" class="empty-state">{{ risks.length === 0 ? "Aucun risque enregistré." : "Aucun risque ne correspond aux filtres." }}</td>
           </tr>
         </tbody>
       </table>
@@ -485,7 +486,7 @@ onMounted(() => { loadRisks(); loadRiskOwners(); });
 .matrix-header { display: flex; justify-content: space-between; align-items: center; gap: 1rem; margin-bottom: 1rem; }
 .matrix-header h2 { margin: 0; color: #0f172a; font-size: 1.1rem; }
 .matrix-header p { margin: .3rem 0 0; color: #64748b; font-size: .85rem; }
-.matrix-grid { display: grid; grid-template-columns: repeat(5, minmax(0, 1fr)); gap: .35rem; max-width: 540px; margin: auto; }
+.matrix-axis-row { max-width: 540px; margin: 0 auto .35rem; display: grid; grid-template-columns: repeat(5, minmax(0, 1fr)); text-align: center; color: #64748b; font-size: .65rem; }\n.matrix-grid { display: grid; grid-template-columns: repeat(5, minmax(0, 1fr)); gap: .35rem; max-width: 540px; margin: auto; }
 .matrix-cell { aspect-ratio: 1; border: 2px solid transparent; border-radius: 6px; color: white; cursor: pointer; display: flex; flex-direction: column; justify-content: center; align-items: center; gap: .15rem; }
 .matrix-cell small { font-size: .7rem; opacity: .9; }
 .matrix-cell strong { font-size: 1.1rem; }
