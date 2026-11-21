@@ -890,10 +890,10 @@ async def get_supplier_risk_overview(
     from app.services.supplier_risk_overview import build_supplier_risk_overview
 
     supplier_rows = await db.execute(
-        select(Supplier.id, Supplier.criticality, Supplier.archived_at)
+        select(Supplier.id, Supplier.criticality, Supplier.archived_at, Supplier.status)
     )
     suppliers = [
-        {"id": row.id, "criticality": row.criticality, "archived": row.archived_at is not None}
+        {"id": row.id, "criticality": row.criticality, "archived": row.archived_at is not None, "status": row.status}
         for row in supplier_rows.all()
     ]
     active_supplier_ids = [item["id"] for item in suppliers if not item["archived"]]
