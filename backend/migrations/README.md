@@ -26,3 +26,6 @@ Avant application en environnement existant, sauvegarder la base, vérifier le s
 
 - 0010 : remplace la suppression en cascade du lien Actif/Risque par une restriction; l'API refuse aussi la suppression d'un risque encore lié.
 - 0011 : impose l'unicité insensible à la casse des références d'actifs. La migration s'arrête si des doublons historiques (après trim et lower) sont détectés; une correction métier manuelle est alors requise.
+
+
+- 0012 : crée le référentiel fournisseurs et contacts professionnels (TPRM), avec code fournisseur unique et archivage logique. Les contacts sont liés par FK restrictive; le module n'expose aucune suppression physique de fournisseur.
