@@ -70,6 +70,7 @@ class RefreshRequest(BaseModel):
 class ChangePasswordRequiredResponse(BaseModel):
     change_password_required: bool = True
     change_password_token: str
+    backup_codes: list[str] = Field(default_factory=list)
     user: dict
 
 
@@ -328,6 +329,7 @@ async def confirm_mfa(
         )
         return ChangePasswordRequiredResponse(
             change_password_token=change_password_token,
+            backup_codes=backup_codes,
             user={
                 "email": user.email,
                 "full_name": user.full_name,
