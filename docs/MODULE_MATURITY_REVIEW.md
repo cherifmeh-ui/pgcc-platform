@@ -349,3 +349,10 @@ The initial code-level review found that DOCX extraction joined paragraphs/table
 - Removed the redundant standalone index on `token_jti_hash`; its unique constraint already creates an index supporting exact-token lookup.
 - Retained the compound active-session index and user/expiry indexes.
 - Added a static migration regression check to guard against reintroducing the duplicate index.
+
+
+### 26. Session revocation on password/account policy changes
+
+- Password-change endpoint revokes all active persisted refresh sessions before issuing a new session.
+- Refresh-policy denial (inactive, locked, mandatory password change, etc.) revokes active sessions before returning the denial.
+- Added static regression checks. Runtime transactional/concurrency behavior still requires PostgreSQL integration tests.
