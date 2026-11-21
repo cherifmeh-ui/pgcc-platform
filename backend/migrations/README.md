@@ -22,3 +22,7 @@ The existing project has historically initialized schemas with SQLAlchemy `creat
 - 0009 : index des champs couramment filtrés de l'inventaire.
 
 Avant application en environnement existant, sauvegarder la base, vérifier le schéma réel et contrôler les références applicatives et doublons historiques. La migration 0009 n'altère pas les données métier.
+
+
+- 0010 : remplace la suppression en cascade du lien Actif/Risque par une restriction; l'API refuse aussi la suppression d'un risque encore lié.
+- 0011 : impose l'unicité insensible à la casse des références d'actifs. La migration s'arrête si des doublons historiques (après trim et lower) sont détectés; une correction métier manuelle est alors requise.
