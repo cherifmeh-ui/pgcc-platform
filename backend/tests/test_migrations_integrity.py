@@ -78,3 +78,32 @@ def test_asset_reference_and_type_migration_has_valid_postgresql_downgrade_guard
     assert "END $$;" in source
     assert "DO $\\n" not in source
     assert "cloud_resource" in source
+
+def test_supplier_open_access_unique_index_matches_model_and_migration() -> None:
+    migration = MIGRATIONS_DIR / "0016_supplier_access_requests.py"
+    migration_source = migration.read_text(encoding="utf-8")
+    model_source = (
+        MIGRATIONS_DIR.parent.parent / "app" / "models" / "supplier.py"
+    ).read_text(encoding="utf-8")
+
+    index_name = "uq_supplier_access_requests_open_link"
+    predicate = "status IN ('Demandé', 'Approuvé', 'Suspendu')"
+    assert index_name in migration_source
+    assert index_name in model_source
+    assert predicate in migration_source
+    assert predicate in model_source
+    assert "unique=True" in model_source
+
+
+def test_supplier_risk_snapshot_month_is_unique_in_model_and_migration() -> None:
+    migration = MIGRATIONS_DIR / "0019_supplier_risk_snapshots.py"
+    migration_source = migration.read_text(encoding="utf-8")
+    model_source = (
+        MIGRATIONS_DIR.parent.parent / "app" / "models" / "supplier.py"
+    ).read_text(encoding="utf-8")
+
+    constraint = "uq_supplier_risk_snapshots_month"
+    assert constraint in migration_source
+    assert constraint in model_source
+    assert "snapshot_month" in migration_source
+    assert "snapshot_month" in model_source
