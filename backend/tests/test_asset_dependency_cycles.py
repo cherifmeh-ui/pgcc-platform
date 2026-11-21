@@ -43,18 +43,18 @@ async def test_dependency_cycle_detection_handles_existing_cycle_safely():
 
 
 def test_relationship_requires_both_assets_to_be_active():
-    assert _relationship_assets_are_active([(A, None), (B, None)]) is True
+    assert _relationship_assets_are_active([(A, None, "Actif"), (B, None, "Actif")]) is True
 
 
 def test_relationship_rejects_retired_asset_endpoint():
     from datetime import datetime, timezone
 
     retired_at = datetime.now(timezone.utc)
-    assert _relationship_assets_are_active([(A, None), (B, retired_at)]) is False
+    assert _relationship_assets_are_active([(A, None, "Actif"), (B, retired_at, "Actif")]) is False
 
 
 def test_relationship_rejects_missing_asset_endpoint():
-    assert _relationship_assets_are_active([(A, None)]) is False
+    assert _relationship_assets_are_active([(A, None, "Actif")]) is False
 
 def test_lifecycle_retired_status_sets_marker():
     marker = _lifecycle_retirement_marker("Retiré", None)
@@ -79,3 +79,7 @@ def test_lifecycle_update_without_status_preserves_marker():
 def test_lifecycle_retirement_preserves_existing_timestamp():
     existing = datetime(2026, 1, 1, tzinfo=timezone.utc)
     assert _lifecycle_retirement_marker("Retiré", existing) == existing
+
+def test_relationship_rejects_retired_lifecycle_even_without_timestamp():
+    assert _relationship_assets_are_active([(A, None, "Actif"), (B, None, "Retiré")]) is False
+    assert _relationship_assets_are_active([(A, None, "Décommissionné"), (B, None, "Actif")]) is False
