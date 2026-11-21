@@ -15,6 +15,13 @@
       </div>
     </div>
 
+    <section class="risk-matrix-card">
+      <div class="matrix-header"><div><h2>Matrice des risques</h2><p>Impact × Probabilité · Cliquez sur une cellule pour filtrer.</p></div><button v-if="matrixFilter" @click="matrixFilter = null">Réinitialiser</button></div>
+      <div class="matrix-grid">
+        <button v-for="cell in matrixCells" :key="cell.impact + '-' + cell.likelihood" class="matrix-cell" :class="[getRiskClass(cell.score), { selected: matrixFilter && matrixFilter.impact === cell.impact && matrixFilter.likelihood === cell.likelihood }]" @click="toggleMatrixFilter(cell)" :title="'Impact ' + cell.impact + ' × Probabilité ' + cell.likelihood + ' = ' + cell.score"><small>{{ cell.score }}</small><strong>{{ cell.count }}</strong></button>
+      </div><div class="matrix-x-label">PROBABILITÉ (1 → 5) · IMPACT (5 → 1)</div>
+    </section>
+    <div class="risk-filters"><input v-model="riskSearch" type="search" placeholder="Recherche référence, titre, menace, site..." /><select v-model="statusFilter"><option value="">Tous les statuts</option><option>Ouvert</option><option>En traitement</option><option>Traité</option><option>Accepté</option></select><select v-model="siteFilter"><option value="">Tous les sites</option><option v-for="site in riskSites" :key="site" :value="site">{{ site }}</option></select><span>{{ filteredRisks.length }} / {{ risks.length }}</span></div>
     <!-- Tableau principal des risques -->
     <div class="table-container">
       <table class="risks-table">
@@ -30,7 +37,7 @@
           </tr>
         </thead>
         <tbody>
-          <tr v-for="risk in risks" :key="risk.id">
+          <tr v-for="risk in filteredRisks" :key="risk.id">
             <td><code>{{ risk.ref }}</code></td>
             <td>
               {{ risk.title }}
@@ -74,7 +81,7 @@
             <td colspan="7" class="loading-row">Chargement...</td>
           </tr>
           <tr v-if="!loading && risks.length === 0">
-            <td colspan="7" class="empty-state">Aucun risque enregistré.</td>
+            <td colspan="7" class="empty-state">Aucun risque ne correspond aux filtres.</td>
           </tr>
         </tbody>
       </table>
@@ -213,6 +220,37 @@ const formData = reactive({
 });
 
 // --- Permissions RBAC ---
+const riskSearch = ref("");
+const statusFilter = ref("");
+const siteFilter = ref("");
+const matrixFilter = ref(null);
+const riskSites = computed(() => [...new Set(risks.value.map(r => r.site).filter(Boolean))].sort());
+const matrixCells = computed(() => {
+  const cells = [];
+  for (let impact = 5; impact >= 1; impact--) {
+    for (let likelihood = 1; likelihood <= 5; likelihood++) {
+      const score = impact * likelihood;
+      const count = risks.value.filter(r => r.impact === impact && r.likelihood === likelihood).length;
+      cells.push({ impact, likelihood, score, count });
+    }
+  }
+  return cells;
+});
+const filteredRisks = computed(() => {
+  const query = riskSearch.value.trim().toLocaleLowerCase();
+  return risks.value.filter(risk => {
+    const matchesSearch = !query || [risk.ref, risk.title, risk.description, risk.threat, risk.site].some(v => String(v || "").toLocaleLowerCase().includes(query));
+    const matchesStatus = !statusFilter.value || risk.status === statusFilter.value;
+    const matchesSite = !siteFilter.value || risk.site === siteFilter.value;
+    const matchesMatrix = !matrixFilter.value || (risk.impact === matrixFilter.value.impact && risk.likelihood === matrixFilter.value.likelihood);
+    return matchesSearch && matchesStatus && matchesSite && matchesMatrix;
+  });
+});
+function toggleMatrixFilter(cell) {
+  if (matrixFilter.value && matrixFilter.value.impact === cell.impact && matrixFilter.value.likelihood === cell.likelihood) matrixFilter.value = null;
+  else matrixFilter.value = { impact: cell.impact, likelihood: cell.likelihood };
+}
+
 const canCreate = computed(() => authStore.canAccessModule('risks', 'create'));
 const canUpdate = computed(() => authStore.canAccessModule('risks', 'update'));
 const canDelete = computed(() => authStore.canAccessModule('risks', 'delete'));
@@ -404,7 +442,23 @@ onMounted(loadRisks);
 .critical { background: #ef4444; }
 .extreme { background: #7f1d1d; }
 
-/* Table */
+.risk-matrix-card { background: white; border: 1px solid #e2e8f0; border-radius: 12px; padding: 1.25rem; margin-bottom: 1.25rem; }
+.matrix-header { display: flex; justify-content: space-between; align-items: center; gap: 1rem; margin-bottom: 1rem; }
+.matrix-header h2 { margin: 0; color: #0f172a; font-size: 1.1rem; }
+.matrix-header p { margin: .3rem 0 0; color: #64748b; font-size: .85rem; }
+.matrix-grid { display: grid; grid-template-columns: repeat(5, minmax(0, 1fr)); gap: .35rem; max-width: 540px; margin: auto; }
+.matrix-cell { aspect-ratio: 1; border: 2px solid transparent; border-radius: 6px; color: white; cursor: pointer; display: flex; flex-direction: column; justify-content: center; align-items: center; gap: .15rem; }
+.matrix-cell small { font-size: .7rem; opacity: .9; }
+.matrix-cell strong { font-size: 1.1rem; }
+.matrix-cell.selected { border-color: #0f172a; outline: 2px solid white; }
+.matrix-cell:hover { filter: brightness(.92); transform: scale(1.03); }
+.matrix-x-label { text-align: center; color: #64748b; font-size: .75rem; font-weight: 700; margin-top: .5rem; }
+.risk-filters { display: flex; gap: .75rem; flex-wrap: wrap; align-items: center; margin: 0 0 1rem; }
+.risk-filters input, .risk-filters select { min-height: 40px; padding: .5rem .75rem; border: 1px solid #cbd5e1; border-radius: 8px; background: white; }
+.risk-filters input { flex: 1; min-width: 220px; }
+.risk-filters span { color: #64748b; font-size: .85rem; }
+@media (max-width: 640px) { .heatmap-summary { grid-template-columns: repeat(2, 1fr); } .matrix-cell strong { font-size: .9rem; } }
+\n/* Table */
 .table-container { overflow-x: auto; background: white; border-radius: 8px; box-shadow: 0 1px 3px rgba(0,0,0,0.1); }
 .risks-table { width: 100%; border-collapse: collapse; min-width: 900px; }
 .risks-table th, .risks-table td { padding: 0.75rem 1rem; text-align: left; border-bottom: 1px solid #e2e8f0; vertical-align: middle; }
