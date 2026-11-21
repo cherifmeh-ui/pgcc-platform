@@ -3,6 +3,7 @@ from fastapi import APIRouter, Depends, HTTPException, Request, status
 from pydantic import BaseModel, Field
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy import select
+from sqlalchemy.exc import IntegrityError
 from typing import Optional, List
 from uuid import UUID
 
@@ -116,7 +117,14 @@ async def delete_application(
         raise HTTPException(status_code=404, detail="Application non trouvée")
     app_name = app.name[:100]
     await db.delete(app)
-    await db.commit()
+    try:
+        await db.commit()
+    except IntegrityError:
+        await db.rollback()
+        raise HTTPException(
+            status_code=409,
+            detail="Cette application est encore référencée par des actifs; détachez ou réaffectez-les avant suppression.",
+        )
     await log_action(
         user_email=current_user.email,
         action="DELETE",
