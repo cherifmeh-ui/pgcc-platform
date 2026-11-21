@@ -85,69 +85,41 @@
         <a href="#" @click.prevent="goBackToCredentials" class="back-link">← Retour</a>
       </div>
 
-      <!-- ÉTAPE 3 : VÉRIFICATION MFA (Compte déjà configuré) -->
+      <!-- Vérification MFA pour comptes déjà enrôlés -->
       <div v-else-if="step === 'verify-mfa'" class="mfa-verify">
         <h2>Vérification en deux étapes</h2>
-        <p>Votre compte est sécurisé par MFA.<br/>Entrez le code depuis votre application :</p>
-
+        <p>Votre compte est sécurisé par MFA.<br/>Entrez le code depuis votre application ou un code de secours :</p>
         <label for="verify-totp">Code TOTP ou code de secours</label>
-        <input 
-          id="totp-code"
-          v-model="totpCode" 
-          maxlength="32" 
-          placeholder="123456 ou code de secours" 
-          inputmode="numeric"
-          autofocus
-          :disabled="isLoading"
-          @keyup.enter="confirmMfaEnrollment"
-        />
-
-        <button 
-          @click="confirmMfaEnrollment" 
-          :disabled="!totpCode || totpCode.length !== 6 || isLoading" 
-          class="primary-btn"
-        >
-          {{ isLoading ? 'Activation...' : 'Activer MFA et continuer' }}
-        </button>
-
-        <p v-if="errorMessage" class="error-msg">{{ errorMessage }}</p>
-        
-        <a href="#" @click.prevent="goBackToCredentials" class="back-link">← Retour</a>
-      </div>
-
-      <!-- ÉTAPE 3 : VÉRIFICATION MFA (Compte déjà configuré) -->
-      <div v-else-if="step === 'verify-mfa'" class="mfa-verify">
-        <h2>Vérification en deux étapes</h2>
-        <p>Votre compte est sécurisé par MFA.<br/>Entrez le code depuis votre application :</p>
-
-        <label for="verify-totp">Code TOTP ou code de secours</label>
-        <input 
+        <input
           id="verify-totp"
-          v-model="totpCode" 
-          maxlength="32" 
-          placeholder="123456 ou code de secours" 
+          v-model="totpCode"
+          maxlength="32"
+          placeholder="123456 ou code de secours"
           inputmode="text"
           autofocus
           :disabled="isLoading"
           @keyup.enter="verifyExistingMfa"
         />
-
-        <button 
-          @click="verifyExistingMfa" 
-          :disabled="!totpCode || totpCode.length < 6 || isLoading" 
-          class="primary-btn"
-        >
+        <button @click="verifyExistingMfa" :disabled="!totpCode || totpCode.trim().length < 6 || isLoading" class="primary-btn">
           {{ isLoading ? 'Vérification...' : 'Valider et se connecter' }}
         </button>
-
         <p v-if="errorMessage" class="error-msg">{{ errorMessage }}</p>
-        
         <a href="#" @click.prevent="goBackToCredentials" class="back-link">← Changer d'email</a>
       </div>
-    </div>
-  </div>
-</template>
 
+      <!-- Changement obligatoire du mot de passe après MFA -->
+      <form v-else-if="step === 'change-password'" @submit.prevent="changePassword" class="auth-form">
+        <h2>Changement obligatoire du mot de passe</h2>
+        <p>Votre compte doit définir un nouveau mot de passe avant d'accéder à la plateforme.</p>
+        <label for="new-password">Nouveau mot de passe</label>
+        <input id="new-password" v-model="newPassword" type="password" minlength="12" maxlength="255" autocomplete="new-password" required :disabled="isLoading"/>
+        <label for="confirm-new-password">Confirmer le mot de passe</label>
+        <input id="confirm-new-password" v-model="confirmPassword" type="password" minlength="12" maxlength="255" autocomplete="new-password" required :disabled="isLoading"/>
+        <button type="submit" :disabled="isLoading || newPassword.length < 12 || !confirmPassword" class="primary-btn">
+          {{ isLoading ? 'Modification...' : 'Changer le mot de passe et continuer' }}
+        </button>
+        <p v-if="errorMessage" class="error-msg">{{ errorMessage }}</p>
+      </div>
 <script setup>
 import { ref, onMounted } from 'vue';
 import { useRouter, useRoute } from 'vue-router';
@@ -166,6 +138,9 @@ const password = ref('');
 const totpCode = ref('');
 const provisioningUri = ref('');
 const mfaSecret = ref('');
+const changePasswordToken = ref('');
+const newPassword = ref('');
+const confirmPassword = ref('');
 const isLoading = ref(false);
 const errorMessage = ref(null);
 
@@ -244,11 +219,7 @@ async function confirmMfaEnrollment() {
       mfa_code: totpCode.value,
     });
 
-    // Succès -> Sauvegarde session & redirection
-    authStore.setSession(confirmRes.data);
-    await authStore.fetchPermissions();
-    
-    router.replace(route.query.redirect || '/dashboard');
+    await handleMfaSuccess(confirmRes.data);
 
   } catch (err) {
     errorMessage.value = err.response?.data?.detail || 'Échec activation MFA.';
@@ -276,14 +247,40 @@ async function verifyExistingMfa() {
       mfa_code: totpCode.value,
     });
 
-    // Succès -> Sauvegarde session & redirection
-    authStore.setSession(res.data);
-    await authStore.fetchPermissions();
-    
-    router.replace(route.query.redirect || '/dashboard');
+    await handleMfaSuccess(res.data);
 
   } catch (err) {
     errorMessage.value = err.response?.data?.detail || 'Code MFA invalide ou expiré.';
+  } finally {
+    isLoading.value = false;
+  }
+}
+
+async function handleMfaSuccess(data) {
+  if (data.change_password_required) {
+    changePasswordToken.value = data.change_password_token;
+    step.value = 'change-password';
+    return;
+  }
+  authStore.setSession(data);
+  await authStore.fetchPermissions();
+  router.replace(route.query.redirect || '/dashboard');
+}
+
+async function changePassword() {
+  isLoading.value = true;
+  errorMessage.value = null;
+  try {
+    const { data } = await apiClient.post('/auth/change-password', {
+      change_password_token: changePasswordToken.value,
+      new_password: newPassword.value,
+      confirm_password: confirmPassword.value,
+    });
+    authStore.setSession(data);
+    await authStore.fetchPermissions();
+    router.replace(route.query.redirect || '/dashboard');
+  } catch (err) {
+    errorMessage.value = err.response?.data?.detail || 'Échec du changement de mot de passe.';
   } finally {
     isLoading.value = false;
   }
@@ -295,6 +292,9 @@ function goBackToCredentials() {
   errorMessage.value = null;
   provisioningUri.value = '';
   mfaSecret.value = '';
+  changePasswordToken.value = '';
+  newPassword.value = '';
+  confirmPassword.value = '';
   currentPreAuthToken = null;
 }
 </script>
