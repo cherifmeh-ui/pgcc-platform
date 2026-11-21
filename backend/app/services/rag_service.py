@@ -13,6 +13,7 @@ EMBEDDING_DIMENSIONS = 768
 CHUNK_SIZE = 500
 CHUNK_OVERLAP = 50
 BATCH_SIZE = 10
+MAX_CHUNKS_PER_DOCUMENT = 2000
 
 
 class RAGService:
@@ -27,6 +28,11 @@ class RAGService:
         chunks = _split_text(doc.content_text, CHUNK_SIZE, CHUNK_OVERLAP)
         if not chunks:
             return False
+        if len(chunks) > MAX_CHUNKS_PER_DOCUMENT:
+            raise RuntimeError(
+                f"Document trop volumineux pour l'indexation ({len(chunks)} chunks; "
+                f"limite {MAX_CHUNKS_PER_DOCUMENT})."
+            )
 
         vectors: List[List[float]] = []
         try:
