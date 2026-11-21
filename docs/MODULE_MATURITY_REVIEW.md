@@ -219,3 +219,5 @@ The initial code-level review found that DOCX extraction joined paragraphs/table
 - The archive operation intentionally does not silently terminate links or revoke approvals: those actions require their own traceable workflows and actors.
 - Regression tests cover both conflict conditions.
 - **Remaining validation:** route-level role/permission tests and database integration tests are pending; review whether terminated supplier status should also block new link creation and access approvals (currently archived state is the explicit block).
+
+- Additional safeguard: new supplier-asset relationships are blocked when the supplier is `Suspendu` or `Terminé` (HTTP 409). Existing relationships remain available for explicit termination and historical review.
