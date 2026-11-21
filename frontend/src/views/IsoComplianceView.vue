@@ -8,10 +8,24 @@
         <p class="subtitle">Indicateur déclaratif : les liens risques/actions ne constituent pas une preuve de conformité. Chaque contrôle doit être évalué et justifié.</p>
       </div>
       
-      <!-- Badge Score Global Style Solid Block -->
-      <div class="global-score-badge" :class="getScoreClass(matrixData?.overall_score)">
-        <span class="score-val">{{ matrixData?.overall_score || 0 }}%</span>
-        <span class="score-lbl">COUVERTURE DÉCLARÉE</span>
+      <!-- Indicateurs déclaratifs et évaluations formelles -->
+      <div class="compliance-kpi-grid">
+        <div class="global-score-badge" :class="getScoreClass(matrixData?.overall_score)">
+          <span class="score-val">{{ matrixData?.overall_score || 0 }}%</span>
+          <span class="score-lbl">COUVERTURE DÉCLARÉE</span>
+        </div>
+        <div class="compliance-kpi-card">
+          <strong>{{ matrixData?.evaluated_count || 0 }}/{{ matrixData?.total_controls || 0 }}</strong>
+          <span>Contrôles évalués</span>
+        </div>
+        <div class="compliance-kpi-card">
+          <strong>{{ matrixData?.applicable_count || 0 }}</strong>
+          <span>Contrôles applicables évalués</span>
+        </div>
+        <div class="compliance-kpi-card">
+          <strong>{{ matrixData?.average_maturity ?? '—' }}/5</strong>
+          <span>Maturité moyenne</span>
+        </div>
       </div>
     </div>
 
@@ -82,9 +96,15 @@
               </span>
             </td>
             <td>
-              <span class="status-badge modern" :class="getStatusClass(row.status)">
-                {{ getStatusIcon(row.status) }} {{ row.status }}
-              </span>
+              <div class="status-cell">
+                <span class="status-badge modern" :class="getStatusClass(row.status)">
+                  {{ getStatusIcon(row.status) }} {{ row.status }}
+                </span>
+                <span v-if="row.latest_assessment_status" class="assessment-status-tag">
+                  {{ row.latest_assessment_status }} · {{ row.latest_assessment_maturity }}/5
+                </span>
+                <span v-else class="assessment-status-tag muted">Aucune évaluation formelle</span>
+              </div>
             </td>
             <td class="links-count">
               <span v-if="row.linked_risks_count > 0" class="link-pill active">
@@ -430,6 +450,13 @@ onMounted(fetchMatrix);
 </script>
 
 <style scoped>
+.compliance-kpi-grid { display:grid; grid-template-columns:repeat(auto-fit,minmax(150px,1fr)); gap:1rem; align-items:stretch; }
+.compliance-kpi-card { background:#fff; border:1px solid #e2e8f0; border-radius:12px; padding:1rem; display:flex; flex-direction:column; justify-content:center; gap:.4rem; }
+.compliance-kpi-card strong { font-size:1.45rem; color:#0f172a; }
+.compliance-kpi-card span { font-size:.82rem; color:#64748b; }
+.status-cell { display:flex; flex-direction:column; align-items:flex-start; gap:.4rem; }
+.assessment-status-tag { font-size:.75rem; color:#0f766e; background:#f0fdfa; border:1px solid #99f6e4; border-radius:6px; padding:.2rem .45rem; }
+.assessment-status-tag.muted { color:#64748b; background:#f8fafc; border-color:#e2e8f0; }
 .btn-assess { border:1px solid #0f766e; background:#ecfdf5; color:#065f46; padding:.4rem .65rem; border-radius:7px; cursor:pointer; margin-right:.35rem; }
 .assessment-modal { max-height:90vh; overflow-y:auto; width:min(760px,95vw); }
 .assessment-form { display:grid; gap:.8rem; }
