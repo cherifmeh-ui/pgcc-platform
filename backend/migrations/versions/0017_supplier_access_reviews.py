@@ -1,7 +1,6 @@
 """Add immutable periodic reviews for supplier access authorizations."""
 from alembic import op
 import sqlalchemy as sa
-import sqlalchemy as sa
 from sqlalchemy.dialects import postgresql
 
 revision = "0017_supplier_access_reviews"
@@ -29,9 +28,12 @@ def upgrade() -> None:
             sa.CheckConstraint("previous_access_level IN ('Standard', 'Privilégié')", name="ck_supplier_access_reviews_previous_level"),
             sa.CheckConstraint("resulting_access_level IN ('Standard', 'Privilégié')", name="ck_supplier_access_reviews_resulting_level"),
         )
-    op.create_index("ix_supplier_access_reviews_access_request_id", "supplier_access_reviews", ["access_request_id"])
-    op.create_index("ix_supplier_access_reviews_reviewed_by_id", "supplier_access_reviews", ["reviewed_by_id"])
-    op.create_index("ix_supplier_access_reviews_request_reviewed", "supplier_access_reviews", ["access_request_id", "reviewed_at"])
+    if "ix_supplier_access_reviews_access_request_id" not in {item["name"] for item in sa.inspect(op.get_bind()).get_indexes("supplier_access_reviews")}:
+        op.create_index("ix_supplier_access_reviews_access_request_id", "supplier_access_reviews", ["access_request_id"])
+    if "ix_supplier_access_reviews_reviewed_by_id" not in {item["name"] for item in sa.inspect(op.get_bind()).get_indexes("supplier_access_reviews")}:
+        op.create_index("ix_supplier_access_reviews_reviewed_by_id", "supplier_access_reviews", ["reviewed_by_id"])
+    if "ix_supplier_access_reviews_request_reviewed" not in {item["name"] for item in sa.inspect(op.get_bind()).get_indexes("supplier_access_reviews")}:
+        op.create_index("ix_supplier_access_reviews_request_reviewed", "supplier_access_reviews", ["access_request_id", "reviewed_at"])
 
 
 def downgrade() -> None:
