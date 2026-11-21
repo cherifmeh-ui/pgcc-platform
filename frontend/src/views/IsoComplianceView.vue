@@ -30,6 +30,14 @@
           <strong>{{ matrixData?.maturity_score ?? '—' }}%</strong>
           <span>Score de maturité évaluée</span>
         </div>
+        <div class="compliance-kpi-card">
+          <strong>{{ matrixData?.verified_evidence_count || 0 }}/{{ matrixData?.evidence_count || 0 }}</strong>
+          <span>Preuves vérifiées</span>
+        </div>
+        <div class="compliance-kpi-card">
+          <strong>{{ matrixData?.expired_evidence_count || 0 }}</strong>
+          <span>Preuves expirées</span>
+        </div>
       </div>
     </div>
 
@@ -84,6 +92,7 @@
             <th>Domaine</th>
             <th>Statut</th>
             <th>Liens Risques</th>
+            <th>Preuves</th>
             <th>Action IA</th>
           </tr>
         </thead>
@@ -115,6 +124,11 @@
                 🔗 {{ row.linked_risks_count }}
               </span>
               <span v-else class="link-pill inactive">—</span>
+            </td>
+            <td class="links-count">
+              <span v-if="row.evidence_count" class="link-pill active">📎 {{ row.verified_evidence_count }}/{{ row.evidence_count }}</span>
+              <span v-else class="link-pill inactive">—</span>
+              <span v-if="row.expired_evidence_count" class="expired-warning">{{ row.expired_evidence_count }} expirée(s)</span>
             </td>
             <td>
               <button @click="openAssessment(row)" class="btn-assess modern" title="Évaluer et consulter l'historique">
@@ -495,14 +509,14 @@ async function saveAssessment() {
 }
 
 function exportMatrixCsv() {
-  const headers = ['Référence', 'Titre', 'Domaine', 'Statut', 'Risques liés'];
+  const headers = ['Référence', 'Titre', 'Domaine', 'Statut déclaratif', 'Risques liés', 'Statut évaluation', 'Maturité', 'Applicabilité', 'Preuves', 'Preuves vérifiées', 'Preuves expirées'];
   const escapeCsv = (value) => {
     let text = String(value ?? '');
     if (/^[=+@\-]/.test(text)) text = "'" + text;
     return '"' + text.replace(/"/g, '""') + '"';
   };
   const lines = [headers, ...filteredRows.value.map(row => [
-    row.ref_code, row.title, row.domain, row.status, row.linked_risks_count
+    row.ref_code, row.title, row.domain, row.status, row.linked_risks_count, row.latest_assessment_status || '', row.latest_assessment_maturity ?? '', row.latest_assessment_applicability || '', row.evidence_count || 0, row.verified_evidence_count || 0, row.expired_evidence_count || 0
   ])].map(row => row.map(escapeCsv).join(';'));
   const csv = '\uFEFF' + lines.join('\r\n');
   const blob = new Blob([csv], { type: 'text/csv;charset=utf-8;' });
