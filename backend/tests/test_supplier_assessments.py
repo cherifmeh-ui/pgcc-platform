@@ -3,7 +3,7 @@ from decimal import Decimal
 from pydantic import ValidationError
 from app.api.v1.endpoints.suppliers import SupplierAssessmentCreate, SupplierAssessmentAnswers
 from app.models.supplier import SupplierAssessment
-from app.services.supplier_assessment import calculate_assessment_score, validate_answers
+from app.services.supplier_assessment import calculate_assessment_score, get_questionnaire_snapshot, validate_answers
 from app.utils.rbac import role_has_permission
 
 QUESTIONS = [
@@ -13,13 +13,17 @@ QUESTIONS = [
 ]
 
 def test_assessment_create_preserves_questionnaire_snapshot():
-    data = SupplierAssessmentCreate(scope="Périmètre de la prestation", questionnaire_version="CTF-TPRM-1.0", questionnaire_snapshot=QUESTIONS)
+    data = SupplierAssessmentCreate(scope="Périmètre de la prestation", questionnaire_version="CTF-TPRM-1.0")
+    snapshot = get_questionnaire_snapshot(data.questionnaire_version)
     assert data.questionnaire_version == "CTF-TPRM-1.0"
-    assert data.questionnaire_snapshot[0].weight == 2
+    assert snapshot[0]["weight"] == 3
+    snapshot[0]["weight"] = 1
+    assert get_questionnaire_snapshot(data.questionnaire_version)[0]["weight"] == 3
 
-def test_assessment_rejects_duplicate_question_ids():
-    with pytest.raises(ValidationError):
-        SupplierAssessmentCreate(scope="Périmètre de la prestation", questionnaire_version="1.0", questionnaire_snapshot=[QUESTIONS[0], QUESTIONS[0]])
+def test_assessment_rejects_unpublished_questionnaire_version():
+    with pytest.raises(ValueError, match="inconnue"):
+        get_questionnaire_snapshot("CUSTOM-UNTRUSTED")
+
 
 def test_assessment_rejects_duplicate_answers():
     with pytest.raises(ValidationError):
