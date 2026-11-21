@@ -8,6 +8,7 @@ import DashboardView from '@/views/DashboardView.vue';
 import RisksView from '@/views/RisksView.vue';
 import AppsView from '@/views/AppsView.vue';
 import AssetsView from '@/views/AssetsView.vue';
+import SuppliersView from '@/views/SuppliersView.vue';
 import IsoComplianceView from '@/views/IsoComplianceView.vue';
 import DocumentsView from '@/views/DocumentsView.vue'; // ⬅️ NOUVELLE VUE BIBLIOTHÈQUE
 import NotFoundView from '@/views/NotFoundView.vue';
@@ -59,6 +60,7 @@ const routes = [
         meta: { requiresAuth: true, module: 'assets', action: 'read' } 
       },
       
+      { path: 'suppliers', name: 'Suppliers', component: SuppliersView, meta: { requiresAuth: true, module: 'suppliers', action: 'read' } },
       { 
         path: 'compliance', 
         name: 'IsoCompliance', 
