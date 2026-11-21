@@ -66,7 +66,7 @@
                 </div>
                 
                 <div class="task-actions">
-                  <button @click="toggleStatus(act)" class="icon-btn done" title="Marquer terminé">✅</button>
+                  <button @click="toggleStatus(act)" class="icon-btn done" :disabled="act.status === 'Terminé'" :title="act.status === 'Terminé' ? 'Action clôturée' : act.status === 'En cours' ? 'Marquer terminé' : act.status === 'Bloqué' ? 'Reprendre l’action' : 'Démarrer l’action'">{{ act.status === 'Terminé' ? '✔️' : '▶️' }}</button>
                   <button @click="editAction(act)" class="icon-btn edit" title="Modifier">✏️</button>
                   <button @click="deleteAction(act.id)" class="icon-btn del" title="Supprimer">🗑️</button>
                 </div>
@@ -152,17 +152,14 @@ async function addAction() {
 }
 
 async function toggleStatus(action) {
-  // Cycle simple basé sur les CHAÎNES FRANÇAISES réelles
-  let nextStatus = 'En cours';
-  if (action.status === 'À faire') nextStatus = 'En cours';
-  else if (action.status === 'En cours') nextStatus = 'Terminé';
-  else if (action.status === 'Terminé') nextStatus = 'À faire'; // Undo
-  
+  // Respect the backend lifecycle: completed actions cannot be reopened.
+  if (action.status === 'Terminé') return;
+  const nextStatus = action.status === 'En cours' ? 'Terminé' : 'En cours';
   try {
     await apiClient.put(`/actions/${action.id}`, { status: nextStatus });
     await loadActions(props.riskId);
   } catch (err) {
-    alert("Erreur mise à jour statut.");
+    alert(err.response?.data?.detail || "Transition de statut impossible.");
   }
 }
 
@@ -258,7 +255,7 @@ function isOverdue(isoStr) {
 .deadline.overdue { color: #ef4444; font-weight: bold; }
 
 .task-actions { display: flex; gap: 0.5rem; }
-.icon-btn { background: none; border: none; cursor: pointer; font-size: 1.1rem; padding: 0.2rem; opacity: 0.7; transition: all 0.2s; }
+.icon-btn:disabled { cursor: not-allowed; opacity: .35; }\n.icon-btn { background: none; border: none; cursor: pointer; font-size: 1.1rem; padding: 0.2rem; opacity: 0.7; transition: all 0.2s; }
 .icon-btn:hover { opacity: 1; transform: scale(1.1); }
 .icon-btn.done:hover { color: #22c55e; }
 .icon-btn.edit:hover { color: #3b82f6; }
