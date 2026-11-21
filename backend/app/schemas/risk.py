@@ -29,8 +29,8 @@ class RiskCreate(BaseModel):
     description: Optional[str] = Field(default=None, max_length=10000)
     threat: Optional[str] = Field(default=None, max_length=5000)
 
-    impact: int = Field(default=3, ge=1, le=5)
-    likelihood: int = Field(default=3, ge=1, le=5)
+    impact: int = Field(default=3, ge=1, le=5, strict=True)
+    likelihood: int = Field(default=3, ge=1, le=5, strict=True)
 
     site: Optional[str] = Field(default=None, max_length=100)
     owner_id: Optional[UUID] = None
@@ -51,8 +51,8 @@ class RiskUpdate(BaseModel):
     description: Optional[str] = Field(default=None, max_length=10000)
     threat: Optional[str] = Field(default=None, max_length=5000)
 
-    impact: Optional[int] = Field(default=None, ge=1, le=5)
-    likelihood: Optional[int] = Field(default=None, ge=1, le=5)
+    impact: Optional[int] = Field(default=None, ge=1, le=5, strict=True)
+    likelihood: Optional[int] = Field(default=None, ge=1, le=5, strict=True)
 
     site: Optional[str] = Field(default=None, max_length=100)
     owner_id: Optional[UUID] = None
