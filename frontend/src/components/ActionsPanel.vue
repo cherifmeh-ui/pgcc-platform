@@ -158,6 +158,8 @@ async function addAction() {
   try {
     const payload = {
       ...newAction,
+      title: newAction.title.trim(),
+      description: newAction.description.trim() || null,
       risk_id: props.riskId,
       due_date: newAction.due_date ? new Date(newAction.due_date).toISOString() : null
     };
