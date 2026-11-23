@@ -414,3 +414,11 @@ Repository/static hardening is substantially progressed, but the remaining gates
 - Commit `8cd7650c` is awaiting CI. Concurrency integration tests for approve/revoke/expire/review transitions remain outstanding.
 
 - Backend checks #1602 for `8cd7650c` (supplier access revocation/expiration locking) are IN PROGRESS. Documentation commit `6d13cb3e` has no workflow result returned. No CI success is claimed for the supplier transition change yet.
+
+
+### Supplier state concurrency — 2026-11-23
+
+- Supplier asset-link creation, supplier status update, and supplier archiving now lock the supplier row with `FOR UPDATE` before eligibility checks and mutation. This serializes these operations against one another and reduces races that could create a new link while a supplier is being suspended/terminated/archived.
+- Access-request revoke/expire endpoints also lock the request row before transition checks (`8cd7650c`).
+- CI #1602 for `8cd7650c` was IN PROGRESS when last checked. New commit `ca0fb162` is awaiting workflow result.
+- PostgreSQL integration tests covering concurrent supplier status/link/archive and access transitions remain necessary.
