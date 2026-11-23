@@ -292,3 +292,12 @@ Repository/static hardening is substantially progressed, but the remaining gates
 - Revision 0021 refresh-token session table/index creation and downgrade now check baseline overlap.
 - Added static regression checks for revisions 0020–0021.
 - Runtime upgrade/downgrade PostgreSQL CI remains the acceptance gate; the baseline overlap guards do not prove exact schema equivalence.
+
+
+### PostgreSQL migration failure — revision 0008 (2026-11-23)
+
+- CI at the branch head failed in `postgres-integration` during `alembic upgrade head`: revision 0008 attempted to drop `uq_assets_application_id`, but the baseline-created `assets` table did not contain that named constraint.
+- Revision 0008 now introspects the existing unique constraints and drops only a constraint whose constrained columns are exactly `application_id`; it safely returns if the table is absent.
+- Downgrade now checks whether the uniqueness constraint already exists and rejects downgrade if duplicate non-null application references would make restoration unsafe.
+- Added static regression coverage for the guard and duplicate-data downgrade check.
+- Backend unit tests and frontend build were green in the observed run; PostgreSQL migration job failed before the refresh-rotation integration test could run. The fix is committed, but CI validation on the new head is pending.
