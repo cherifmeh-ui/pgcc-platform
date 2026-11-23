@@ -394,3 +394,10 @@ Repository/static hardening is substantially progressed, but the remaining gates
 - Asset update, retirement, and asset-risk association paths now also use row locks.
 - Application endpoint file and dedicated asset-application tests could not be located at the attempted paths through repository file fetch; no changes were made to that module. Need identify correct paths before further review.
 - Runtime PostgreSQL concurrency tests and fresh-stack validation remain outstanding; CI success does not replace them.
+
+
+### Dependency graph cycle concurrency hardening — 2026-11-23
+
+- Cycle detection now excludes retired/decommissioned assets and their dependency edges, so the active dependency graph is evaluated rather than historical retired nodes.
+- Added a PostgreSQL transaction-scoped advisory lock for `depends_on` relationship creation. Endpoint row locks alone could not serialize disjoint concurrent edge additions that jointly form a cycle.
+- Commit `fe53937e` contains this source-level hardening. CI and PostgreSQL concurrency tests remain pending.
