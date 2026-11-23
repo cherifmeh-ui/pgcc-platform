@@ -456,3 +456,10 @@ Status: targeted code review recorded; additional runtime/API tests remain requi
 - The asset relationship creation endpoint previously converted every database exception into HTTP 409, masking operational failures (connection errors, timeouts, programming errors) as duplicate/conflict responses.
 - Narrowed handling to SQLAlchemy `IntegrityError`, retaining rollback and conflict response for constraint violations. Unexpected exceptions now propagate to normal error handling rather than being misreported.
 - CI validation pending.
+
+
+### Relationship creation uses unified retirement predicate
+- Relationship creation validation previously duplicated lifecycle and retirement-marker checks, rather than using the shared retirement predicate. It was functionally similar but could drift from other endpoints.
+- Updated the helper to call `_asset_is_retired`, making lifecycle status and `retired_at` consistent across impact analysis, risk linking, supplier linking, and relationship creation.
+- Added focused tests for missing endpoints, retired lifecycle states, and marker-only retirement.
+- CI pending.
