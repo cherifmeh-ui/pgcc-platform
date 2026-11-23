@@ -340,3 +340,5 @@ Repository/static hardening is substantially progressed, but the remaining gates
 - Remaining hardening items: verify duplicate-request protection under concurrent PostgreSQL transactions (application check alone may race); ensure expiration/revocation transitions are consistently audit logged and tested; validate that access checks use current status and dates rather than only persisted status.
 - Latest observed workflow for commit `011c4f82`: Backend checks succeeded. This does not establish full CI or runtime validation for subsequent commits.
 - Phase 0 remains open.
+
+- Follow-up inspection of `SupplierAccessRequest` model confirmed a PostgreSQL partial unique index `uq_supplier_access_requests_open_link` on `supplier_asset_link_id` for statuses `Demandé`, `Approuvé`, and `Suspendu`. This mitigates the concurrent duplicate-request race at the database layer; runtime migration/index parity and concurrency tests remain to be verified. Corrected the earlier finding: the model already declares this guard.
