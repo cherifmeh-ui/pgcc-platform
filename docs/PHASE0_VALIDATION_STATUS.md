@@ -342,3 +342,11 @@ Repository/static hardening is substantially progressed, but the remaining gates
 - Phase 0 remains open.
 
 - Follow-up inspection of `SupplierAccessRequest` model confirmed a PostgreSQL partial unique index `uq_supplier_access_requests_open_link` on `supplier_asset_link_id` for statuses `Demandé`, `Approuvé`, and `Suspendu`. This mitigates the concurrent duplicate-request race at the database layer; runtime migration/index parity and concurrency tests remain to be verified. Corrected the earlier finding: the model already declares this guard.
+
+
+### Asset mutation concurrency review — 2026-11-23
+
+- Asset retirement now obtains a row lock before normalizing lifecycle markers, preventing concurrent retirement requests from racing on state changes.
+- Asset-risk association creation now locks the asset row before checking retirement state and inserting the association, serializing link creation with retirement.
+- The latest previously observed Backend checks workflow on commit `9acbbd0` completed successfully. The new commit `eb74f54` is awaiting its own workflow result.
+- Full PostgreSQL concurrency tests for retirement/link operations remain required; source-level row locks alone are not runtime proof.
