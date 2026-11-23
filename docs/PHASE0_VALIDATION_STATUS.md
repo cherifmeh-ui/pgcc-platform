@@ -412,3 +412,5 @@ Repository/static hardening is substantially progressed, but the remaining gates
 - CI: Backend checks #1592 (`fe53937e`), #1598 (`d1ca302e`), and #1600 (`59dc97c5`) completed SUCCESS.
 - Supplier access revocation and expiration endpoints now lock the access-request row with `FOR UPDATE` before checking status and mutating it, reducing concurrent double-transition races.
 - Commit `8cd7650c` is awaiting CI. Concurrency integration tests for approve/revoke/expire/review transitions remain outstanding.
+
+- Backend checks #1602 for `8cd7650c` (supplier access revocation/expiration locking) are IN PROGRESS. Documentation commit `6d13cb3e` has no workflow result returned. No CI success is claimed for the supplier transition change yet.
