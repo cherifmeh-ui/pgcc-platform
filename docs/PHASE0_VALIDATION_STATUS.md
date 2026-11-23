@@ -401,3 +401,5 @@ Repository/static hardening is substantially progressed, but the remaining gates
 - Cycle detection now excludes retired/decommissioned assets and their dependency edges, so the active dependency graph is evaluated rather than historical retired nodes.
 - Added a PostgreSQL transaction-scoped advisory lock for `depends_on` relationship creation. Endpoint row locks alone could not serialize disjoint concurrent edge additions that jointly form a cycle.
 - Commit `fe53937e` contains this source-level hardening. CI and PostgreSQL concurrency tests remain pending.
+
+- Backend checks run #1592 for commit `fe53937e` is currently IN PROGRESS. Its outcome must be verified before claiming this graph-cycle hardening passes CI.
