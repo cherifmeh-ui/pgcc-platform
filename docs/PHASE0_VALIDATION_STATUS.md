@@ -405,3 +405,10 @@ Repository/static hardening is substantially progressed, but the remaining gates
 - Backend checks run #1592 for commit `fe53937e` is currently IN PROGRESS. Its outcome must be verified before claiming this graph-cycle hardening passes CI.
 
 - Backend checks run #1592 for `fe53937e` and #1596 for `d1ca302e` are both currently IN PROGRESS. The documentation update commit `fe94d6aa` has run #1596 also in progress. No CI conclusion is recorded yet for these graph-lock changes.
+
+
+### Supplier access revocation/expiration concurrency — 2026-11-23
+
+- CI: Backend checks #1592 (`fe53937e`), #1598 (`d1ca302e`), and #1600 (`59dc97c5`) completed SUCCESS.
+- Supplier access revocation and expiration endpoints now lock the access-request row with `FOR UPDATE` before checking status and mutating it, reducing concurrent double-transition races.
+- Commit `8cd7650c` is awaiting CI. Concurrency integration tests for approve/revoke/expire/review transitions remain outstanding.
