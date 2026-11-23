@@ -222,9 +222,9 @@ def _lifecycle_retirement_marker(status: str | None, current_retired_at: datetim
 
 
 def _relationship_assets_are_active(asset_rows: list[tuple[UUID, datetime | None, str]]) -> bool:
-    """Require both endpoints to exist and have no retired lifecycle marker."""
+    """Require both endpoints to exist and be active according to retirement markers."""
     return len(asset_rows) == 2 and all(
-        retired_at is None and lifecycle_status not in {"Retiré", "Décommissionné"}
+        not _asset_is_retired(lifecycle_status, retired_at)
         for _, retired_at, lifecycle_status in asset_rows
     )
 
