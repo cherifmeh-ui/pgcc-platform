@@ -301,3 +301,13 @@ Repository/static hardening is substantially progressed, but the remaining gates
 - Downgrade now checks whether the uniqueness constraint already exists and rejects downgrade if duplicate non-null application references would make restoration unsafe.
 - Added static regression coverage for the guard and duplicate-data downgrade check.
 - Backend unit tests and frontend build were green in the observed run; PostgreSQL migration job failed before the refresh-rotation integration test could run. The fix is committed, but CI validation on the new head is pending.
+
+
+### Alembic revision length compatibility — follow-up (2026-11-23)
+
+- PostgreSQL's Alembic version table stores revision identifiers in a 32-character field. The earlier revision names exceeded this limit, so migration execution failed even after the 0008 constraint guard.
+- Shortened revision IDs and aligned dependency references: 0008 `0008_asset_app_cardinality`, 0009 `0009_asset_filter_indexes`, 0010 `0010_asset_risk_restrict`, 0011 `0011_asset_ref_ci`, and 0020 `0020_asset_ref_type`.
+- Updated downstream `down_revision` links and static test references.
+- Added a regression test asserting every Alembic revision identifier is at most 32 characters.
+- Corrected the 0008 migration static test to match the actual column introspection expression.
+- These commits require a fresh PostgreSQL CI run; no runtime migration validation is claimed yet.
