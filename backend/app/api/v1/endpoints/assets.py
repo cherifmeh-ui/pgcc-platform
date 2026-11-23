@@ -685,7 +685,7 @@ async def retire_asset(
     db: AsyncSession = Depends(get_db),
     current_user: User = require_permission("assets", "delete"),
 ):
-    result = await db.execute(select(Asset).where(Asset.id == asset_id))
+    result = await db.execute(select(Asset).where(Asset.id == asset_id).with_for_update())
     asset = result.scalar_one_or_none()
     if asset is None:
         raise HTTPException(status_code=404, detail="Actif introuvable")
@@ -970,7 +970,7 @@ async def link_asset_to_risk(
 ):
     if not role_has_permission((current_user.role or "").lower(), "risks", "update"):
         raise HTTPException(status_code=403, detail="Accès refusé : permission risks:update requise.")
-    asset_result = await db.execute(select(Asset).where(Asset.id == asset_id))
+    asset_result = await db.execute(select(Asset).where(Asset.id == asset_id).with_for_update())
     asset = asset_result.scalar_one_or_none()
     if asset is None:
         raise HTTPException(status_code=404, detail="Actif introuvable")
