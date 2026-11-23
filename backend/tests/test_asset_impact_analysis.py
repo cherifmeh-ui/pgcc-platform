@@ -43,3 +43,18 @@ def test_retirement_marker_and_lifecycle_state_are_both_authoritative():
     assert not _asset_is_retired("Actif", None)
     assert not _asset_allows_risk_link("Actif", marker)
     assert _asset_allows_risk_link("Actif", None)
+
+
+def test_relationship_creation_rejects_any_retirement_marker():
+    from datetime import datetime, timezone
+    from app.api.v1.endpoints.assets import _relationship_assets_are_active
+
+    active_marker = (A, None, "Actif")
+    retired_status = (B, None, "Retiré")
+    decommissioned_status = (C, None, "Décommissionné")
+    marker_only = (D, datetime.now(timezone.utc), "Actif")
+    assert _relationship_assets_are_active([active_marker, (B, None, "En maintenance")])
+    assert not _relationship_assets_are_active([active_marker, retired_status])
+    assert not _relationship_assets_are_active([active_marker, decommissioned_status])
+    assert not _relationship_assets_are_active([active_marker, marker_only])
+    assert not _relationship_assets_are_active([active_marker])
