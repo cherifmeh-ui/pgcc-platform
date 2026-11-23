@@ -433,3 +433,11 @@ Repository/static hardening is substantially progressed, but the remaining gates
 - Remaining concerns: expire vs revoke status transitions are serialized by row locks; supplier-risk link creation should be reviewed for duplicate races and transaction behavior; supplier asset-link termination should lock link row and be reviewed for termination/access-request races. No runtime concurrency claim.
 
 - CI Backend checks #1608 for supplier state locking commit `ca0fb162` completed SUCCESS. CI #1612 for access expiration lock commit `4d030a33` is QUEUED. Documentation commit `3ef9c8da` has no workflow run returned.
+
+
+### Supplier risk-link and RBAC review — 2026-11-23
+
+- Supplier-risk links have a database unique constraint on `(supplier_id, risk_id)` and RESTRICT foreign keys, so concurrent duplicate link creation is rejected by PostgreSQL even if endpoint pre-checks race.
+- The endpoint explicitly checks `suppliers:manage_risks` and `risks:update`, with backend deny-by-default RBAC.
+- Document/RAG endpoint paths were not discoverable through the attempted GitHub search queries; review is deferred until exact file paths are identified.
+- CI #1608 for supplier state row-lock hardening (`ca0fb162`) passed. CI #1612 for supplier access expiration locking (`4d030a33`) was IN PROGRESS at last observation. No result claimed for the latter.
