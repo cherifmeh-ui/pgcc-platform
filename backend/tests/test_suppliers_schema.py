@@ -414,3 +414,14 @@ def test_supplier_access_eligibility_allows_active_asset():
     assert _asset_allows_supplier_access("Actif", None)
     assert _asset_allows_supplier_access("En maintenance", None)
     assert _asset_allows_supplier_access("En projet", None)
+
+
+def test_supplier_asset_link_rejects_retired_marker_even_if_lifecycle_is_inconsistent():
+    from app.api.v1.endpoints.suppliers import _asset_allows_supplier_access
+    from datetime import datetime, timezone
+
+    retired_at = datetime.now(timezone.utc)
+    assert not _asset_allows_supplier_access("Actif", retired_at)
+    assert not _asset_allows_supplier_access("Retiré", None)
+    assert not _asset_allows_supplier_access("Décommissionné", None)
+    assert _asset_allows_supplier_access("Actif", None)
