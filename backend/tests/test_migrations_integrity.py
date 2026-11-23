@@ -64,7 +64,7 @@ def test_baseline_downgrade_is_explicitly_non_destructive() -> None:
     assert "CREATE EXTENSION IF NOT EXISTS vector" in source
 
 def test_asset_reference_migration_has_safe_duplicate_and_downgrade_guards() -> None:
-    migration = MIGRATIONS_DIR / "0020_asset_ref_type.py"
+    migration = MIGRATIONS_DIR / "0020_asset_reference_and_type_constraints.py"
     source = migration.read_text(encoding="utf-8")
     assert "lower(btrim(reference))" in source
     assert "ck_assets_reference_nonblank" in source
@@ -72,7 +72,7 @@ def test_asset_reference_migration_has_safe_duplicate_and_downgrade_guards() -> 
     assert "Cannot downgrade asset type constraint while cloud_resource assets exist" in source
 
 def test_asset_reference_and_type_migration_has_valid_postgresql_downgrade_guard() -> None:
-    migration = MIGRATIONS_DIR / "0020_asset_ref_type.py"
+    migration = MIGRATIONS_DIR / "0020_asset_reference_and_type_constraints.py"
     source = migration.read_text(encoding="utf-8")
     assert "DO $pgcc$" in source
     assert "END $pgcc$;" in source
@@ -193,7 +193,7 @@ def test_refresh_rotation_locks_user_before_refresh_session():
 
 
 def test_asset_reference_index_upgrade_and_downgrade_are_symmetrical():
-    migration = MIGRATIONS_DIR / "0020_asset_ref_type.py"
+    migration = MIGRATIONS_DIR / "0020_asset_reference_and_type_constraints.py"
     source = migration.read_text(encoding="utf-8")
     upgrade = source.split("def upgrade() -> None:", 1)[1].split("def downgrade() -> None:", 1)[0]
     downgrade = source.split("def downgrade() -> None:", 1)[1]
@@ -241,21 +241,21 @@ def test_asset_risk_links_migration_guards_baseline_overlap():
 
 
 def test_asset_filter_index_migration_guards_existing_indexes():
-    source = (MIGRATIONS_DIR / "0009_asset_filter_indexes.py").read_text(encoding="utf-8")
+    source = (MIGRATIONS_DIR / "0009_asset_inventory_filter_indexes.py").read_text(encoding="utf-8")
     assert "get_indexes(\"assets\")" in source
     for index_name in ("ix_assets_owner", "ix_assets_location", "ix_assets_lifecycle_status", "ix_assets_criticality", "ix_assets_classification"):
         assert index_name in source
 
 
 def test_asset_risk_delete_policy_migration_inspects_existing_fk():
-    source = (MIGRATIONS_DIR / "0010_asset_risk_restrict.py").read_text(encoding="utf-8")
+    source = (MIGRATIONS_DIR / "0010_asset_risk_restrict_delete.py").read_text(encoding="utf-8")
     assert "get_foreign_keys(\"asset_risk_links\")" in source
     assert 'ondelete="RESTRICT"' in source
     assert 'ondelete="CASCADE"' in source
 
 
 def test_asset_reference_ci_migration_guards_existing_index():
-    source = (MIGRATIONS_DIR / "0011_asset_ref_ci.py").read_text(encoding="utf-8")
+    source = (MIGRATIONS_DIR / "0011_asset_reference_case_insensitive.py").read_text(encoding="utf-8")
     assert "get_indexes(\"assets\")" in source
     assert "uq_assets_reference_ci" in source
 
@@ -300,7 +300,7 @@ def test_supplier_assessment_and_relationship_migrations_guard_baseline_overlap(
 
 
 def test_asset_constraint_migration_guards_existing_objects():
-    source = (MIGRATIONS_DIR / "0020_asset_ref_type.py").read_text(encoding="utf-8")
+    source = (MIGRATIONS_DIR / "0020_asset_reference_and_type_constraints.py").read_text(encoding="utf-8")
     assert "get_indexes(\"assets\")" in source
     assert "get_check_constraints(\"assets\")" in source
     assert "ck_assets_reference_nonblank" in source
@@ -317,7 +317,7 @@ def test_refresh_token_session_migration_guards_baseline_overlap():
 
 
 def test_asset_application_cardinality_migration_guards_missing_constraint():
-    source = (MIGRATIONS_DIR / "0008_asset_app_cardinality.py").read_text(encoding="utf-8")
+    source = (MIGRATIONS_DIR / "0008_asset_application_cardinality.py").read_text(encoding="utf-8")
     upgrade = source.split("def upgrade() -> None:", 1)[1].split("def downgrade() -> None:", 1)[0]
     downgrade = source.split("def downgrade() -> None:", 1)[1]
     assert 'has_table("assets")' in upgrade
