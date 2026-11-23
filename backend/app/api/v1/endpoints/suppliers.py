@@ -665,7 +665,7 @@ async def revoke_supplier_access_request(
     result = await db.execute(select(SupplierAccessRequest).where(
         SupplierAccessRequest.id == access_request_id,
         SupplierAccessRequest.supplier_id == supplier_id,
-    ))
+    ).with_for_update())
     access_request = result.scalar_one_or_none()
     if access_request is None:
         raise HTTPException(status_code=404, detail="Demande d'accès introuvable")
