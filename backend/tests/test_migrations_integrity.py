@@ -314,3 +314,15 @@ def test_refresh_token_session_migration_guards_baseline_overlap():
     assert 'has_table("refresh_token_sessions")' in upgrade
     assert "get_indexes(\"refresh_token_sessions\")" in upgrade
     assert 'has_table("refresh_token_sessions")' in downgrade
+
+
+def test_asset_application_cardinality_migration_guards_missing_constraint():
+    source = (MIGRATIONS_DIR / "0008_asset_application_cardinality.py").read_text(encoding="utf-8")
+    upgrade = source.split("def upgrade() -> None:", 1)[1].split("def downgrade() -> None:", 1)[0]
+    downgrade = source.split("def downgrade() -> None:", 1)[1]
+    assert 'has_table("assets")' in upgrade
+    assert "get_unique_constraints(\"assets\")" in upgrade
+    assert 'column_names == ["application_id"]' in upgrade
+    assert 'has_table("assets")' in downgrade
+    assert "HAVING COUNT(*) > 1" in downgrade
+    assert "Cannot downgrade 0008" in downgrade
