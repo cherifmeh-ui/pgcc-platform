@@ -311,3 +311,11 @@ Repository/static hardening is substantially progressed, but the remaining gates
 - Added a regression test asserting every Alembic revision identifier is at most 32 characters.
 - Corrected the 0008 migration static test to match the actual column introspection expression.
 - These commits require a fresh PostgreSQL CI run; no runtime migration validation is claimed yet.
+
+
+### Refresh-session PostgreSQL concurrency test — fixture correction (2026-11-23)
+
+- The migration job successfully applied Alembic head on PostgreSQL 16. The integration test then failed while inserting a refresh-token session because the referenced user row was not yet present.
+- The test fixture previously added the User and RefreshTokenSession in one ORM flush without an explicit relationship; SQLAlchemy did not guarantee insert ordering for these independent objects.
+- The fixture now commits the user first, then creates and commits the initial refresh-token session. The concurrent rotation assertions remain unchanged.
+- The correction is committed; CI must rerun before claiming the PostgreSQL integration test is green.
