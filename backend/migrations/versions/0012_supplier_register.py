@@ -1,14 +1,14 @@
 """Create supplier register and contact tables.
 
 Revision ID: 0012_supplier_register
-Revises: 0011_asset_reference_case_insensitive
+Revises: 0011_asset_ref_ci
 """
 from alembic import op
 import sqlalchemy as sa
 from sqlalchemy.dialects import postgresql
 
 revision = "0012_supplier_register"
-down_revision = "0011_asset_reference_case_insensitive"
+down_revision = "0011_asset_ref_ci"
 branch_labels = None
 depends_on = None
 
