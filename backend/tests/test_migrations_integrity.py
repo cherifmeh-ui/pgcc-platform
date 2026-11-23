@@ -317,7 +317,7 @@ def test_refresh_token_session_migration_guards_baseline_overlap():
 
 
 def test_asset_application_cardinality_migration_guards_missing_constraint():
-    source = (MIGRATIONS_DIR / "0008_asset_application_cardinality.py").read_text(encoding="utf-8")
+    source = (MIGRATIONS_DIR / "0008_asset_app_cardinality.py").read_text(encoding="utf-8")
     upgrade = source.split("def upgrade() -> None:", 1)[1].split("def downgrade() -> None:", 1)[0]
     downgrade = source.split("def downgrade() -> None:", 1)[1]
     assert 'has_table("assets")' in upgrade
