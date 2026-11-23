@@ -1,13 +1,13 @@
 """Prevent physical deletion of risks linked to assets.
 
-Revision ID: 0010_asset_risk_restrict_delete
-Revises: 0009_asset_inventory_filter_indexes
+Revision ID: 0010_asset_risk_restrict
+Revises: 0009_asset_filter_indexes
 """
 from alembic import op
 import sqlalchemy as sa
 
-revision = "0010_asset_risk_restrict_delete"
-down_revision = "0009_asset_inventory_filter_indexes"
+revision = "0010_asset_risk_restrict"
+down_revision = "0009_asset_filter_indexes"
 branch_labels = None
 depends_on = None
 
