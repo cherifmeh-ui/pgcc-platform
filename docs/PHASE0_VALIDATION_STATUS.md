@@ -330,3 +330,13 @@ Repository/static hardening is substantially progressed, but the remaining gates
 - Commits: `b6628fa` (asset endpoint consistency), `4a99ad2` (test).
 - CI status for latest commit not yet available through the workflow-run query; no validation claim is made.
 - Phase 0 remains open; DB/runtime validation and security gates remain required.
+
+
+### Supplier access lifecycle review — 2026-11-23
+
+- Reviewed supplier access request, decision, review, revocation, and expiration endpoints.
+- Confirmed request creation checks supplier approval, active supplier-asset link, asset lifecycle eligibility, and open-request duplication; decisions lock the request row and reject self-approval.
+- Confirmed periodic reviews lock the request and reject reviewers who were the requester or initial approver; review outcomes validate privilege reduction and revoke access when requested.
+- Remaining hardening items: verify duplicate-request protection under concurrent PostgreSQL transactions (application check alone may race); ensure expiration/revocation transitions are consistently audit logged and tested; validate that access checks use current status and dates rather than only persisted status.
+- Latest observed workflow for commit `011c4f82`: Backend checks succeeded. This does not establish full CI or runtime validation for subsequent commits.
+- Phase 0 remains open.
