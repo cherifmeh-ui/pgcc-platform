@@ -234,6 +234,11 @@ def _asset_is_retired(lifecycle_status: str, retired_at: datetime | None) -> boo
     return lifecycle_status in {"Retiré", "Décommissionné"} or retired_at is not None
 
 
+def _active_asset_filter():
+    """SQL predicate for assets active in both lifecycle fields."""
+    return (Asset.retired_at.is_(None), Asset.lifecycle_status.notin_(("Retiré", "Décommissionné")))
+
+
 def _asset_allows_risk_link(lifecycle_status: str, retired_at: datetime | None) -> bool:
     """Only active, non-retired assets may be newly linked to risks."""
     return not _asset_is_retired(lifecycle_status, retired_at)
@@ -389,7 +394,7 @@ async def get_asset_dependency_graph(
     current_user: User = require_permission("assets", "read"),
 ):
     """Return the active asset inventory and its explicit relationships for visualization."""
-    assets_result = await db.execute(select(Asset).where(Asset.retired_at.is_(None)).order_by(Asset.name.asc()))
+    assets_result = await db.execute(select(Asset).where(*_active_asset_filter()).order_by(Asset.name.asc()))
     assets = assets_result.scalars().all()
     relations_result = await db.execute(select(AssetRelationship).order_by(AssetRelationship.created_at.asc()))
     asset_ids = {asset.id for asset in assets}
@@ -420,7 +425,7 @@ async def list_assets_page(
     """Return a stable, count-bearing page of inventory records."""
     filters = []
     if not include_retired:
-        filters.append(Asset.retired_at.is_(None))
+        filters.extend(_active_asset_filter())
     if q and q.strip():
         pattern = f"%{q.strip()}%"
         filters.append(
@@ -488,7 +493,7 @@ async def export_assets_csv(
     """Export the filtered inventory as UTF-8 CSV with spreadsheet formula protection."""
     filters = []
     if not include_retired:
-        filters.append(Asset.retired_at.is_(None))
+        filters.extend(_active_asset_filter())
     if q and q.strip():
         pattern = f"%{q.strip()}%"
         filters.append(
@@ -553,7 +558,7 @@ async def list_assets(
 ):
     stmt = select(Asset)
     if not include_retired:
-        stmt = stmt.where(Asset.retired_at.is_(None))
+        stmt = stmt.where(*_active_asset_filter())
     if q:
         pattern = f"%{q.strip()}%"
         stmt = stmt.where(Asset.name.ilike(pattern) | Asset.reference.ilike(pattern) | Asset.hostname.ilike(pattern))
@@ -600,7 +605,7 @@ async def get_asset_inventory_quality(
     current_user: User = require_permission("assets", "read"),
 ):
     """Return completeness and lifecycle indicators for the active inventory."""
-    result = await db.execute(select(Asset).where(Asset.retired_at.is_(None)))
+    result = await db.execute(select(Asset).where(*_active_asset_filter()))
     assets = result.scalars().all()
     total = len(assets)
     missing_owner = sum(not (asset.owner or "").strip() for asset in assets)
@@ -684,9 +689,10 @@ async def retire_asset(
     asset = result.scalar_one_or_none()
     if asset is None:
         raise HTTPException(status_code=404, detail="Actif introuvable")
-    if asset.retired_at is None:
-        asset.retired_at = datetime.now(timezone.utc)
-        asset.lifecycle_status = "Retiré"
+    if not _asset_is_retired(asset.lifecycle_status, asset.retired_at) or asset.retired_at is None:
+        asset.retired_at = asset.retired_at or datetime.now(timezone.utc)
+        if asset.lifecycle_status not in {"Retiré", "Décommissionné"}:
+            asset.lifecycle_status = "Retiré"
         await db.commit()
         await log_action(
             user_email=current_user.email, action="RETIRE", resource="assets",
