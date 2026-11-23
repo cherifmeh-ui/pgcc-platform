@@ -809,7 +809,7 @@ async def link_supplier_asset(
     asset = asset_result.scalar_one_or_none()
     if asset is None:
         raise HTTPException(status_code=404, detail="Actif introuvable")
-    if asset.lifecycle_status in ("Retiré", "Décommissionné"):
+    if not _asset_allows_supplier_access(asset.lifecycle_status, asset.retired_at):
         raise HTTPException(status_code=422, detail="Impossible de rattacher un actif retiré ou décommissionné")
     existing = await db.execute(select(SupplierAssetLink.id).where(
         SupplierAssetLink.supplier_id == supplier_id,
