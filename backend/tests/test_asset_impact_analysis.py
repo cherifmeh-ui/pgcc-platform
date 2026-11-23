@@ -30,3 +30,16 @@ def test_supplier_exposure_in_impact_is_permission_gated():
     assert role_has_permission("admin", "suppliers", "read_assets")
     assert role_has_permission("auditor", "suppliers", "read_assets")
     assert not role_has_permission("executive", "suppliers", "read_assets")
+
+
+def test_retirement_marker_and_lifecycle_state_are_both_authoritative():
+    from datetime import datetime, timezone
+    from app.api.v1.endpoints.assets import _asset_is_retired, _asset_allows_risk_link
+
+    marker = datetime.now(timezone.utc)
+    assert _asset_is_retired("Actif", marker)
+    assert _asset_is_retired("Retiré", None)
+    assert _asset_is_retired("Décommissionné", None)
+    assert not _asset_is_retired("Actif", None)
+    assert not _asset_allows_risk_link("Actif", marker)
+    assert _asset_allows_risk_link("Actif", None)
