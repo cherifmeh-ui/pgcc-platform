@@ -229,9 +229,14 @@ def _relationship_assets_are_active(asset_rows: list[tuple[UUID, datetime | None
     )
 
 
+def _asset_is_retired(lifecycle_status: str, retired_at: datetime | None) -> bool:
+    """Treat either lifecycle state or retirement marker as authoritative."""
+    return lifecycle_status in {"Retiré", "Décommissionné"} or retired_at is not None
+
+
 def _asset_allows_risk_link(lifecycle_status: str, retired_at: datetime | None) -> bool:
     """Only active, non-retired assets may be newly linked to risks."""
-    return lifecycle_status not in {"Retiré", "Décommissionné"} and retired_at is None
+    return not _asset_is_retired(lifecycle_status, retired_at)
 
 
 async def _ensure_application_exists(application_id: UUID | None, db: AsyncSession) -> None:
@@ -701,7 +706,7 @@ async def get_asset_impact(
     """Return transitive assets depending on the selected asset and their linked risks."""
     source_result = await db.execute(select(Asset).where(Asset.id == asset_id))
     source = source_result.scalar_one_or_none()
-    if source is None or source.retired_at is not None:
+    if source is None or _asset_is_retired(source.lifecycle_status, source.retired_at):
         raise HTTPException(status_code=404, detail="Actif actif introuvable")
     dependent_asset = aliased(Asset)
     dependency_asset = aliased(Asset)
@@ -712,7 +717,9 @@ async def get_asset_impact(
         .where(
             AssetRelationship.relationship_type == "depends_on",
             dependent_asset.retired_at.is_(None),
+            dependent_asset.lifecycle_status.notin_(("Retiré", "Décommissionné")),
             dependency_asset.retired_at.is_(None),
+            dependency_asset.lifecycle_status.notin_(("Retiré", "Décommissionné")),
         )
     )
     impacted = _compute_asset_impact(asset_id, rel_result.all())
