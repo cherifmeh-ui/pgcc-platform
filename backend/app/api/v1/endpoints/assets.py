@@ -172,10 +172,20 @@ class RelationshipResponse(BaseModel):
 
 
 async def _would_create_dependency_cycle(db: AsyncSession, source_id: UUID, target_id: UUID) -> bool:
-    """Return whether source -> target would close a depends_on cycle."""
+    """Return whether source -> target would close a cycle in the active dependency graph."""
+    source_asset = aliased(Asset)
+    target_asset = aliased(Asset)
     result = await db.execute(
         select(AssetRelationship.source_asset_id, AssetRelationship.target_asset_id)
-        .where(AssetRelationship.relationship_type == "depends_on")
+        .join(source_asset, source_asset.id == AssetRelationship.source_asset_id)
+        .join(target_asset, target_asset.id == AssetRelationship.target_asset_id)
+        .where(
+            AssetRelationship.relationship_type == "depends_on",
+            source_asset.retired_at.is_(None),
+            source_asset.lifecycle_status.notin_(("Retiré", "Décommissionné")),
+            target_asset.retired_at.is_(None),
+            target_asset.lifecycle_status.notin_(("Retiré", "Décommissionné")),
+        )
     )
     graph: dict[UUID, list[UUID]] = {}
     for source, target in result.all():
@@ -191,9 +201,6 @@ async def _would_create_dependency_cycle(db: AsyncSession, source_id: UUID, targ
         visited.add(node)
         pending.extend(graph.get(node, []))
     return False
-
-
-
 
 def _compute_asset_impact(source_asset_id: UUID, dependency_pairs: list[tuple[UUID, UUID]]) -> list[tuple[UUID, int]]:
     """Find assets that transitively depend on source; nearest dependents first."""
@@ -879,6 +886,9 @@ async def create_asset_relationship(
         raise HTTPException(status_code=422, detail="Un actif ne peut pas être lié à lui-même")
 
     # Lock active asset rows in a deterministic order to serialize dependency
+    if data.relationship_type == "depends_on":
+        # Endpoint locks alone do not prevent cycles from disjoint concurrent edges.
+        await db.execute(select(func.pg_advisory_xact_lock(736291, 1)))
     # graph mutations and prevent concurrent requests from introducing cycles.
     locked_assets = await db.execute(
         select(Asset.id, Asset.retired_at, Asset.lifecycle_status)
