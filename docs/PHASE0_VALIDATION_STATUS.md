@@ -383,3 +383,14 @@ Repository/static hardening is substantially progressed, but the remaining gates
 - Backend checks run #1584 for commit `160e5de2` were observed in progress.
 - Workflow status for documentation-only commit `78c9aea6` was not returned.
 - These are pending observations; do not mark them successful until final conclusions are available.
+
+
+### CI and dependency-graph concurrency review — 2026-11-23
+
+- Backend checks run #1582 (`05261a63`) completed SUCCESS.
+- Backend checks run #1584 (`160e5de2`) completed SUCCESS.
+- Backend checks run #1588 (`cfc75d59`) completed SUCCESS.
+- Dependency relationship creation locks both endpoint asset rows in deterministic ID order, checks both endpoints are active, and rejects `depends_on` cycles after locking. This serializes concurrent relationship mutations on shared endpoints and reduces the cycle race.
+- Asset update, retirement, and asset-risk association paths now also use row locks.
+- Application endpoint file and dedicated asset-application tests could not be located at the attempted paths through repository file fetch; no changes were made to that module. Need identify correct paths before further review.
+- Runtime PostgreSQL concurrency tests and fresh-stack validation remain outstanding; CI success does not replace them.
