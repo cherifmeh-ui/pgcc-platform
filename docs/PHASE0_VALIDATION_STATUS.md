@@ -359,3 +359,10 @@ Repository/static hardening is substantially progressed, but the remaining gates
 - Asset retirement is logical (not physical), so risk associations remain traceable after retirement. New links reject retired assets; unlink remains available to authorized users.
 - Asset-risk linking now locks the asset row before checking lifecycle and inserting, serializing against retirement. PostgreSQL integration testing of concurrent link/retire is still outstanding.
 - Backend checks run #1574 passed on commit `9acbbd0`; commit `eb74f54` has no workflow result returned yet, and documentation commit `0cc20b0` also awaits status.
+
+
+### Asset update lifecycle concurrency — 2026-11-23
+
+- Asset update now locks the asset row (`FOR UPDATE`) before applying lifecycle status and `retired_at` normalization, preventing concurrent update/retirement operations from overwriting lifecycle state based on stale reads.
+- Source-level change is committed as `05261a63`; workflow result is not yet available.
+- This adds serialization to update/retire/link-risk paths. PostgreSQL concurrency tests are still required before claiming runtime correctness.
