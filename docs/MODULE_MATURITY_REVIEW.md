@@ -411,3 +411,28 @@ The initial code-level review found that DOCX extraction joined paragraphs/table
 
 - Numeric JWT `exp` values can still be outside Python's datetime range. Persistence now maps `OverflowError`, `OSError`, and `ValueError` during timestamp conversion to an invalid-refresh-token response.
 - Added regression tests for extreme positive and negative numeric expiry values.
+
+
+## Phase 0 follow-up — PostgreSQL refresh rotation and asset lifecycle (2026-11-23)
+
+### Validation evidence
+- Commit `987ebc60604854baba379a270f3d431e5735b179` has a successful Backend checks workflow.
+- Workflow jobs observed: backend compile + unit tests, frontend build, and PostgreSQL integration.
+- PostgreSQL job completed both Alembic migration application and refresh-token rotation integration test successfully.
+- This validates the current CI test path only; it does not yet prove a clean Docker application startup, full API integration, or production deployment.
+
+### Asset lifecycle code-level observations
+- `PATCH /assets/{asset_id}` synchronizes `retired_at` when lifecycle_status is explicitly changed to Retiré or Décommissionné, and clears it for other explicit lifecycle states.
+- `DELETE /assets/{asset_id}` is a logical retirement: it sets `retired_at` and lifecycle_status=Retiré, preserving records.
+- New asset-risk links reject retired/decommissioned assets and require both asset:update and risks:update.
+- New asset relationships lock both endpoint rows in deterministic UUID order, reject missing/retired endpoints, reject self-relations, and check dependency cycles for depends_on. Integrity errors are translated to HTTP 409.
+- Impact computation traverses reverse depends_on edges; its query excludes retired endpoints. Supplier details in impact are permission-gated by suppliers:read_assets.
+
+### Remaining targeted validation
+- Add/confirm API tests for retirement markers across PATCH and DELETE, reactivation semantics, retired assets in list/export/impact, and retained historical links.
+- Add graph tests for direct and transitive impact, cycle rejection, and concurrent edge creation.
+- Confirm access-control matrix for assets read/export/update/delete and cross-module risk/supplier permissions with negative-role tests.
+- Review the post-commit audit logging pattern for mutation endpoints: database mutation and audit record are currently separate operations in sampled asset endpoints, so failure behavior should be explicitly tested/documented.
+- Verify supplier access links and authorization lifecycle (request, approve, review, expiry, revoke) against retired assets and archived/suspended suppliers.
+
+Status: targeted code review recorded; additional runtime/API tests remain required before marking Cartography validated.
