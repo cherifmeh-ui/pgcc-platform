@@ -241,21 +241,21 @@ def test_asset_risk_links_migration_guards_baseline_overlap():
 
 
 def test_asset_filter_index_migration_guards_existing_indexes():
-    source = (MIGRATIONS_DIR / "0009_asset_inventory_filter_indexes.py").read_text(encoding="utf-8")
+    source = (MIGRATIONS_DIR / "0009_asset_filter_indexes.py").read_text(encoding="utf-8")
     assert "get_indexes(\"assets\")" in source
     for index_name in ("ix_assets_owner", "ix_assets_location", "ix_assets_lifecycle_status", "ix_assets_criticality", "ix_assets_classification"):
         assert index_name in source
 
 
 def test_asset_risk_delete_policy_migration_inspects_existing_fk():
-    source = (MIGRATIONS_DIR / "0010_asset_risk_restrict_delete.py").read_text(encoding="utf-8")
+    source = (MIGRATIONS_DIR / "0010_asset_risk_restrict.py").read_text(encoding="utf-8")
     assert "get_foreign_keys(\"asset_risk_links\")" in source
     assert 'ondelete="RESTRICT"' in source
     assert 'ondelete="CASCADE"' in source
 
 
 def test_asset_reference_ci_migration_guards_existing_index():
-    source = (MIGRATIONS_DIR / "0011_asset_reference_case_insensitive.py").read_text(encoding="utf-8")
+    source = (MIGRATIONS_DIR / "0011_asset_ref_ci.py").read_text(encoding="utf-8")
     assert "get_indexes(\"assets\")" in source
     assert "uq_assets_reference_ci" in source
 
@@ -326,3 +326,9 @@ def test_asset_application_cardinality_migration_guards_missing_constraint():
     assert 'has_table("assets")' in downgrade
     assert "HAVING COUNT(*) > 1" in downgrade
     assert "Cannot downgrade 0008" in downgrade
+
+
+def test_alembic_revision_ids_fit_version_column():
+    for migration in MIGRATIONS_DIR.glob("*.py"):
+        revision, _ = _revision_metadata(migration)
+        assert len(revision) <= 32, f"{migration.name}: revision ID exceeds alembic_version.version_num length"
