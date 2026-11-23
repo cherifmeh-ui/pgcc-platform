@@ -1,13 +1,13 @@
 """Enforce case-insensitive uniqueness for asset business references.
 
-Revision ID: 0011_asset_reference_case_insensitive
-Revises: 0010_asset_risk_restrict_delete
+Revision ID: 0011_asset_ref_ci
+Revises: 0010_asset_risk_restrict
 """
 from alembic import op
 import sqlalchemy as sa
 
-revision = "0011_asset_reference_case_insensitive"
-down_revision = "0010_asset_risk_restrict_delete"
+revision = "0011_asset_ref_ci"
+down_revision = "0010_asset_risk_restrict"
 branch_labels = None
 depends_on = None
 
