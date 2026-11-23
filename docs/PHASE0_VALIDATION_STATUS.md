@@ -350,3 +350,12 @@ Repository/static hardening is substantially progressed, but the remaining gates
 - Asset-risk association creation now locks the asset row before checking retirement state and inserting the association, serializing link creation with retirement.
 - The latest previously observed Backend checks workflow on commit `9acbbd0` completed successfully. The new commit `eb74f54` is awaiting its own workflow result.
 - Full PostgreSQL concurrency tests for retirement/link operations remain required; source-level row locks alone are not runtime proof.
+
+
+### Asset-risk integrity and deletion review — 2026-11-23
+
+- `AssetRiskLink` enforces unique `(asset_id, risk_id)` and RESTRICT foreign keys to assets and risks.
+- Risk deletion endpoint refuses deletion while corrective actions or asset-risk links exist, preserving traceability; explicit unlinking is required before deletion.
+- Asset retirement is logical (not physical), so risk associations remain traceable after retirement. New links reject retired assets; unlink remains available to authorized users.
+- Asset-risk linking now locks the asset row before checking lifecycle and inserting, serializing against retirement. PostgreSQL integration testing of concurrent link/retire is still outstanding.
+- Backend checks run #1574 passed on commit `9acbbd0`; commit `eb74f54` has no workflow result returned yet, and documentation commit `0cc20b0` also awaits status.
