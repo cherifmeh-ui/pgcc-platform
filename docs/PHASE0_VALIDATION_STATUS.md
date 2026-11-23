@@ -375,3 +375,11 @@ Repository/static hardening is substantially progressed, but the remaining gates
 - Asset reference case/whitespace uniqueness is enforced by model-level `uq_assets_reference_ci` index and nonblank check. Hostname and serial number are currently checked by preview only, with no database uniqueness constraint visible in the Asset model; concurrent imports or direct API writes may therefore bypass those duplicate checks.
 - Before adding DB uniqueness constraints, inspect existing inventory for duplicate hostname/serial data and choose nullable/case-insensitive semantics; then add a migration and PostgreSQL tests. No migration was created without this evidence.
 - The test directory path guessed for CSV import tests was not found by GitHub file fetch, so test discovery remains incomplete; no claim of tests run.
+
+
+### CI follow-up — 2026-11-23
+
+- Backend checks run #1582 for commit `05261a63` were observed in progress.
+- Backend checks run #1584 for commit `160e5de2` were observed in progress.
+- Workflow status for documentation-only commit `78c9aea6` was not returned.
+- These are pending observations; do not mark them successful until final conclusions are available.
