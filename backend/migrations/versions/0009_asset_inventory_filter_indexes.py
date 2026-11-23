@@ -1,12 +1,12 @@
 """Add indexes supporting common asset inventory filters.
 
-Revision ID: 0009_asset_inventory_filter_indexes
+Revision ID: 0009_asset_filter_indexes
 Revises: 0008_asset_app_cardinality
 """
 from alembic import op
 import sqlalchemy as sa
 
-revision = "0009_asset_inventory_filter_indexes"
+revision = "0009_asset_filter_indexes"
 down_revision = "0008_asset_app_cardinality"
 branch_labels = None
 depends_on = None
