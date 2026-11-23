@@ -1,12 +1,12 @@
 """Align asset type and normalized reference constraints with the model.
 
-Revision ID: 0020_asset_reference_and_type_constraints
+Revision ID: 0020_asset_ref_type
 Revises: 0019_supplier_risk_snapshots
 """
 from alembic import op
 import sqlalchemy as sa
 
-revision = "0020_asset_reference_and_type_constraints"
+revision = "0020_asset_ref_type"
 down_revision = "0019_supplier_risk_snapshots"
 branch_labels = None
 depends_on = None
