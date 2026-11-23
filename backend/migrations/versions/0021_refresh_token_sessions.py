@@ -5,7 +5,7 @@ import sqlalchemy as sa
 from sqlalchemy.dialects import postgresql
 
 revision = "0021_refresh_token_sessions"
-down_revision = "0020_asset_reference_and_type_constraints"
+down_revision = "0020_asset_ref_type"
 branch_labels = None
 depends_on = None
 
