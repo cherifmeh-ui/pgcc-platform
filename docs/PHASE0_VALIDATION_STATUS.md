@@ -366,3 +366,12 @@ Repository/static hardening is substantially progressed, but the remaining gates
 - Asset update now locks the asset row (`FOR UPDATE`) before applying lifecycle status and `retired_at` normalization, preventing concurrent update/retirement operations from overwriting lifecycle state based on stale reads.
 - Source-level change is committed as `05261a63`; workflow result is not yet available.
 - This adds serialization to update/retire/link-risk paths. PostgreSQL concurrency tests are still required before claiming runtime correctness.
+
+
+### CSV inventory import integrity review — 2026-11-23
+
+- CSV preview validates duplicate references, hostnames, and serial numbers within the file and against current inventory.
+- Confirm endpoint re-runs preview, revalidates application references, and commits the complete import atomically; failure rolls back and returns conflict.
+- Asset reference case/whitespace uniqueness is enforced by model-level `uq_assets_reference_ci` index and nonblank check. Hostname and serial number are currently checked by preview only, with no database uniqueness constraint visible in the Asset model; concurrent imports or direct API writes may therefore bypass those duplicate checks.
+- Before adding DB uniqueness constraints, inspect existing inventory for duplicate hostname/serial data and choose nullable/case-insensitive semantics; then add a migration and PostgreSQL tests. No migration was created without this evidence.
+- The test directory path guessed for CSV import tests was not found by GitHub file fetch, so test discovery remains incomplete; no claim of tests run.
