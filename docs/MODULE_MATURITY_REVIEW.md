@@ -436,3 +436,10 @@ The initial code-level review found that DOCX extraction joined paragraphs/table
 - Verify supplier access links and authorization lifecycle (request, approve, review, expiry, revoke) against retired assets and archived/suspended suppliers.
 
 Status: targeted code review recorded; additional runtime/API tests remain required before marking Cartography validated.
+
+
+### Supplier-to-asset link lifecycle consistency — follow-up
+- The supplier asset-link endpoint previously rejected retired/decommissioned assets based only on `lifecycle_status`, while access-request validation already checked both lifecycle status and `retired_at`.
+- Reused the existing `_asset_allows_supplier_access` predicate in link creation so inconsistent records with `retired_at` set but status still `Actif` cannot acquire a new supplier relationship.
+- Added a regression test for this inconsistent-marker case and normal active assets.
+- CI validation is pending for this change.
