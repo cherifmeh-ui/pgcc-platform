@@ -796,7 +796,7 @@ async def link_supplier_asset(
     db: AsyncSession = Depends(get_db),
     current_user: User = require_permission("suppliers", "manage_assets"),
 ):
-    supplier_result = await db.execute(select(Supplier).where(Supplier.id == supplier_id, Supplier.archived_at.is_(None)))
+    supplier_result = await db.execute(select(Supplier).where(Supplier.id == supplier_id, Supplier.archived_at.is_(None)).with_for_update())
     supplier = supplier_result.scalar_one_or_none()
     if supplier is None:
         raise HTTPException(status_code=404, detail="Fournisseur introuvable ou archivé")
@@ -1154,7 +1154,7 @@ async def update_supplier(
     db: AsyncSession = Depends(get_db),
     current_user: User = require_permission("suppliers", "update"),
 ):
-    result = await db.execute(select(Supplier).where(Supplier.id == supplier_id, Supplier.archived_at.is_(None)))
+    result = await db.execute(select(Supplier).where(Supplier.id == supplier_id, Supplier.archived_at.is_(None)).with_for_update())
     supplier = result.scalar_one_or_none()
     if supplier is None:
         raise HTTPException(status_code=404, detail="Fournisseur introuvable ou archivé")
@@ -1206,7 +1206,7 @@ async def archive_supplier(
     db: AsyncSession = Depends(get_db),
     current_user: User = require_permission("suppliers", "archive"),
 ):
-    result = await db.execute(select(Supplier).where(Supplier.id == supplier_id, Supplier.archived_at.is_(None)))
+    result = await db.execute(select(Supplier).where(Supplier.id == supplier_id, Supplier.archived_at.is_(None)).with_for_update())
     supplier = result.scalar_one_or_none()
     if supplier is None:
         raise HTTPException(status_code=404, detail="Fournisseur introuvable ou déjà archivé")
