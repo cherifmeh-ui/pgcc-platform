@@ -885,11 +885,10 @@ async def create_asset_relationship(
     if asset_id == data.target_asset_id:
         raise HTTPException(status_code=422, detail="Un actif ne peut pas être lié à lui-même")
 
-    # Lock active asset rows in a deterministic order to serialize dependency
+    # Serialize dependency-edge creation to prevent cycles from disjoint concurrent edges.
     if data.relationship_type == "depends_on":
-        # Endpoint locks alone do not prevent cycles from disjoint concurrent edges.
         await db.execute(select(func.pg_advisory_xact_lock(736291, 1)))
-    # graph mutations and prevent concurrent requests from introducing cycles.
+    # Lock endpoint rows in deterministic order to serialize lifecycle changes.
     locked_assets = await db.execute(
         select(Asset.id, Asset.retired_at, Asset.lifecycle_status)
         .where(Asset.id.in_([asset_id, data.target_asset_id]))
