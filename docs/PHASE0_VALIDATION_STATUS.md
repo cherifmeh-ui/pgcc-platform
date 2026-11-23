@@ -319,3 +319,14 @@ Repository/static hardening is substantially progressed, but the remaining gates
 - The test fixture previously added the User and RefreshTokenSession in one ORM flush without an explicit relationship; SQLAlchemy did not guarantee insert ordering for these independent objects.
 - The fixture now commits the user first, then creates and commits the initial refresh-token session. The concurrent rotation assertions remain unchanged.
 - The correction is committed; CI must rerun before claiming the PostgreSQL integration test is green.
+
+
+### Asset lifecycle consistency review — 2026-11-23
+
+- Source review found active-inventory queries relied only on `retired_at IS NULL`, which could include records whose `lifecycle_status` was `Retiré` or `Décommissionné` if legacy/inconsistent data existed.
+- Added `_active_asset_filter()` and applied it to graph, paginated inventory, list, export, and completeness statistics when retired assets are excluded.
+- Retirement endpoint now normalizes inconsistent records: it fills `retired_at` when missing and preserves `Décommissionné` rather than downgrading it to `Retiré`.
+- Regression coverage extended for lifecycle predicate behavior.
+- Commits: `b6628fa` (asset endpoint consistency), `4a99ad2` (test).
+- CI status for latest commit not yet available through the workflow-run query; no validation claim is made.
+- Phase 0 remains open; DB/runtime validation and security gates remain required.
