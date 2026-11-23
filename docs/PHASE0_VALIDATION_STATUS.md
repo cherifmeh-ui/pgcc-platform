@@ -403,3 +403,5 @@ Repository/static hardening is substantially progressed, but the remaining gates
 - Commit `fe53937e` contains this source-level hardening. CI and PostgreSQL concurrency tests remain pending.
 
 - Backend checks run #1592 for commit `fe53937e` is currently IN PROGRESS. Its outcome must be verified before claiming this graph-cycle hardening passes CI.
+
+- Backend checks run #1592 for `fe53937e` and #1596 for `d1ca302e` are both currently IN PROGRESS. The documentation update commit `fe94d6aa` has run #1596 also in progress. No CI conclusion is recorded yet for these graph-lock changes.
