@@ -422,3 +422,12 @@ Repository/static hardening is substantially progressed, but the remaining gates
 - Access-request revoke/expire endpoints also lock the request row before transition checks (`8cd7650c`).
 - CI #1602 for `8cd7650c` was IN PROGRESS when last checked. New commit `ca0fb162` is awaiting workflow result.
 - PostgreSQL integration tests covering concurrent supplier status/link/archive and access transitions remain necessary.
+
+
+### RBAC cross-module review and access expiration — 2026-11-23
+
+- `require_permission` is enforced server-side using `role_has_permission`; frontend permission data is informational only. The suppliers-to-risks link additionally checks `risks:update`, preventing suppliers permission alone from authorizing risk linkage.
+- Access expiration now also locks the supplier access request row with `FOR UPDATE` before checking status and end date and mutating to `Expiré`. Commit `4d030a33` awaits CI.
+- Access decision, review, and revocation already use request row locks. Supplier lifecycle changes now lock supplier rows.
+- RBAC review found explicit module/action entries and deny-by-default behavior for unknown module/action. Existing dedicated RBAC test file could not be located by repository fetch; test coverage needs path discovery.
+- Remaining concerns: expire vs revoke status transitions are serialized by row locks; supplier-risk link creation should be reviewed for duplicate races and transaction behavior; supplier asset-link termination should lock link row and be reviewed for termination/access-request races. No runtime concurrency claim.
