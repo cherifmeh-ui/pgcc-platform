@@ -64,7 +64,7 @@ def test_baseline_downgrade_is_explicitly_non_destructive() -> None:
     assert "CREATE EXTENSION IF NOT EXISTS vector" in source
 
 def test_asset_reference_migration_has_safe_duplicate_and_downgrade_guards() -> None:
-    migration = MIGRATIONS_DIR / "0020_asset_reference_and_type_constraints.py"
+    migration = MIGRATIONS_DIR / "0020_asset_ref_type.py"
     source = migration.read_text(encoding="utf-8")
     assert "lower(btrim(reference))" in source
     assert "ck_assets_reference_nonblank" in source
@@ -72,7 +72,7 @@ def test_asset_reference_migration_has_safe_duplicate_and_downgrade_guards() -> 
     assert "Cannot downgrade asset type constraint while cloud_resource assets exist" in source
 
 def test_asset_reference_and_type_migration_has_valid_postgresql_downgrade_guard() -> None:
-    migration = MIGRATIONS_DIR / "0020_asset_reference_and_type_constraints.py"
+    migration = MIGRATIONS_DIR / "0020_asset_ref_type.py"
     source = migration.read_text(encoding="utf-8")
     assert "DO $pgcc$" in source
     assert "END $pgcc$;" in source
@@ -113,7 +113,7 @@ def test_refresh_token_sessions_migration_is_linked_and_revocable():
     migration = MIGRATIONS_DIR / "0021_refresh_token_sessions.py"
     source = migration.read_text(encoding="utf-8")
     assert 'revision = "0021_refresh_token_sessions"' in source
-    assert 'down_revision = "0020_asset_reference_and_type_constraints"' in source
+    assert 'down_revision = "0020_asset_ref_type"' in source
     assert "token_jti_hash" in source
     assert "revoked_at" in source
     assert "replaced_by_jti_hash" in source
@@ -193,7 +193,7 @@ def test_refresh_rotation_locks_user_before_refresh_session():
 
 
 def test_asset_reference_index_upgrade_and_downgrade_are_symmetrical():
-    migration = MIGRATIONS_DIR / "0020_asset_reference_and_type_constraints.py"
+    migration = MIGRATIONS_DIR / "0020_asset_ref_type.py"
     source = migration.read_text(encoding="utf-8")
     upgrade = source.split("def upgrade() -> None:", 1)[1].split("def downgrade() -> None:", 1)[0]
     downgrade = source.split("def downgrade() -> None:", 1)[1]
@@ -300,7 +300,7 @@ def test_supplier_assessment_and_relationship_migrations_guard_baseline_overlap(
 
 
 def test_asset_constraint_migration_guards_existing_objects():
-    source = (MIGRATIONS_DIR / "0020_asset_reference_and_type_constraints.py").read_text(encoding="utf-8")
+    source = (MIGRATIONS_DIR / "0020_asset_ref_type.py").read_text(encoding="utf-8")
     assert "get_indexes(\"assets\")" in source
     assert "get_check_constraints(\"assets\")" in source
     assert "ck_assets_reference_nonblank" in source
@@ -322,7 +322,7 @@ def test_asset_application_cardinality_migration_guards_missing_constraint():
     downgrade = source.split("def downgrade() -> None:", 1)[1]
     assert 'has_table("assets")' in upgrade
     assert "get_unique_constraints(\"assets\")" in upgrade
-    assert 'column_names == ["application_id"]' in upgrade
+    assert 'constraint.get("column_names") == ["application_id"]' in upgrade
     assert 'has_table("assets")' in downgrade
     assert "HAVING COUNT(*) > 1" in downgrade
     assert "Cannot downgrade 0008" in downgrade
