@@ -443,3 +443,10 @@ Status: targeted code review recorded; additional runtime/API tests remain requi
 - Reused the existing `_asset_allows_supplier_access` predicate in link creation so inconsistent records with `retired_at` set but status still `Actif` cannot acquire a new supplier relationship.
 - Added a regression test for this inconsistent-marker case and normal active assets.
 - CI validation is pending for this change.
+
+
+### Impact analysis retirement consistency — follow-up
+- Impact analysis previously filtered graph endpoints only by `retired_at IS NULL` and checked the source only by the marker. A lifecycle status of Retiré/Décommissionné without a marker (possible on creation/import or legacy rows) could therefore appear active.
+- Introduced a shared retirement predicate treating lifecycle status and `retired_at` as authoritative, and applied both conditions to the source and graph query.
+- Added a focused regression test for inconsistent lifecycle/marker states and risk-link eligibility.
+- CI pending; runtime validation not yet claimed.
