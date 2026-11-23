@@ -41,6 +41,7 @@ def test_retirement_marker_and_lifecycle_state_are_both_authoritative():
     assert _asset_is_retired("Retiré", None)
     assert _asset_is_retired("Décommissionné", None)
     assert not _asset_is_retired("Actif", None)
+    assert not _asset_is_retired("En maintenance", None)
     assert not _asset_allows_risk_link("Actif", marker)
     assert _asset_allows_risk_link("Actif", None)
 
