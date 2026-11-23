@@ -47,6 +47,9 @@ async def test_concurrent_rotation_has_exactly_one_winner_and_revokes_old_sessio
             is_active=True,
             mfa_enabled=True,
         ))
+        # Commit the referenced user first: these ORM models intentionally do
+        # not define a relationship, so unit-of-work ordering is not guaranteed.
+        await setup.commit()
         setup.add(RefreshTokenSession(
             user_id=user_id,
             token_jti_hash=old_hash,
