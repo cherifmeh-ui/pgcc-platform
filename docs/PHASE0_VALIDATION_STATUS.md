@@ -431,3 +431,5 @@ Repository/static hardening is substantially progressed, but the remaining gates
 - Access decision, review, and revocation already use request row locks. Supplier lifecycle changes now lock supplier rows.
 - RBAC review found explicit module/action entries and deny-by-default behavior for unknown module/action. Existing dedicated RBAC test file could not be located by repository fetch; test coverage needs path discovery.
 - Remaining concerns: expire vs revoke status transitions are serialized by row locks; supplier-risk link creation should be reviewed for duplicate races and transaction behavior; supplier asset-link termination should lock link row and be reviewed for termination/access-request races. No runtime concurrency claim.
+
+- CI Backend checks #1608 for supplier state locking commit `ca0fb162` completed SUCCESS. CI #1612 for access expiration lock commit `4d030a33` is QUEUED. Documentation commit `3ef9c8da` has no workflow run returned.
