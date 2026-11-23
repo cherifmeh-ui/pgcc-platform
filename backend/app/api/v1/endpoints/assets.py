@@ -899,7 +899,7 @@ async def create_asset_relationship(
     db.add(relationship)
     try:
         await db.commit()
-    except Exception:
+    except IntegrityError:
         await db.rollback()
         raise HTTPException(status_code=409, detail="Relation déjà existante ou contrainte invalide")
     await db.refresh(relationship)
