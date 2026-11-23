@@ -450,3 +450,9 @@ Status: targeted code review recorded; additional runtime/API tests remain requi
 - Introduced a shared retirement predicate treating lifecycle status and `retired_at` as authoritative, and applied both conditions to the source and graph query.
 - Added a focused regression test for inconsistent lifecycle/marker states and risk-link eligibility.
 - CI pending; runtime validation not yet claimed.
+
+
+### Asset relationship error handling — follow-up
+- The asset relationship creation endpoint previously converted every database exception into HTTP 409, masking operational failures (connection errors, timeouts, programming errors) as duplicate/conflict responses.
+- Narrowed handling to SQLAlchemy `IntegrityError`, retaining rollback and conflict response for constraint violations. Unexpected exceptions now propagate to normal error handling rather than being misreported.
+- CI validation pending.
