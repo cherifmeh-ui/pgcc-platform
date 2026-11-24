@@ -451,3 +451,12 @@ Repository/static hardening is substantially progressed, but the remaining gates
 - GitHub Actions for that exact HEAD: Backend checks success; backend tests **268 passed, 1 skipped**; frontend Vite build success; PostgreSQL 16 integration job success (Alembic upgrade to head and refresh-token concurrency test: **1 passed**).
 - Static review identified broad database exception mapping in asset create/update/CSV import; only `IntegrityError` should become HTTP 409. Correction and focused regression tests are committed on this branch; CI for the resulting HEAD is pending.
 - Remaining: relationship create/delete and asset retirement/deletion behavior require broader PostgreSQL-backed API integration tests; full clean Docker application stack, document/RAG ACL and audit durability remain unverified. Phase 0 is **not closed**.
+
+
+## Cartography relationship checkpoint — 2026-11-24
+
+- Last fully green HEAD before this change: `e4ed3d20e7586ebad09913a239a16811934efe23`; backend 271 passed / 1 skipped, frontend build passed, PostgreSQL migrations and refresh-token integration passed.
+- Relationship creation already uses a PostgreSQL advisory transaction lock for `depends_on` edges and locks endpoint assets in deterministic order. Existing tests covered the pure cycle helper, not the endpoint transaction path.
+- Corrective change: relationship create/delete now explicitly roll back and re-raise unexpected database errors; create continues to map only `IntegrityError` to HTTP 409.
+- New API regression tests cover unexpected commit errors, duplicate constraint mapping, cycle rejection and delete rollback. CI for the new HEAD is pending.
+- Remaining: PostgreSQL concurrency test for opposing dependency edges, FK/RESTRICT behavior for relationship deletion and asset deletion, and end-to-end validation of supplier/application/risk link lifecycles. Phase 0 remains open.
