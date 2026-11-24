@@ -526,3 +526,11 @@ Status: targeted code review recorded; additional runtime/API tests remain requi
 - HEAD `1a022b8e9f4197d77d940804d3448862e087b42c` has a fully successful CI run `45458697575`.
 - PostgreSQL 16 migrations succeeded and all three integration tests passed: refresh-token rotation, opposing asset dependency-edge concurrency, and asset-risk link versus risk deletion.
 - Backend suite: 277 passed, 3 skipped. Frontend build passed.
+
+
+### Supplier access request versus link termination concurrency — 2026-11-24
+
+- Review found a lifecycle race: access-request creation checked supplier, supplier-asset link and asset eligibility without row locks, while link termination checked for open access requests without locking the supplier/link rows. Concurrent requests could leave an active authorization attached to a terminated supplier-asset relationship.
+- Access-request creation now locks Supplier, SupplierAssetLink and Asset rows before eligibility checks and insert. Link termination locks Supplier then SupplierAssetLink before checking open requests and changing status. Access decisions also lock Supplier, SupplierAssetLink and Asset after locking the request, serializing approval with supplier/link/asset lifecycle changes.
+- Added a PostgreSQL concurrency test racing real access-request creation against real link termination. Only two outcomes are accepted: request created and termination rejected (409), or link terminated and request rejected (404).
+- PostgreSQL CI validation is pending on the new HEAD.
