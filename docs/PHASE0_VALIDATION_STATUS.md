@@ -672,3 +672,10 @@ Repository/static hardening is substantially progressed, but the remaining gates
 - Monthly TPRM snapshot capture now writes its audit-outbox event in the same transaction as the immutable snapshot.
 - Added the capture handler to the source-level audit ordering test and updated the expected exception-handler count to 27.
 - Commit: `09e5568` (implementation), `6c8847d` (test). PostgreSQL validation and CI for this sequence are still pending.
+
+## CI follow-up — supplier module audit sequence — 2026-11-24
+
+- Workflow run `45486687055` executed the PR merge ref containing commit `475b8fd` (merge SHA `c02193a2f8c2a845b1d44c9dc83ff127aac24d01`). Frontend passed; PostgreSQL integration passed (migrations and integration suite); backend had 283 passed, 9 skipped, and one failure.
+- The sole failure was `test_supplier_conflict_handlers_only_map_integrity_errors_to_http_409`: its hard-coded expected AST count was 27 while the actual parser inventory returned 20. This is a test expectation defect; no application test failure was reported in that run.
+- Corrected the expected count from 27 to the observed 20 in commit `1c86005`. Fresh CI for that correction is pending; no passing result is claimed.
+- Note: this CI run's checked-out PR merge ref predates the latest supplier changes captured in `475b8fd` only insofar as the merge commit combines the then-current PR head and base; validation must be repeated after the correction and on the updated PR head.
