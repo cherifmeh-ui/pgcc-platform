@@ -926,6 +926,9 @@ async def create_asset_relationship(
     except IntegrityError:
         await db.rollback()
         raise HTTPException(status_code=409, detail="Relation déjà existante ou contrainte invalide")
+    except Exception:
+        await db.rollback()
+        raise
     await db.refresh(relationship)
     await log_action(
         user_email=current_user.email, action="CREATE_RELATIONSHIP", resource="asset_relationships",
@@ -952,8 +955,12 @@ async def delete_asset_relationship(
     relationship = result.scalar_one_or_none()
     if relationship is None:
         raise HTTPException(status_code=404, detail="Relation introuvable pour cet actif")
-    await db.delete(relationship)
-    await db.commit()
+    try:
+        await db.delete(relationship)
+        await db.commit()
+    except Exception:
+        await db.rollback()
+        raise
     await log_action(
         user_email=current_user.email, action="DELETE_RELATIONSHIP", resource="asset_relationships",
         resource_id=str(relationship.id), details=f"Asset relationship deleted: {relationship.source_asset_id} -> {relationship.target_asset_id}",
