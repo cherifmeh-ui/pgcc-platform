@@ -657,3 +657,12 @@ Repository/static hardening is substantially progressed, but the remaining gates
 - Added AST regression assertions for all four assessment lifecycle handlers and updated the expected database-handler count. These are source-structure checks, not proof of PostgreSQL concurrency behavior.
 - Commits: `a68e49a` (implementation), `ab0fccf` (focused test).
 - CI for the latest commits has not yet been observed. PostgreSQL-backed concurrent submit-vs-validation and rollback-on-outbox-failure tests remain required. Phase 0 remains open.
+
+## Supplier register, contracts and contacts — transactional audit — 2026-11-24
+
+- Extended same-session audit-outbox writes to supplier creation, update and archive; contract creation/update; and contact creation/update.
+- All supplier write handlers in `suppliers.py` now use `enqueue_audit_event` before commit; a source scan found no remaining post-commit `log_action()` calls in this endpoint module.
+- Unexpected failures roll back and propagate; IntegrityError is the only database exception mapped to HTTP 409. Existing supplier row locks and lifecycle guards were preserved.
+- Expanded the AST regression checks to cover these operations; the expected generic/specific database exception handler count is now 26. These checks verify source structure only.
+- Commits: `6e37ee3` (contracts/contacts), `4afaef0` (tests), `fcec651` (supplier CRUD/archive), `539165c` (tests).
+- Snapshot capture and its audit semantics still need explicit review. CI has not yet been observed for these commits; no runtime test result is claimed. Phase 0 remains open.
