@@ -566,3 +566,13 @@ Repository/static hardening is substantially progressed, but the remaining gates
 - Outbox delivery is idempotent and transactionally couples the immutable log insert with marking the outbox event delivered. Failed delivery records attempt metadata.
 - PostgreSQL integration test covers transient delivery failure and successful replay. CI validation pending.
 - Remaining limitation: outbox persistence itself depends on PostgreSQL availability, and existing business transactions are not yet atomically coupled to outbox inserts. Phase 0 remains open.
+
+
+## Durable audit outbox — CI verification — 2026-11-24
+
+- HEAD: `15a95f136e7f3e42fcc75ad9313850f0d39ec74b`; GitHub Actions runs `45465933278` and `45465948124` completed successfully.
+- Backend: **282 passed, 8 skipped**, 9 warnings.
+- PostgreSQL 16: **8 passed**; Alembic applied revision `0024_audit_outbox`; the new failure/retry integration test passed.
+- Frontend build: passed.
+- Two initial static-test assertion mismatches were corrected; final CI is green.
+- Limitation remains: business transactions and audit outbox enqueue are not yet atomic for all existing endpoints. Phase 0 remains open.

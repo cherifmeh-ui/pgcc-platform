@@ -595,3 +595,13 @@ Status: targeted code review recorded; additional runtime/API tests remain requi
 - Added PostgreSQL coverage simulating a transient delivery failure, asserting the outbox remains durable, then replaying the event and verifying exactly one immutable log row.
 - Boundary: if PostgreSQL is unavailable before the outbox commit, the application cannot durably queue the event; the error is surfaced. Because many business handlers currently call `log_action()` after their business commit, this is durable retry, not atomic coupling of the business mutation and audit record. That stronger invariant still requires targeted transaction-boundary refactoring.
 - CI validation pending on the new HEAD.
+
+
+### Durable audit outbox — CI verification on 2026-11-24
+
+- Verified HEAD `15a95f136e7f3e42fcc75ad9313850f0d39ec74b`.
+- Backend: **282 passed, 8 skipped**, 9 warnings.
+- PostgreSQL 16: **8 passed**, including Alembic migration `0024_audit_outbox` and transient outbox delivery failure/replay. The test confirms the event remains pending after sink failure, then produces exactly one immutable log on retry.
+- Frontend build passed.
+- The first CI attempts exposed two overly literal static-test assertions (`CREATE TABLE` / `DROP TABLE` rather than SQLAlchemy Alembic operation calls). Both assertions were corrected to check `op.create_table(` and `op.drop_table(`; the final HEAD is green.
+- Outbox delivery is durable after enqueue and idempotent. Existing business operations still commit before calling `log_action()`; this does not yet guarantee atomic coupling of business writes and audit outbox records.
