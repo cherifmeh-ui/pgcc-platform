@@ -134,3 +134,11 @@ Do not close Phase 0 until evidence is attached for:
 ## Migration head correction
 
 - The current migration head is 0024_audit_outbox, not 0021_refresh_token_sessions. The database validation runbook now reflects revision 0024 and includes audit_outbox/security_logs checks.
+
+
+## RBAC normalization hardening — 2026-11-24
+
+- Access-token authentication now normalizes the persisted role before privileged-role MFA enforcement, matching the RBAC matrix's case/whitespace normalization.
+- Access-token role claims are now required, must be non-empty strings, and must match the normalized database role. Missing, malformed or mismatched claims are rejected with 403.
+- Added unit tests for uppercase/whitespace privileged-role MFA enforcement, missing/malformed/mismatched claims and normalized matching roles.
+- Commits: 07c434f (implementation), 8149214 (tests). Fresh CI execution remains pending.
