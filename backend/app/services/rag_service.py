@@ -20,7 +20,7 @@ class RAGService:
     @staticmethod
     async def index_document(db: AsyncSession, doc_id: str) -> bool:
         """Generate all vectors first, then atomically replace a document's chunks."""
-        result = await db.execute(select(Document).where(Document.id == doc_id))
+        result = await db.execute(select(Document).where(Document.id == doc_id).with_for_update())
         doc = result.scalar_one_or_none()
         if not doc or not doc.content_text or not doc.content_text.strip():
             return False
