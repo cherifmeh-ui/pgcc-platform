@@ -636,3 +636,14 @@ Repository/static hardening is substantially progressed, but the remaining gates
 - Supplier access decision, review (including reduction), revocation and expiration now enqueue audit events before commit in the same AsyncSession. Existing permission checks and row locks were retained.
 - Supplier-asset and supplier-risk relationship create/terminate operations are still pending migration.
 - Latest code/test changes are not yet CI-validated. Phase 0 remains open.
+
+
+## Supplier relationship audit atomicity — 2026-11-24
+
+- Latest verified workflow run 45480587724 on commit 4a7fd5d completed successfully for Backend checks. No other workflow runs were returned for that exact commit.
+- Current branch head observed during this pass had advanced beyond 4a7fd5d (recent commit search returned 91d47a8fe29b391245449b99b55e651fa444ccb8, an unrelated README addition). The branch remains chore/phase0-stabilization and PR #1 remains open/unmerged; draft status is not exposed by the search response.
+- Migrated supplier-risk association creation, supplier-asset association creation, and supplier-asset relationship termination to enqueue audit events in the same AsyncSession before commit. Existing supplier/asset lifecycle checks, access-open guard, and row locks were retained.
+- IntegrityError remains the only exception mapped to HTTP 409; unexpected errors roll back and propagate.
+- Extended the static audit-order test to cover all seven supplier access/relationship lifecycle handlers and updated the expected number of IntegrityError/generic exception handler pairs to 15.
+- Latest implementation and test commits: 5c8b87575856dcdb84506004e5cf255a0b18cab8 and ab4927193e6434b78af9e7674f784ebc3f9e6fba. They require fresh CI validation.
+- Supplier contract and supplier assessment create/update/submit/validate endpoints still use post-commit log_action and remain outside the completed transactional outbox scope. Phase 0 remains open.
