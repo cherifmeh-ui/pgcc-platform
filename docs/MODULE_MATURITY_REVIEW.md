@@ -504,3 +504,11 @@ Status: targeted code review recorded; additional runtime/API tests remain requi
 - The first PostgreSQL graph-concurrency run exposed a test harness mapper-registration issue (`Risk.actions` referenced `ActionItem` before that model was imported). The integration test now explicitly imports the model before ORM use.
 - Corrected PostgreSQL run on HEAD `306e966b72ff4c6b026fa130647a7c7282ca2ecb`, run `45457897057`: backend **276 passed, 2 skipped**, frontend build passed, Alembic upgrade passed, and PostgreSQL integration tests **2 passed** (refresh-token rotation plus concurrent opposing asset dependency edges).
 - The concurrency scenario is now runtime-verified on PostgreSQL 16: exactly one of the two opposing dependency edges is persisted; the other request is rejected as a cycle.
+
+
+### Asset-risk association versus risk deletion concurrency — 2026-11-24
+
+- Static review identified a race: asset-risk linking checked that the risk existed without locking its row, while risk deletion checked association counts without locking the risk row. A concurrent link could pass its existence check while deletion passed its association count.
+- Both paths now lock the same risk row with `SELECT ... FOR UPDATE` before eligibility/count checks and mutation. The existing `ON DELETE RESTRICT` foreign key remains the final database safeguard.
+- Added a PostgreSQL integration test that races the real asset-risk link endpoint against the real risk-delete endpoint. The only valid outcomes are: link succeeds and delete returns 409, or delete succeeds and link returns 404.
+- PostgreSQL CI validation is pending on the new HEAD.
