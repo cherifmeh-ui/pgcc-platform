@@ -825,20 +825,21 @@ async def link_supplier_to_risk(
     )
     db.add(link)
     try:
+        await db.flush()
+        await enqueue_audit_event(
+            db, user_email=current_user.email, action="LINK_SUPPLIER_RISK",
+            resource="supplier_risk_links", resource_id=str(link.id),
+            details=f"Supplier {supplier.code} linked to risk {risk.ref}: {data.relationship_type}",
+            event_type="SUPPLIER_RISK", request=request,
+        )
         await db.commit()
-    except IntegrityError:
+    except IntegrityError as exc:
         await db.rollback()
-        raise HTTPException(status_code=409, detail="Association fournisseur/risque déjà existante ou contrainte invalide")
+        raise HTTPException(status_code=409, detail="Association fournisseur/risque déjà existante ou contrainte invalide") from exc
     except Exception:
         await db.rollback()
         raise
     await db.refresh(link)
-    await log_action(
-        user_email=current_user.email, action="LINK_SUPPLIER_RISK",
-        resource="supplier_risk_links", resource_id=str(link.id),
-        details=f"Supplier {supplier.code} linked to risk {risk.ref}: {data.relationship_type}",
-        event_type="SUPPLIER_RISK", request=request,
-    )
     return link
 
 
@@ -898,15 +899,21 @@ async def link_supplier_asset(
     link = SupplierAssetLink(supplier_id=supplier_id, created_by_id=current_user.id, **data.model_dump())
     db.add(link)
     try:
+        await db.flush()
+        await enqueue_audit_event(
+            db, user_email=current_user.email, action="LINK_SUPPLIER_ASSET",
+            resource="supplier_asset_links", resource_id=str(link.id),
+            details=f"Supplier {supplier_id} linked to asset {data.asset_id} ({data.relationship_type})",
+            event_type="SUPPLIER", request=request,
+        )
         await db.commit()
-    except IntegrityError:
+    except IntegrityError as exc:
         await db.rollback()
-        raise HTTPException(status_code=409, detail="Relation fournisseur-actif déjà créée ou contrainte invalide")
+        raise HTTPException(status_code=409, detail="Relation fournisseur-actif déjà créée ou contrainte invalide") from exc
     except Exception:
         await db.rollback()
         raise
     await db.refresh(link)
-    await log_action(user_email=current_user.email, action="LINK_SUPPLIER_ASSET", resource="supplier_asset_links", resource_id=str(link.id), details=f"Supplier {supplier_id} linked to asset {data.asset_id} ({data.relationship_type})", event_type="SUPPLIER", request=request)
     return link
 
 
@@ -944,9 +951,22 @@ async def terminate_supplier_asset_link(
             detail="Relation impossible à terminer : une demande ou autorisation d'accès reste ouverte. Révoquez ou clôturez-la d'abord.",
         )
     link.status = "Terminé"
-    await db.commit()
+    try:
+        await db.flush()
+        await enqueue_audit_event(
+            db, user_email=current_user.email, action="TERMINATE_SUPPLIER_ASSET_LINK",
+            resource="supplier_asset_links", resource_id=str(link.id),
+            details=f"Supplier-asset relationship terminated: {link.id}",
+            event_type="SUPPLIER", request=request,
+        )
+        await db.commit()
+    except IntegrityError as exc:
+        await db.rollback()
+        raise HTTPException(status_code=409, detail="Conflit lors de la terminaison de la relation fournisseur-actif") from exc
+    except Exception:
+        await db.rollback()
+        raise
     await db.refresh(link)
-    await log_action(user_email=current_user.email, action="TERMINATE_SUPPLIER_ASSET_LINK", resource="supplier_asset_links", resource_id=str(link.id), details=f"Supplier-asset relationship terminated: {link.id}", event_type="SUPPLIER", request=request)
     return link
 
 
