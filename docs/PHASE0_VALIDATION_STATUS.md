@@ -730,3 +730,12 @@ Repository/static hardening is substantially progressed, but the remaining gates
 - The failing parameter expected a denial for token role viewer while the persisted user role was also viewer. The test case was corrected to use admin as the mismatched token role in commit f42e108. This was a test-data correction; the implementation behavior was correct.
 - PostgreSQL migration/integration job was still in progress at the time of this status update. Its final result must be checked separately.
 - The run was created before commit f42e108, so it does not validate that correction. A fresh PR workflow run is required.
+
+
+### Final PostgreSQL result for workflow 45491802074 — 2026-11-24
+
+- PostgreSQL 16.16 clean database was initialized and Alembic upgraded successfully from 0001 through 0024_audit_outbox.
+- PostgreSQL integration suite completed successfully: 13 passed. This includes refresh rotation, asset relationships, supplier access lifecycle, document/RAG index-vs-delete, duplicate upload, append-only audit log and durable outbox tests.
+- Frontend build completed successfully.
+- Backend unit job had 292 passed, 13 skipped and one failing test-data case (viewer token against viewer user); the parameter was corrected to admin in commit f42e108.
+- Important: run 45491802074 checked out the PR merge ref before f42e108, so its backend failure does not validate the correction. A fresh backend CI result on the corrected branch head is still required.
