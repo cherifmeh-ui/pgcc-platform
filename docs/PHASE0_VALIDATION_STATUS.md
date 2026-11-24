@@ -714,3 +714,11 @@ Repository/static hardening is substantially progressed, but the remaining gates
 - Added PostgreSQL integration tests invoking the actual refresh endpoint concurrently with one token, verifying exactly one successful response, replay revocation and both audit events; added audit-enqueue-failure rollback coverage. Updated logout unit tests to verify audit event enqueue.
 - Commits: a5ff17b (refresh audit), b0adc25 (rollback), 9febb71 (logout audit), cd0f8db (PostgreSQL refresh tests), d0e51b9 and 801cb8a (logout tests), 44c12cf (backlog), 4ed8834 (auth review), defb67e (security findings).
 - These latest authentication tests have not yet been executed by a fresh CI run. Administrative session revocation on account disable/role change/MFA reset remains open.
+
+
+## RBAC authentication gate hardening — 2026-11-24
+
+- Closed a defense-in-depth inconsistency: RBAC normalized role strings, but get_current_user previously compared privileged roles case-sensitively for MFA enforcement and did not reject missing/malformed role claims.
+- Persisted roles are now normalized before admin/executive MFA enforcement. Access tokens must contain a non-empty string role claim matching the normalized persisted role.
+- Added focused tests for privileged MFA enforcement and role-claim validation.
+- Commits: 07c434f and 8149214. No CI result for these commits has yet been observed.
