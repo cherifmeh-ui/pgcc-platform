@@ -375,7 +375,7 @@ def test_audit_outbox_migration_is_idempotent_and_links_immutable_logs():
     ).read_text(encoding="utf-8")
     assert 'revision = "0024_audit_outbox"' in source
     assert 'down_revision = "0023_security_logs_append_only"' in source
-    assert 'CREATE TABLE' in source
+    assert "op.create_table(" in source
     assert '"audit_outbox"' in source
     assert "JSONB" in source
     assert "delivered_at" in source
