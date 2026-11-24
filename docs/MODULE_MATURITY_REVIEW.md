@@ -471,3 +471,12 @@ Status: targeted code review recorded; additional runtime/API tests remain requi
 - The handlers now translate only SQLAlchemy `IntegrityError` into HTTP 409 and continue to roll back the failed transaction. Other exceptions propagate to normal server error handling.
 - Added regression tests for create/update: integrity conflicts remain 409 while unexpected database errors are not misclassified.
 - Validation evidence for the pre-fix HEAD `70e2bbf6bb57c462f8d320ed824bf8edd98bdacb`: Backend checks green (268 passed, 1 skipped), frontend build green, PostgreSQL migrations and refresh rotation integration test green. The corrective commit itself still requires CI validation.
+
+
+### Asset relationship transaction safety — 2026-11-24
+
+- Review confirmed that dependency-cycle detection is serialized with a PostgreSQL transaction advisory lock, endpoint asset rows are locked in deterministic order, and retired/missing endpoints are rejected. The database also enforces non-self relationships, allowed relationship types, uniqueness and RESTRICT foreign keys.
+- Existing cycle tests exercised the graph helper, but not the route's transaction behavior. The create and delete relationship endpoints also lacked an explicit rollback/re-raise path for unexpected commit failures.
+- Added explicit rollback/re-raise handling for unexpected exceptions in relationship create/delete, while retaining HTTP 409 mapping for create-time `IntegrityError`.
+- Added API-level regression tests for create rollback, integrity conflict mapping, cycle rejection before insert, and delete rollback.
+- These are mock-backed route tests. A concurrent PostgreSQL test that attempts two opposing dependency edges remains a required runtime proof; the advisory lock implementation is source-reviewed but not yet concurrency-tested at the relationship API level.
