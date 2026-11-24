@@ -76,18 +76,26 @@ async def get_current_user(
             detail="Changement de mot de passe obligatoire avant accès.",
         )
 
-    # MFA obligatoire pour les rôles sensibles
-    if user.role in {"admin", "executive"} and not user.mfa_enabled:
+    # Normalize the persisted role exactly as the RBAC matrix does. This keeps
+    # privileged-role MFA enforcement fail-closed even if legacy data has case
+    # or whitespace inconsistencies.
+    normalized_role = (user.role or "").strip().lower()
+    if normalized_role in {"admin", "executive"} and not user.mfa_enabled:
         raise HTTPException(
             status_code=status.HTTP_403_FORBIDDEN,
             detail="MFA obligatoire pour ce rôle.",
         )
 
-    # Si le rôle a changé en base depuis l'émission du token, forcer reconnexion
-    if token_role and user.role and token_role != user.role:
+    # Access tokens issued by this application always carry a role claim.
+    # Reject missing/malformed claims and force re-authentication after role changes.
+    if (
+        not isinstance(token_role, str)
+        or not token_role.strip()
+        or token_role.strip().lower() != normalized_role
+    ):
         raise HTTPException(
             status_code=status.HTTP_403_FORBIDDEN,
-            detail="Rôle modifié. Veuillez vous reconnecter.",
+            detail="Rôle modifié ou absent. Veuillez vous reconnecter.",
         )
 
     return user
