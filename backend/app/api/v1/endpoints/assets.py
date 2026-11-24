@@ -1001,7 +1001,7 @@ async def link_asset_to_risk(
         raise HTTPException(status_code=404, detail="Actif introuvable")
     if not _asset_allows_risk_link(asset.lifecycle_status, asset.retired_at):
         raise HTTPException(status_code=409, detail="Impossible d'associer un risque à un actif retiré ou décommissionné")
-    risk_result = await db.execute(select(Risk).where(Risk.id == data.risk_id))
+    risk_result = await db.execute(select(Risk).where(Risk.id == data.risk_id).with_for_update())
     risk = risk_result.scalar_one_or_none()
     if risk is None:
         raise HTTPException(status_code=404, detail="Risque introuvable")
