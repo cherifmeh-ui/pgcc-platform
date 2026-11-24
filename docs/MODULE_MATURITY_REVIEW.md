@@ -512,3 +512,10 @@ Status: targeted code review recorded; additional runtime/API tests remain requi
 - Both paths now lock the same risk row with `SELECT ... FOR UPDATE` before eligibility/count checks and mutation. The existing `ON DELETE RESTRICT` foreign key remains the final database safeguard.
 - Added a PostgreSQL integration test that races the real asset-risk link endpoint against the real risk-delete endpoint. The only valid outcomes are: link succeeds and delete returns 409, or delete succeeds and link returns 404.
 - PostgreSQL CI validation is pending on the new HEAD.
+
+
+### Supplier-risk references in risk deletion — 2026-11-24
+
+- Further review found that `risks.delete_risk` checked action items and asset-risk links but omitted supplier-risk links, despite `supplier_risk_links.risk_id` having an `ON DELETE RESTRICT` foreign key.
+- Risk deletion now returns an explicit HTTP 409 when supplier-risk links exist. Supplier-risk link creation also locks the Risk row, serializing it with risk deletion's row lock.
+- Added a route regression test for the supplier-risk deletion conflict. The PostgreSQL FK remains a final safeguard; dedicated supplier-link/delete concurrency coverage remains a follow-up.
