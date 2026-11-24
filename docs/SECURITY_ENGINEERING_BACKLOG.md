@@ -40,7 +40,8 @@ Status: active engineering review. This is a static review backlog, not a securi
 - [x] Persist refresh-token sessions with hashed JTI, atomic rotation and reuse detection/revocation.
 - [x] Revoke active refresh sessions on password change and logout.
 - [ ] Proactively revoke persisted sessions on account disable, role change, MFA reset and administrator security reset.
-- [ ] Add durable audit-outbox events for refresh rotation, reuse detection, denial and logout; add HTTP-level PostgreSQL concurrency tests.
+- [x] Add durable audit-outbox events for refresh rotation, reuse detection, denial and logout in the same transaction as session changes.
+- [x] Add PostgreSQL HTTP-endpoint concurrency/replay and audit-failure rollback tests for refresh rotation; CI execution of the latest additions remains pending.
 - [x] Require dedicated change-password token for forced password change; remove access-token fallback.
 - [ ] Complete frontend forced-password-change flow and validate token issuance.
 - [x] Apply account lockout policy to MFA verification failures.
