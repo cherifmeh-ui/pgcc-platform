@@ -449,5 +449,5 @@ Repository/static hardening is substantially progressed, but the remaining gates
 - HEAD before this correction: `70e2bbf6bb57c462f8d320ed824bf8edd98bdacb`.
 - PR #1: open, draft, not merged; base `main`.
 - GitHub Actions for that exact HEAD: Backend checks success; backend tests **268 passed, 1 skipped**; frontend Vite build success; PostgreSQL 16 integration job success (Alembic upgrade to head and refresh-token concurrency test: **1 passed**).
-- Static review identified broad database exception mapping in asset create/update/CSV import; only `IntegrityError` should become HTTP 409. Fix and regression tests are being added on this branch.
+- Static review identified broad database exception mapping in asset create/update/CSV import; only `IntegrityError` should become HTTP 409. Correction and focused regression tests are committed on this branch; CI for the resulting HEAD is pending.
 - Remaining: relationship create/delete and asset retirement/deletion behavior require broader PostgreSQL-backed API integration tests; full clean Docker application stack, document/RAG ACL and audit durability remain unverified. Phase 0 is **not closed**.
