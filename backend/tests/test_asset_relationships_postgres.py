@@ -6,7 +6,7 @@ import os
 from uuid import uuid4
 
 import pytest
-from fastapi import HTTPException
+from fastapi import HTTPException, Request
 from sqlalchemy import delete, or_, select
 from sqlalchemy.ext.asyncio import async_sessionmaker, create_async_engine
 from unittest.mock import AsyncMock, MagicMock
@@ -21,6 +21,19 @@ from app.models.asset import Asset, AssetRelationship, AssetRiskLink
 from app.models.risk import Risk
 
 DATABASE_URL = os.getenv("PGCC_INTEGRATION_DATABASE_URL")
+
+
+def _request():
+    return Request({
+        "type": "http",
+        "method": "POST",
+        "path": "/phase0-test",
+        "headers": [(b"user-agent", b"phase0-postgres-test")],
+        "client": ("127.0.0.1", 12345),
+        "server": ("localhost", 80),
+        "scheme": "http",
+        "query_string": b"",
+    })
 
 pytestmark = pytest.mark.skipif(
     not DATABASE_URL,
@@ -65,7 +78,7 @@ async def test_concurrent_opposing_dependency_edges_allow_only_one_direction(mon
                             target_asset_id=target_id,
                             relationship_type="depends_on",
                         ),
-                        request=MagicMock(),
+                        request=_request(),
                         db=db,
                         current_user=MagicMock(email="phase0-test@example.invalid"),
                     )
@@ -143,7 +156,7 @@ async def test_concurrent_asset_risk_link_and_risk_delete_are_serialized(monkeyp
                     await link_asset_to_risk(
                         asset_id=asset.id,
                         data=AssetRiskLinkCreate(risk_id=risk.id),
-                        request=MagicMock(),
+                        request=_request(),
                         db=db,
                         current_user=MagicMock(role="admin", email="phase0-test@example.invalid"),
                     )
@@ -156,7 +169,7 @@ async def test_concurrent_asset_risk_link_and_risk_delete_are_serialized(monkeyp
                 try:
                     await delete_risk(
                         risk_id=risk.id,
-                        request=MagicMock(),
+                        request=_request(),
                         db=db,
                         current_user=MagicMock(role="admin", email="phase0-test@example.invalid"),
                     )
