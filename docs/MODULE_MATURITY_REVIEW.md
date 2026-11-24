@@ -625,3 +625,13 @@ Status: targeted code review recorded; additional runtime/API tests remain requi
 - Existing PostgreSQL concurrency tests still cover opposing dependency-edge creation and asset-risk link versus risk deletion. Their CI result after this change is pending.
 - Export remains a separate read-side audit event; preview/list/graph endpoints do not mutate state.
 - Supplier workflows, document/RAG workflows and authentication still need the same transactional migration.
+
+
+
+### Cartography CI regression analysis — 2026-11-24
+
+- Reviewed complete failing logs for run 45470003937 (commit 40020d5): frontend build passed; backend failed 4 tests and PostgreSQL integration failed 2 tests; migrations succeeded.
+- Backend test fixtures were not updated for the new asynchronous audit outbox flush (missing AsyncMock for session.flush); the relationship-ordering test also exhausted its mocked execute results because it invoked the endpoint twice.
+- PostgreSQL concurrency fixtures supplied MagicMock Request objects; the real audit payload then contained non-JSON-serializable mock values for client IP/user-agent. Replaced these with concrete Starlette Request instances in the integration tests.
+- Follow-up test-only commits: 1067a1f, d2b45bf, df9e3b4. Validation of the latest commit is required before treating these fixes as accepted.
+- No production endpoint behavior was changed in these follow-up commits. Supplier audit migration remains pending.
