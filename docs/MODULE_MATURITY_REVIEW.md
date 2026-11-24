@@ -534,3 +534,11 @@ Status: targeted code review recorded; additional runtime/API tests remain requi
 - Access-request creation now locks Supplier, SupplierAssetLink and Asset rows before eligibility checks and insert. Link termination locks Supplier then SupplierAssetLink before checking open requests and changing status. Access decisions also lock Supplier, SupplierAssetLink and Asset after locking the request, serializing approval with supplier/link/asset lifecycle changes.
 - Added a PostgreSQL concurrency test racing real access-request creation against real link termination. Only two outcomes are accepted: request created and termination rejected (409), or link terminated and request rejected (404).
 - PostgreSQL CI validation is pending on the new HEAD.
+
+
+### Document indexing versus source deletion — 2026-11-24
+
+- Review found that RAG indexing read and later replaced document chunks without locking the source Document row, while document deletion read and deleted the source without coordinating with indexation. Concurrent operations could commit chunks for a deleted source or return a misleading successful index result after deletion.
+- RAG indexing now locks the Document row for the full embedding/persistence transaction. Document deletion locks the same row before checking evidence references and removing chunks/source.
+- Added a PostgreSQL integration test with a controlled embedding pause: deletion must block while indexation holds the row lock, then remove the document and its newly persisted chunks after indexation commits.
+- CI validation is pending on the new HEAD.
