@@ -625,3 +625,14 @@ Repository/static hardening is substantially progressed, but the remaining gates
 - Added a static source-order test covering the four lifecycle handlers. The test asserts audit enqueue precedes commit.
 - Latest code/test commits: ee12644, 9947204, 55db138. A new CI run for the latest HEAD has not yet been observed.
 - Supplier risk-link and supplier-asset link create/terminate operations still use post-commit log_action and remain to migrate. Phase 0 remains open.
+
+
+## Supplier lifecycle follow-up and CI evidence — 2026-11-24
+
+- Rechecked branch chore/phase0-stabilization; PR #1 remains open and unmerged.
+- CI run 45479777408: PostgreSQL integration and frontend passed; backend failed one static assertion because the supplier error-handler count increased from 8 to 12 after migrating decision, review, revocation and expiration handlers.
+- Updated the assertion to 12 in commit aa657c0f7fb438f3a3353bfb465cd5e488592832.
+- Backend logs also exposed RuntimeWarnings from AsyncMock-backed synchronous Session.add calls in asset relationship tests. Updated test fixtures to use MagicMock for add and AsyncMock for flush in commits 0825e53 and 49cd29f. These warning fixes still require a fresh CI run.
+- Supplier access decision, review (including reduction), revocation and expiration now enqueue audit events before commit in the same AsyncSession. Existing permission checks and row locks were retained.
+- Supplier-asset and supplier-risk relationship create/terminate operations are still pending migration.
+- Latest code/test changes are not yet CI-validated. Phase 0 remains open.
