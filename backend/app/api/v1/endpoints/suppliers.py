@@ -582,9 +582,23 @@ async def decide_supplier_access_request(
     access_request.decided_by_id = current_user.id
     access_request.decided_at = datetime.now(timezone.utc)
     access_request.decision_comment = data.comment
-    await db.commit()
+    try:
+        await db.flush()
+        await enqueue_audit_event(
+            db, user_email=current_user.email,
+            action=f"SUPPLIER_ACCESS_{data.decision.upper()}",
+            resource="supplier_access_requests", resource_id=str(access_request.id),
+            details=f"Decision for supplier access request {access_request.id}: {data.decision}",
+            event_type="SUPPLIER", request=request,
+        )
+        await db.commit()
+    except IntegrityError as exc:
+        await db.rollback()
+        raise HTTPException(status_code=409, detail="Conflit lors de la décision d'accès fournisseur") from exc
+    except Exception:
+        await db.rollback()
+        raise
     await db.refresh(access_request)
-    await log_action(user_email=current_user.email, action=f"SUPPLIER_ACCESS_{data.decision.upper()}", resource="supplier_access_requests", resource_id=str(access_request.id), details=f"Decision for supplier access request {access_request.id}: {data.decision}", event_type="SUPPLIER", request=request)
     return access_request
 
 
@@ -668,9 +682,22 @@ async def review_supplier_access(
         next_review_at=data.next_review_at,
     )
     db.add(review)
-    await db.commit()
+    try:
+        await db.flush()
+        await enqueue_audit_event(
+            db, user_email=current_user.email, action="REVIEW_SUPPLIER_ACCESS",
+            resource="supplier_access_reviews", resource_id=str(review.id),
+            details=f"Access review {data.outcome} for authorization {access_request.id}: {data.comment}",
+            event_type="SUPPLIER", request=request,
+        )
+        await db.commit()
+    except IntegrityError as exc:
+        await db.rollback()
+        raise HTTPException(status_code=409, detail="Conflit lors de la revue de l'autorisation fournisseur") from exc
+    except Exception:
+        await db.rollback()
+        raise
     await db.refresh(review)
-    await log_action(user_email=current_user.email, action="REVIEW_SUPPLIER_ACCESS", resource="supplier_access_reviews", resource_id=str(review.id), details=f"Access review {data.outcome} for authorization {access_request.id}: {data.comment}", event_type="SUPPLIER", request=request)
     return review
 
 
@@ -696,9 +723,22 @@ async def revoke_supplier_access_request(
     access_request.revoked_by_id = current_user.id
     access_request.revoked_at = datetime.now(timezone.utc)
     access_request.revocation_reason = data.reason
-    await db.commit()
+    try:
+        await db.flush()
+        await enqueue_audit_event(
+            db, user_email=current_user.email, action="REVOKE_SUPPLIER_ACCESS",
+            resource="supplier_access_requests", resource_id=str(access_request.id),
+            details=f"Supplier access revoked: {data.reason}",
+            event_type="SUPPLIER", request=request,
+        )
+        await db.commit()
+    except IntegrityError as exc:
+        await db.rollback()
+        raise HTTPException(status_code=409, detail="Conflit lors de la révocation de l'accès fournisseur") from exc
+    except Exception:
+        await db.rollback()
+        raise
     await db.refresh(access_request)
-    await log_action(user_email=current_user.email, action="REVOKE_SUPPLIER_ACCESS", resource="supplier_access_requests", resource_id=str(access_request.id), details=f"Supplier access revoked: {data.reason}", event_type="SUPPLIER", request=request)
     return access_request
 
 
@@ -722,9 +762,22 @@ async def expire_supplier_access_request(
     if access_request.end_date >= date.today():
         raise HTTPException(status_code=409, detail="La date de fin de l’autorisation n’est pas encore dépassée")
     access_request.status = "Expiré"
-    await db.commit()
+    try:
+        await db.flush()
+        await enqueue_audit_event(
+            db, user_email=current_user.email, action="EXPIRE_SUPPLIER_ACCESS",
+            resource="supplier_access_requests", resource_id=str(access_request.id),
+            details=f"Supplier access expired on {access_request.end_date}",
+            event_type="SUPPLIER", request=request,
+        )
+        await db.commit()
+    except IntegrityError as exc:
+        await db.rollback()
+        raise HTTPException(status_code=409, detail="Conflit lors de l'expiration de l'accès fournisseur") from exc
+    except Exception:
+        await db.rollback()
+        raise
     await db.refresh(access_request)
-    await log_action(user_email=current_user.email, action="EXPIRE_SUPPLIER_ACCESS", resource="supplier_access_requests", resource_id=str(access_request.id), details=f"Supplier access expired on {access_request.end_date}", event_type="SUPPLIER", request=request)
     return access_request
 
 
