@@ -196,7 +196,7 @@ async def delete_risk(
     db: AsyncSession = Depends(get_db),
     current_user: User = require_permission("risks", "delete"),
 ):
-    result = await db.execute(select(Risk).where(Risk.id == risk_id))
+    result = await db.execute(select(Risk).where(Risk.id == risk_id).with_for_update())
     risk = result.scalar_one_or_none()
 
     if not risk:
