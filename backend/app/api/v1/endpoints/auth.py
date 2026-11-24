@@ -570,17 +570,38 @@ async def refresh_tokens(
 
 
 @router.post("/logout", status_code=status.HTTP_204_NO_CONTENT)
-async def logout(payload: RefreshRequest, db: AsyncSession = Depends(get_db)):
-    """Revoke the presented refresh session; idempotent for invalid/revoked tokens."""
+async def logout(
+    payload: RefreshRequest,
+    request: Request,
+    db: AsyncSession = Depends(get_db),
+):
+    """Revoke the presented refresh session and audit the state change atomically."""
     try:
         data = decode_token(payload.refresh_token, expected_type="refresh")
     except Exception:
         return None
     token_hash = _refresh_jti_hash(data)
-    await db.execute(
-        update(RefreshTokenSession)
-        .where(RefreshTokenSession.token_jti_hash == token_hash, RefreshTokenSession.revoked_at.is_(None))
-        .values(revoked_at=_now())
+    result = await db.execute(
+        select(RefreshTokenSession)
+        .where(RefreshTokenSession.token_jti_hash == token_hash)
+        .with_for_update()
     )
-    await db.commit()
+    session = result.scalar_one_or_none()
+    if session is None or session.revoked_at is not None:
+        return None
+
+    user_result = await db.execute(select(User.email).where(User.id == session.user_id))
+    user_email = user_result.scalar_one_or_none()
+    try:
+        session.revoked_at = _now()
+        await enqueue_audit_event(
+            db, user_email=user_email, action="REFRESH_SESSION_LOGOUT",
+            resource="auth", resource_id=str(session.id),
+            details="Refresh session revoked by logout.",
+            event_type="AUTH", request=request,
+        )
+        await db.commit()
+    except Exception:
+        await db.rollback()
+        raise
     return None
