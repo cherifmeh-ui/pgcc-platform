@@ -487,3 +487,10 @@ Repository/static hardening is substantially progressed, but the remaining gates
 - The PostgreSQL graph test initially failed because the test module had not registered the `ActionItem` mapper referenced by `Risk.actions`; an explicit model import fixed the test harness. The corrected run passed.
 - Supplier database error correction was validated on preceding HEAD `459a8fb668e845b71a3663d9add2a50713ebf28a`: backend 276 passed / 1 skipped, frontend and PostgreSQL integration jobs succeeded.
 - Phase 0 remains open: supplier-access concurrency, risk/asset deletion races, document/RAG ACL, audit durability, clean Docker stack and broader runtime validation remain under review.
+
+
+## Asset-risk link/delete race — 2026-11-24
+
+- Added row-level serialization on the Risk row in both asset-risk link creation and risk deletion.
+- Added a PostgreSQL concurrency test exercising both real endpoints with independent sessions and checking that no orphaned association or deleted-but-linked risk can result.
+- CI validation pending. Phase 0 remains open.
