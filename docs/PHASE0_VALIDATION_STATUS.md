@@ -687,3 +687,11 @@ Repository/static hardening is substantially progressed, but the remaining gates
 - Added source-level regression tests for upload, delete, rollback and RAG audit ordering in `backend/tests/test_document_audit_transactionality.py`.
 - Commits: `be532ff` (upload/delete), `83a3ae1` (RAG service), `7b0fe01` (endpoint integration), `420482f` (tests).
 - These tests are AST/source-structure checks. PostgreSQL runtime tests for audit-outbox failure rollback, concurrent delete-vs-index, and concurrent duplicate upload are still required. Fresh CI after the supplier assertion correction and these document changes has not yet been observed.
+
+### PostgreSQL regression coverage additions — 2026-11-24
+
+- Updated the existing PostgreSQL index-vs-delete race test to pass an actor identity to the RAG indexer and assert that both INDEX and DELETE outbox events persist for the document.
+- Updated the duplicate-upload PostgreSQL test to use a real Starlette Request and assert exactly one durable UPLOAD outbox event for the winning insert.
+- Added PostgreSQL rollback tests: upload must not persist a document if outbox enqueue fails; RAG re-index must preserve the previous chunk set and leave `is_indexed` false if audit enqueue fails.
+- The tests are committed but not yet executed by a fresh CI run. No runtime pass is claimed.
+- Commits: `5d3b449`, `dc10508`, `c7b6c24`, `393e02f`, `883927c`, `1257106`.
