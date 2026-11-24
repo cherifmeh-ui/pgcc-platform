@@ -122,3 +122,15 @@ Do not close Phase 0 until evidence is attached for:
 - Conditional guards added to revisions 0002/0004/0006 mitigate specific overlaps but are not a complete migration-chain strategy.
 - Recommended stabilization strategy: determine the exact legacy baseline schema and make revision 0001 create only that frozen schema (explicit table list or explicit DDL); then validate upgrade from 0001 through head and downgrade on a disposable PostgreSQL instance. Avoid broadly adding `IF NOT EXISTS` to all migrations because that can conceal schema drift and missing constraints.
 - This is a blocking Phase 0 migration issue until clean upgrade and downgrade are demonstrated.
+
+## Follow-up — transactional document/RAG and refresh-session audit — 2026-11-24
+
+- Document upload and deletion now enqueue durable audit events in the same transaction as the document/chunk changes. RAG chunk replacement and the is_indexed flag now share the INDEX audit event transaction.
+- Added PostgreSQL test coverage for index-vs-delete serialization, duplicate-upload uniqueness with a durable UPLOAD event, upload rollback on audit enqueue failure, and RAG chunk rollback on audit enqueue failure. These additions are committed but await fresh CI execution.
+- Refresh rotation, replay detection, account-eligibility denial/session revocation and logout now enqueue audit-outbox events before the same transaction commits. The refresh endpoint uses the request context for actor metadata.
+- Added PostgreSQL tests that exercise concurrent calls to the actual refresh endpoint with one old token, assert replay revocation and both audit events, and verify the old session remains active if audit enqueue fails. These tests are committed but await fresh CI execution.
+- Residual: proactively revoke persisted sessions from account disable, role change, MFA reset and administrator security-reset workflows; add retention/cleanup for expired refresh sessions; monitor outbox delivery and test logout audit rollback.
+
+## Migration head correction
+
+- The current migration head is 0024_audit_outbox, not 0021_refresh_token_sessions. The database validation runbook now reflects revision 0024 and includes audit_outbox/security_logs checks.
