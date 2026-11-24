@@ -585,3 +585,12 @@ Repository/static hardening is substantially progressed, but the remaining gates
 - Added PostgreSQL test coverage asserting rollback removes the outbox row and commit preserves it.
 - Other endpoint families have not yet been migrated; Phase 0 remains open.
 - CI validation pending.
+
+
+## Transactional audit integration — Asset Cartography — 2026-11-24
+
+- Asset import/create/update/retire and asset relationship/asset-risk association writes now enqueue audit records using the same request database session before commit.
+- Added flush-before-enqueue for newly generated identifiers.
+- Added endpoint tests for enqueue ordering and deletion audit metadata.
+- PostgreSQL concurrency coverage is present but must be revalidated on the new commit.
+- Phase 0 remains open; supplier, document/RAG and authentication workflows are not yet migrated.

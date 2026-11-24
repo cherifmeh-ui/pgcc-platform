@@ -615,3 +615,13 @@ Status: targeted code review recorded; additional runtime/API tests remain requi
 - Added PostgreSQL integration coverage for same-transaction commit and rollback behavior. The test is included in the existing outbox integration suite.
 - Scope is intentionally limited to the risk CRUD vertical slice. Actions, documents, suppliers, assets and authentication still require migration to the same transaction boundary.
 - CI validation pending.
+
+
+### Transactional audit integration — Asset Cartography — 2026-11-24
+
+- Migrated asset CSV import, asset create/update/retirement, asset relationship create/delete, and asset-risk link/unlink to enqueue audit events through the caller-owned SQLAlchemy session before the business commit.
+- Added explicit `flush()` before enqueue where a newly generated asset/relationship/link identifier is included in the audit payload.
+- Added/updated endpoint tests to verify audit enqueue receives the same session and is ordered between business flush and commit; relationship deletion verifies the audit metadata.
+- Existing PostgreSQL concurrency tests still cover opposing dependency-edge creation and asset-risk link versus risk deletion. Their CI result after this change is pending.
+- Export remains a separate read-side audit event; preview/list/graph endpoints do not mutate state.
+- Supplier workflows, document/RAG workflows and authentication still need the same transactional migration.

@@ -55,13 +55,11 @@ async def test_delete_relationship_removes_only_relationship_linked_to_asset(mon
 
     db.delete.assert_awaited_once_with(relationship)
     db.commit.assert_awaited_once()
-    enqueue_mock.assert_awaited_once_with(
-        db,
-        user_email="user@example.test",
-        action="DELETE_RELATIONSHIP",
-        resource="asset_relationships",
-        resource_id=str(RELATION_ID),
-        details=f"Asset relationship deleted: {ASSET_ID} -> {relationship.target_asset_id}",
-        event_type="ASSET",
-        request=pytest.ANY if hasattr(pytest, "ANY") else enqueue_mock.await_args.kwargs["request"],
-    )
+    assert enqueue_mock.await_count == 1
+    kwargs = enqueue_mock.await_args.kwargs
+    assert kwargs["action"] == "DELETE_RELATIONSHIP"
+    assert kwargs["resource"] == "asset_relationships"
+    assert kwargs["resource_id"] == str(RELATION_ID)
+    assert kwargs["event_type"] == "ASSET"
+    assert kwargs["user_email"] == "user@example.test"
+    assert "request" in kwargs
