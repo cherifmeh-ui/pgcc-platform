@@ -1143,10 +1143,17 @@ async def capture_supplier_risk_snapshot(
     )
     db.add(snapshot)
     try:
+        await db.flush()
+        await enqueue_audit_event(
+            db, user_email=current_user.email, action="CAPTURE_SUPPLIER_RISK_SNAPSHOT",
+            resource="supplier_risk_snapshots", resource_id=str(snapshot.id),
+            details=f"Monthly supplier risk snapshot captured for {snapshot_month.isoformat()}",
+            event_type="SUPPLIER",
+        )
         await db.commit()
-    except IntegrityError:
+    except IntegrityError as exc:
         await db.rollback()
-        raise HTTPException(status_code=409, detail="Un instantané mensuel existe déjà ou une contrainte est invalide.")
+        raise HTTPException(status_code=409, detail="Un instantané mensuel existe déjà ou une contrainte est invalide.") from exc
     except Exception:
         await db.rollback()
         raise
