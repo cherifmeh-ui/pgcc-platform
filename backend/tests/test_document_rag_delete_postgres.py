@@ -8,6 +8,7 @@ from uuid import uuid4
 
 import pytest
 from fastapi import HTTPException
+from starlette.requests import Request
 from sqlalchemy import delete, select
 from sqlalchemy.ext.asyncio import async_sessionmaker, create_async_engine
 
@@ -39,9 +40,6 @@ async def test_rag_indexing_and_document_deletion_are_serialized(monkeypatch):
         return [[0.0] * rag_service.EMBEDDING_DIMENSIONS]
 
     monkeypatch.setattr(rag_service, "_generate_embeddings", controlled_embedding)
-    monkeypatch.setattr(
-        "app.api.v1.endpoints.documents.log_action", AsyncMock()
-    )
 
     try:
         async with sessions() as setup:
@@ -68,7 +66,11 @@ async def test_rag_indexing_and_document_deletion_are_serialized(monkeypatch):
                 try:
                     await delete_document(
                         doc_id=str(document_id),
-                        request=MagicMock(),
+                        request=Request({
+                            "type": "http", "method": "DELETE", "path": "/documents/test",
+                            "headers": [], "client": ("127.0.0.1", 1234),
+                            "server": ("test", 80), "scheme": "http", "query_string": b"",
+                        }),
                         db=db,
                         current_user=MagicMock(email="phase0@example.invalid"),
                     )
