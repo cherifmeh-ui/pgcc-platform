@@ -1,6 +1,6 @@
 # Phase 0 — Runbook de validation des migrations PostgreSQL
 
-**Statut:** procédure préparatoire; aucune exécution PostgreSQL n'est attestée par ce document.
+**Statut:** exécution CI attestée pour une base neuve PostgreSQL 16.16 jusqu'à Alembic head 0024; les scénarios d'upgrade legacy, downgrade et restauration restent à exécuter.
 
 ## 1. Conditions de sécurité
 
@@ -78,18 +78,18 @@ La stratégie de récupération privilégiée en environnement réel est backup 
 
 | Champ | Valeur |
 |---|---|
-| Commit SHA | |
-| PostgreSQL version | |
-| Source revision | |
-| Target revision | |
-| Fresh DB upgrade | Pass/Fail |
-| Schema comparison | Pass/Fail |
-| Legacy baseline/stamp | Pass/Fail/Not applicable |
-| Upgrade from supported revision | Pass/Fail |
-| Backup/restore rehearsal | Pass/Fail |
-| Logs / artifact | |
-| Reviewer | |
-| Date | |
+| Commit SHA | PR merge commit 2bd0c01 (PR head 677c299) |
+| PostgreSQL version | 16.16 (CI pgvector/pgvector:pg16) |
+| Source revision | Empty database / baseline 0001_initial |
+| Target revision | 0024_audit_outbox |
+| Fresh DB upgrade | Pass — Alembic applied 0001 through 0024 |
+| Schema comparison | Not run independently |
+| Legacy baseline/stamp | Not applicable to this clean-database run |
+| Upgrade from supported revision | Not run |
+| Backup/restore rehearsal | Not run |
+| Logs / artifact | GitHub Actions run 45491802074; PostgreSQL integration job 138791791724; 13 passed |
+| Reviewer | Automated CI only; human review pending |
+| Date | 2026-11-24 |
 
 ## 7. Limites actuelles
 
