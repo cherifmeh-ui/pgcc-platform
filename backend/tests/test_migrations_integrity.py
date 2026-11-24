@@ -385,4 +385,4 @@ def test_audit_outbox_migration_is_idempotent_and_links_immutable_logs():
     assert "audit_outbox" in outbox_model
     assert "ix_audit_outbox_pending" in outbox_model
     assert "event_id" in log_model
-    assert "DROP TABLE" in source
+    assert "op.drop_table(" in source
