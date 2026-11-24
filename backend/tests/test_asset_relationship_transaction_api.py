@@ -126,17 +126,13 @@ async def test_create_relationship_flushes_asset_edge_before_audit_enqueue_and_c
         enqueue,
     )
 
-    await create_asset_relationship(
-        asset_id=ASSET_A,
-        data=RelationshipCreate(target_asset_id=ASSET_B, relationship_type="depends_on"),
-        request=MagicMock(),
-        db=db,
-        current_user=MagicMock(email="admin@example.test"),
-    )
-
     order = []
+
+    async def record_enqueue(*args, **kwargs):
+        order.append("enqueue")
+
     db.flush.side_effect = lambda: order.append("flush")
-    enqueue.side_effect = lambda *args, **kwargs: order.append("enqueue")
+    enqueue.side_effect = record_enqueue
     db.commit.side_effect = lambda: order.append("commit")
 
     await create_asset_relationship(
