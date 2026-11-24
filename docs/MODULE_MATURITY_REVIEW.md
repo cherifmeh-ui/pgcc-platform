@@ -480,3 +480,11 @@ Status: targeted code review recorded; additional runtime/API tests remain requi
 - Added explicit rollback/re-raise handling for unexpected exceptions in relationship create/delete, while retaining HTTP 409 mapping for create-time `IntegrityError`.
 - Added API-level regression tests for create rollback, integrity conflict mapping, cycle rejection before insert, and delete rollback.
 - These are mock-backed route tests. A concurrent PostgreSQL test that attempts two opposing dependency edges remains a required runtime proof; the advisory lock implementation is source-reviewed but not yet concurrency-tested at the relationship API level.
+
+
+### Supplier API database error semantics — 2026-11-24
+
+- Static review found seven supplier endpoint commit handlers (supplier-risk link, supplier-asset link, supplier create/update, monthly risk snapshot, and supplier contract create/update) that mapped every database exception to HTTP 409.
+- Narrowed the conflict mapping to SQLAlchemy `IntegrityError`; unexpected database/runtime errors now roll back and propagate unchanged.
+- Added an AST-based regression test that checks all seven handlers retain a specific integrity branch and that generic exception branches roll back and re-raise rather than returning HTTP 409.
+- This is a source-level regression guard. Backend CI and PostgreSQL integration on the new HEAD are required before considering it validated.
