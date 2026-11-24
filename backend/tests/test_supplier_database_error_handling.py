@@ -76,25 +76,21 @@ def test_supplier_access_lifecycle_writes_enqueue_audit_before_commit():
     }
     for function_name, action_marker in expected.items():
         function = functions[function_name]
-        calls = [
-            (index, node)
-            for index, node in enumerate(ast.walk(function))
+        enqueue_calls = [
+            node for node in ast.walk(function)
+            if isinstance(node, ast.Await)
+            and isinstance(node.value, ast.Call)
+            and isinstance(node.value.func, ast.Name)
+            and node.value.func.id == "enqueue_audit_event"
+        ]
+        commit_calls = [
+            node for node in ast.walk(function)
             if isinstance(node, ast.Await)
             and isinstance(node.value, ast.Call)
             and isinstance(node.value.func, ast.Attribute)
+            and node.value.func.attr == "commit"
         ]
-        enqueue_positions = [
-            index for index, node in calls
-            if node.value.func.attr == "enqueue_audit_event"
-        ]
-        commit_positions = [
-            index for index, node in calls
-            if node.value.func.attr == "commit"
-        ]
-        assert enqueue_positions, f"{function_name} must enqueue audit"
-        assert commit_positions, f"{function_name} must commit"
-        assert any(
-            action_marker in ast.unparse(node.value)
-            for _, node in calls
-            if node.value.func.attr == "enqueue_audit_event"
-        ), f"{function_name} must use the expected audit action"
+        assert enqueue_calls, f"{function_name} must enqueue audit"
+        assert commit_calls, f"{function_name} must commit"
+        assert any(action_marker in ast.unparse(node.value) for node in enqueue_calls)
+        assert min(node.lineno for node in enqueue_calls) < min(node.lineno for node in commit_calls)
