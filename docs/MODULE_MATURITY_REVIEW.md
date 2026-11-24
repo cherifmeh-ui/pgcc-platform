@@ -542,3 +542,10 @@ Status: targeted code review recorded; additional runtime/API tests remain requi
 - RAG indexing now locks the Document row for the full embedding/persistence transaction. Document deletion locks the same row before checking evidence references and removing chunks/source.
 - Added a PostgreSQL integration test with a controlled embedding pause: deletion must block while indexation holds the row lock, then remove the document and its newly persisted chunks after indexation commits.
 - CI validation is pending on the new HEAD.
+
+
+### AI prompt injection — risk context submitted for executive rewrite — 2026-11-24
+
+- Review of `AIService.rewrite_risk_for_executive` found that user-controlled risk fields were interpolated into the instruction prompt without an explicit untrusted-data boundary. A malicious description could attempt to override the system's requested behavior.
+- The prompt now explicitly identifies risk JSON as untrusted data, instructs the model to ignore embedded directives and to retain the factual-only constraint. This is defense-in-depth; prompt wording is not a substitute for output validation or human review.
+- Added focused unit tests verifying the untrusted-data boundary, preservation of the original risk content, and factual-only instructions. CI validation is pending on the new HEAD.
