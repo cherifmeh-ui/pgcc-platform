@@ -18,7 +18,7 @@ Status: active review; not a certification or production approval.
 ## Residual risks and validation gates
 
 1. **Session lifecycle completeness:** explicitly revoke sessions when an account is disabled, a user's role changes, MFA is reset, or an administrator performs a security reset. Current access-token checks block inactive accounts and role-mismatched access tokens; refresh eligibility also blocks inactive users, but the persisted rows are not proactively revoked by every administrative lifecycle operation.
-2. **Refresh auditability:** rotation, reuse detection, denial and logout do not yet write durable audit-outbox events in the same transaction as session changes. Add actor/request-aware audit events without weakening rollback semantics.
+2. **Refresh auditability:** rotation, reuse detection, eligibility denial and logout now enqueue durable audit-outbox events in the same transaction as session changes. The new paths still require fresh CI execution and operational delivery monitoring.
 3. **HTTP-level concurrency:** add PostgreSQL integration tests that call the actual /auth/refresh endpoint with the same token concurrently, assert exactly one success, and verify reuse revocation behavior.
 4. **Rate limiting:** add distributed account/IP/device rate limiting for login, MFA, enrollment, refresh and password reset. Current database lockout counters are not a substitute for distributed rate limiting.
 5. **MFA secret protection:** mfa_secret is stored on the user record; design encryption at rest, key management and rotation, plus an administrator-approved MFA reset/recovery workflow.
