@@ -332,3 +332,21 @@ def test_alembic_revision_ids_fit_version_column():
     for migration in MIGRATIONS_DIR.glob("*.py"):
         revision, _ = _revision_metadata(migration)
         assert len(revision) <= 32, f"{migration.name}: revision ID exceeds alembic_version.version_num length"
+
+
+def test_document_filename_unique_migration_matches_model_and_guards_duplicates():
+    migration = MIGRATIONS_DIR / "0022_document_filename_unique.py"
+    migration_source = migration.read_text(encoding="utf-8")
+    model_source = (
+        MIGRATIONS_DIR.parent.parent / "app" / "models" / "document.py"
+    ).read_text(encoding="utf-8")
+    assert 'revision = "0022_document_filename_unique"' in migration_source
+    assert 'down_revision = "0021_refresh_token_sessions"' in migration_source
+    assert "uq_documents_filename_ci" in migration_source
+    assert "lower(btrim(filename))" in migration_source
+    assert "HAVING COUNT(*) > 1" in migration_source
+    assert "Resolve duplicates" in migration_source
+    assert "uq_documents_filename_ci" in model_source
+    assert "postgresql_where" in model_source
+    assert "btrim(filename)" in model_source
+    assert "op.drop_index" in migration_source
