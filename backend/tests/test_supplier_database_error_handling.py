@@ -54,7 +54,7 @@ def test_supplier_conflict_handlers_only_map_integrity_errors_to_http_409():
             for item in generic.body
         ), "Unexpected database errors must not be converted into HTTP business conflicts"
 
-    assert matching_handlers == 26
+    assert matching_handlers == 27
 
 
 def test_supplier_access_lifecycle_writes_enqueue_audit_before_commit():
@@ -82,6 +82,7 @@ def test_supplier_access_lifecycle_writes_enqueue_audit_before_commit():
         "create_supplier": "CREATE",
         "update_supplier": "UPDATE",
         "archive_supplier": "ARCHIVE",
+        "capture_supplier_risk_snapshot": "CAPTURE_SUPPLIER_RISK_SNAPSHOT",
     }
     functions = {
         node.name: node
