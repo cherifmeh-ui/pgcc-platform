@@ -497,18 +497,22 @@ async def refresh_tokens(
     )
     if denial_reason:
         # Revoke all sessions when the account is no longer eligible to refresh.
-        await db.execute(
-            update(RefreshTokenSession)
-            .where(RefreshTokenSession.user_id == user.id, RefreshTokenSession.revoked_at.is_(None))
-            .values(revoked_at=_now())
-        )
-        await enqueue_audit_event(
-            db, user_email=user.email, action="REFRESH_DENIED_SESSIONS_REVOKED",
-            resource="auth", resource_id=str(user.id),
-            details=f"Refresh denied and active sessions revoked: {denial_reason}",
-            event_type="AUTH", request=request,
-        )
-        await db.commit()
+        try:
+            await db.execute(
+                update(RefreshTokenSession)
+                .where(RefreshTokenSession.user_id == user.id, RefreshTokenSession.revoked_at.is_(None))
+                .values(revoked_at=_now())
+            )
+            await enqueue_audit_event(
+                db, user_email=user.email, action="REFRESH_DENIED_SESSIONS_REVOKED",
+                resource="auth", resource_id=str(user.id),
+                details=f"Refresh denied and active sessions revoked: {denial_reason}",
+                event_type="AUTH", request=request,
+            )
+            await db.commit()
+        except Exception:
+            await db.rollback()
+            raise
         denial_status = status.HTTP_423_LOCKED if user.is_locked else status.HTTP_403_FORBIDDEN if not user.is_active or user.must_change_password else status.HTTP_401_UNAUTHORIZED
         raise HTTPException(status_code=denial_status, detail=denial_reason)
 
@@ -522,32 +526,40 @@ async def refresh_tokens(
         raise HTTPException(status_code=401, detail="Session refresh invalide ou expirée.")
     if session.revoked_at is not None:
         # Reuse of a revoked token revokes the user's active refresh sessions.
-        await db.execute(
-            update(RefreshTokenSession)
-            .where(RefreshTokenSession.user_id == user.id, RefreshTokenSession.revoked_at.is_(None))
-            .values(revoked_at=now)
-        )
-        await enqueue_audit_event(
-            db, user_email=user.email, action="REFRESH_TOKEN_REUSE_DETECTED",
-            resource="auth", resource_id=str(user.id),
-            details="A revoked refresh token was replayed; all active sessions were revoked.",
-            event_type="AUTH", request=request,
-        )
-        await db.commit()
+        try:
+            await db.execute(
+                update(RefreshTokenSession)
+                .where(RefreshTokenSession.user_id == user.id, RefreshTokenSession.revoked_at.is_(None))
+                .values(revoked_at=now)
+            )
+            await enqueue_audit_event(
+                db, user_email=user.email, action="REFRESH_TOKEN_REUSE_DETECTED",
+                resource="auth", resource_id=str(user.id),
+                details="A revoked refresh token was replayed; all active sessions were revoked.",
+                event_type="AUTH", request=request,
+            )
+            await db.commit()
+        except Exception:
+            await db.rollback()
+            raise
         raise HTTPException(status_code=401, detail="Réutilisation d'un refresh token détectée. Sessions révoquées.")
 
     access_token = create_access_token(subject=user.email, role=user.role)
     refresh_token = create_refresh_token(subject=user.email)
-    new_hash = await _persist_refresh_session(db, user, refresh_token)
-    session.revoked_at = now
-    session.replaced_by_jti_hash = new_hash
-    await enqueue_audit_event(
-        db, user_email=user.email, action="REFRESH_TOKEN_ROTATED",
-        resource="auth", resource_id=str(session.id),
-        details="Refresh session rotated successfully.",
-        event_type="AUTH", request=request,
-    )
-    await db.commit()
+    try:
+        new_hash = await _persist_refresh_session(db, user, refresh_token)
+        session.revoked_at = now
+        session.replaced_by_jti_hash = new_hash
+        await enqueue_audit_event(
+            db, user_email=user.email, action="REFRESH_TOKEN_ROTATED",
+            resource="auth", resource_id=str(session.id),
+            details="Refresh session rotated successfully.",
+            event_type="AUTH", request=request,
+        )
+        await db.commit()
+    except Exception:
+        await db.rollback()
+        raise
 
     return TokenPairResponse(
         access_token=access_token,
