@@ -9,6 +9,7 @@ from uuid import uuid4
 
 import pytest
 from fastapi import HTTPException, UploadFile
+from starlette.requests import Request
 from sqlalchemy import delete, select, func
 from sqlalchemy.ext.asyncio import async_sessionmaker, create_async_engine
 
@@ -35,9 +36,6 @@ async def test_concurrent_uploads_with_same_filename_return_one_conflict(monkeyp
         "app.api.v1.endpoints.documents.DocumentExtractor.extract_text",
         lambda _contents, _filename: ("safe extracted text", "PDF"),
     )
-    monkeypatch.setattr(
-        "app.api.v1.endpoints.documents.log_action", AsyncMock()
-    )
 
     async def upload_once():
         nonlocal precheck_count
@@ -56,7 +54,11 @@ async def test_concurrent_uploads_with_same_filename_return_one_conflict(monkeyp
             db.execute = synchronized_execute
             try:
                 await upload_document(
-                    request=MagicMock(),
+                    request=Request({
+                        "type": "http", "method": "POST", "path": "/documents/upload",
+                        "headers": [], "client": ("127.0.0.1", 1234),
+                        "server": ("test", 80), "scheme": "http", "query_string": b"",
+                    }),
                     file=UploadFile(filename=filename, file=BytesIO(b"%PDF-test")),
                     title="Concurrent upload test",
                     doc_type="PSSI",
