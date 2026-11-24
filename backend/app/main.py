@@ -1,5 +1,6 @@
 # backend/app/main.py
-from contextlib import asynccontextmanager
+import asyncio
+from contextlib import asynccontextmanager, suppress
 
 from sqlalchemy import text
 
@@ -10,11 +11,12 @@ from app.core.config import settings
 from app.core.database import Base, engine
 from app.api.v1.router import api_router
 from app.api.v1.endpoints.auth import router as auth_router
+from app.services.security_logger import audit_outbox_worker
 
 
 @asynccontextmanager
 async def lifespan(app: FastAPI):
-    from app.models import user, security_log, risk, asset, supplier, refresh_token_session  # noqa: F401
+    from app.models import user, security_log, audit_outbox, risk, asset, supplier, refresh_token_session  # noqa: F401
 
     if settings.ENVIRONMENT.lower() == "development":
         async with engine.begin() as conn:
@@ -23,7 +25,13 @@ async def lifespan(app: FastAPI):
         print("PGCC | development schema ensured via create_all")
     else:
         print("PGCC | production schema must be managed through Alembic migrations")
-    yield
+    audit_worker = asyncio.create_task(audit_outbox_worker())
+    try:
+        yield
+    finally:
+        audit_worker.cancel()
+        with suppress(asyncio.CancelledError):
+            await audit_worker
     print("🛑 PGCC | arrêt")
 
 

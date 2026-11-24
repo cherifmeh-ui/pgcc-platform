@@ -585,3 +585,13 @@ Status: targeted code review recorded; additional runtime/API tests remain requi
 - Alembic successfully applied revision `0023_security_logs_append_only`.
 - PostgreSQL integration confirmed UPDATE and DELETE against `security_logs` fail with SQLSTATE 55000 and the original row remains unchanged. The test rolls back its outer transaction.
 - The trigger protects against ordinary SQL mutation; database owners/superusers remain privileged and can bypass it. Audit-write failure handling remains fail-open and is not considered resolved.
+
+
+### Durable audit outbox — 2026-11-24
+
+- Replaced the logger's swallow-and-return behavior with a durable PostgreSQL outbox. Each event is committed to `audit_outbox` before delivery to `security_logs`.
+- Added a unique `security_logs.event_id` to make delivery idempotent. Outbox-to-log insertion and setting `delivered_at` occur in one transaction; row locking with `SKIP LOCKED` supports multiple application workers.
+- Added an application lifespan worker that retries pending events every five seconds. A delivery failure leaves the outbox row pending and records the exception class/attempt count. An outbox persistence failure is surfaced to the caller rather than silently discarded.
+- Added PostgreSQL coverage simulating a transient delivery failure, asserting the outbox remains durable, then replaying the event and verifying exactly one immutable log row.
+- Boundary: if PostgreSQL is unavailable before the outbox commit, the application cannot durably queue the event; the error is surfaced. Because many business handlers currently call `log_action()` after their business commit, this is durable retry, not atomic coupling of the business mutation and audit record. That stronger invariant still requires targeted transaction-boundary refactoring.
+- CI validation pending on the new HEAD.

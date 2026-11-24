@@ -362,3 +362,27 @@ def test_security_log_append_only_migration_has_mutation_guards():
     assert "ERRCODE = '55000'" in source
     assert "DROP TRIGGER IF EXISTS" in source
     assert "DROP FUNCTION IF EXISTS" in source
+
+
+def test_audit_outbox_migration_is_idempotent_and_links_immutable_logs():
+    migration = MIGRATIONS_DIR / "0024_audit_outbox.py"
+    source = migration.read_text(encoding="utf-8")
+    outbox_model = (
+        MIGRATIONS_DIR.parent.parent / "app" / "models" / "audit_outbox.py"
+    ).read_text(encoding="utf-8")
+    log_model = (
+        MIGRATIONS_DIR.parent.parent / "app" / "models" / "security_log.py"
+    ).read_text(encoding="utf-8")
+    assert 'revision = "0024_audit_outbox"' in source
+    assert 'down_revision = "0023_security_logs_append_only"' in source
+    assert 'CREATE TABLE' in source
+    assert '"audit_outbox"' in source
+    assert "JSONB" in source
+    assert "delivered_at" in source
+    assert "attempts" in source
+    assert "event_id" in source
+    assert "uq_security_logs_event_id" in source
+    assert "audit_outbox" in outbox_model
+    assert "ix_audit_outbox_pending" in outbox_model
+    assert "event_id" in log_model
+    assert "DROP TABLE" in source

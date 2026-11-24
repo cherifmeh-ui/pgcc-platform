@@ -557,3 +557,12 @@ Repository/static hardening is substantially progressed, but the remaining gates
 - PostgreSQL 16: **7 passed**, including Alembic revision `0023_security_logs_append_only` and UPDATE/DELETE rejection tests.
 - Frontend build: passed.
 - Audit log writes remain best-effort; append-only triggers do not protect against privileged database owners. Phase 0 remains open.
+
+
+## Durable audit outbox — 2026-11-24
+
+- Added migration `0024_audit_outbox`, JSONB outbox storage, unique log event IDs and a pending-delivery index.
+- `log_action()` now commits the outbox event first; failed materialization remains pending for retry. The FastAPI lifespan starts a five-second retry worker.
+- Outbox delivery is idempotent and transactionally couples the immutable log insert with marking the outbox event delivered. Failed delivery records attempt metadata.
+- PostgreSQL integration test covers transient delivery failure and successful replay. CI validation pending.
+- Remaining limitation: outbox persistence itself depends on PostgreSQL availability, and existing business transactions are not yet atomically coupled to outbox inserts. Phase 0 remains open.
