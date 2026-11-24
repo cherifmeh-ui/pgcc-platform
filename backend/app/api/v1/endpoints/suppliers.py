@@ -740,7 +740,7 @@ async def link_supplier_to_risk(
     supplier = supplier_result.scalar_one_or_none()
     if supplier is None:
         raise HTTPException(status_code=404, detail="Fournisseur introuvable")
-    risk_result = await db.execute(select(Risk).where(Risk.id == data.risk_id))
+    risk_result = await db.execute(select(Risk).where(Risk.id == data.risk_id).with_for_update())
     risk = risk_result.scalar_one_or_none()
     if risk is None:
         raise HTTPException(status_code=404, detail="Risque introuvable")
