@@ -739,3 +739,11 @@ Repository/static hardening is substantially progressed, but the remaining gates
 - Frontend build completed successfully.
 - Backend unit job had 292 passed, 13 skipped and one failing test-data case (viewer token against viewer user); the parameter was corrected to admin in commit f42e108.
 - Important: run 45491802074 checked out the PR merge ref before f42e108, so its backend failure does not validate the correction. A fresh backend CI result on the corrected branch head is still required.
+
+
+### Fresh PostgreSQL migration evidence — workflow 45491802074
+
+- On PR merge commit 2bd0c01 (PR head 677c299), CI initialized PostgreSQL 16.16 from an empty data directory and successfully applied every Alembic revision from 0001_initial through 0024_audit_outbox.
+- The configured PostgreSQL integration suite passed: 13 passed. It included actual endpoint refresh concurrency/replay and rollback, asset graph, supplier access lifecycle, document/RAG delete/index race, duplicate upload uniqueness, append-only security logs and durable outbox tests.
+- This closes the clean-database Alembic upgrade-to-head check for that PR head. It does not prove upgrade from an existing supported production revision, downgrade symmetry, schema drift comparison, backup/restore, or a full Docker Compose stack build/start.
+- The same run's frontend job passed. Backend unit job failed only the RBAC test-data case documented above; its corrected case is not yet covered by a new backend run.
