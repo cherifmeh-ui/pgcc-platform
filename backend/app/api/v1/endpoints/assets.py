@@ -383,6 +383,7 @@ async def confirm_asset_csv_import(
     assets = [Asset(**row["data"]) for row in rows]
     db.add_all(assets)
     try:
+        await db.flush()
         await enqueue_audit_event(
             db, user_email=current_user.email, action="IMPORT", resource="assets",
             details=f"CSV asset import completed: {len(assets)} assets from {file.filename}",
@@ -596,6 +597,7 @@ async def create_asset(
     asset = Asset(**data.model_dump())
     db.add(asset)
     try:
+        await db.flush()
         await enqueue_audit_event(
             db, user_email=current_user.email, action="CREATE", resource="assets",
             resource_id=str(asset.id), details=f"Asset created: {asset.reference}",
@@ -922,6 +924,7 @@ async def create_asset_relationship(
     )
     db.add(relationship)
     try:
+        await db.flush()
         await enqueue_audit_event(
             db, user_email=current_user.email, action="CREATE_RELATIONSHIP", resource="asset_relationships",
             resource_id=str(relationship.id),
@@ -1010,6 +1013,7 @@ async def link_asset_to_risk(
     link = AssetRiskLink(asset_id=asset_id, risk_id=data.risk_id, relationship_context=data.relationship_context, created_by=current_user.email)
     db.add(link)
     try:
+        await db.flush()
         await enqueue_audit_event(
             db, user_email=current_user.email, action="LINK_RISK", resource="asset_risk_links",
             resource_id=str(link.id),

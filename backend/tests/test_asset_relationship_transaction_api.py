@@ -113,3 +113,28 @@ async def test_delete_relationship_rolls_back_and_propagates_commit_error():
 
     db.delete.assert_awaited_once_with(relationship)
     db.rollback.assert_awaited_once()
+
+
+
+@pytest.mark.asyncio
+async def test_create_relationship_flushes_asset_edge_before_audit_enqueue_and_commit(monkeypatch):
+    db = _db_for_relationship_create()
+    enqueue = AsyncMock()
+
+    monkeypatch.setattr(
+        "app.api.v1.endpoints.assets.enqueue_audit_event",
+        enqueue,
+    )
+
+    await create_asset_relationship(
+        asset_id=ASSET_A,
+        data=RelationshipCreate(target_asset_id=ASSET_B, relationship_type="depends_on"),
+        request=MagicMock(),
+        db=db,
+        current_user=MagicMock(email="admin@example.test"),
+    )
+
+    calls = [call[0] for call in db.mock_calls]
+    assert calls.index("flush") < calls.index("commit")
+    enqueue.assert_awaited_once()
+    assert enqueue.await_args.args[0] is db

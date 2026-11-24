@@ -42,8 +42,8 @@ async def test_delete_relationship_removes_only_relationship_linked_to_asset(mon
     result = MagicMock()
     result.scalar_one_or_none.return_value = relationship
     db.execute.return_value = result
-    log_mock = AsyncMock()
-    monkeypatch.setattr("app.api.v1.endpoints.assets.log_action", log_mock)
+    enqueue_mock = AsyncMock()
+    monkeypatch.setattr("app.api.v1.endpoints.assets.enqueue_audit_event", enqueue_mock)
 
     await delete_asset_relationship(
         asset_id=ASSET_ID,
@@ -55,4 +55,13 @@ async def test_delete_relationship_removes_only_relationship_linked_to_asset(mon
 
     db.delete.assert_awaited_once_with(relationship)
     db.commit.assert_awaited_once()
-    log_mock.assert_awaited_once()
+    enqueue_mock.assert_awaited_once_with(
+        db,
+        user_email="user@example.test",
+        action="DELETE_RELATIONSHIP",
+        resource="asset_relationships",
+        resource_id=str(RELATION_ID),
+        details=f"Asset relationship deleted: {ASSET_ID} -> {relationship.target_asset_id}",
+        event_type="ASSET",
+        request=pytest.ANY if hasattr(pytest, "ANY") else enqueue_mock.await_args.kwargs["request"],
+    )
