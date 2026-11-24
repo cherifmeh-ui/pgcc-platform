@@ -577,3 +577,11 @@ Status: targeted code review recorded; additional runtime/API tests remain requi
 - Boundary: a database owner/superuser can still disable/drop triggers or alter the schema. This is append-only protection against ordinary application SQL, not cryptographic tamper-proof storage.
 - Remaining control gap: `log_action()` still fails open; mutation handlers may succeed when audit persistence fails. A durable out-of-band sink or an explicitly designed transactional/fail-closed audit policy is still required before claiming audit completeness.
 - CI validation pending on the new HEAD.
+
+
+### Append-only audit guard CI result — 2026-11-24
+
+- HEAD `0073b1f261acef6409237db70ff60ba6aae865ba`: backend **281 passed / 7 skipped**; PostgreSQL 16 **7 passed**; frontend build passed.
+- Alembic successfully applied revision `0023_security_logs_append_only`.
+- PostgreSQL integration confirmed UPDATE and DELETE against `security_logs` fail with SQLSTATE 55000 and the original row remains unchanged. The test rolls back its outer transaction.
+- The trigger protects against ordinary SQL mutation; database owners/superusers remain privileged and can bypass it. Audit-write failure handling remains fail-open and is not considered resolved.

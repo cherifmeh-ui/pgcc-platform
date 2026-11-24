@@ -548,3 +548,12 @@ Repository/static hardening is substantially progressed, but the remaining gates
 - Added PostgreSQL integration test for UPDATE/DELETE rejection and unchanged evidence.
 - Scope limitation: privileged database owners can bypass/drop triggers; this is not cryptographic tamper-proofing. Audit writes remain best-effort because `log_action()` swallows failures; durable fail-closed/out-of-band audit delivery remains open.
 - PostgreSQL and backend CI validation pending; Phase 0 remains open.
+
+
+## Append-only audit guard validation — 2026-11-24
+
+- HEAD `0073b1f261acef6409237db70ff60ba6aae865ba`; GitHub Actions runs `45463809824` and `45463820416` succeeded.
+- Backend: **281 passed, 7 skipped**.
+- PostgreSQL 16: **7 passed**, including Alembic revision `0023_security_logs_append_only` and UPDATE/DELETE rejection tests.
+- Frontend build: passed.
+- Audit log writes remain best-effort; append-only triggers do not protect against privileged database owners. Phase 0 remains open.
