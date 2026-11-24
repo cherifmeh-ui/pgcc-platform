@@ -604,3 +604,14 @@ Repository/static hardening is substantially progressed, but the remaining gates
 - PostgreSQL concurrency fixtures supplied MagicMock Request objects; the real audit payload then contained non-JSON-serializable mock values for client IP/user-agent. Replaced these with concrete Starlette Request instances in the integration tests.
 - Follow-up test-only commits: 1067a1f, d2b45bf, df9e3b4. Validation of the latest commit is required before treating these fixes as accepted.
 - No production endpoint behavior was changed in these follow-up commits. Supplier audit migration remains pending.
+
+
+
+## Supplier access audit — CI regression and correction — 2026-11-24
+
+- Supplier access-request creation now flushes the request and enqueues its audit event through the same AsyncSession before the business commit; unexpected failures roll back and propagate.
+- IntegrityError is mapped specifically to HTTP 409, while other exceptions are rolled back and re-raised unchanged.
+- PostgreSQL concurrency fixture now uses a concrete Starlette Request so audit metadata is JSON-serializable.
+- Run 45474317861: frontend passed; PostgreSQL integration passed (including migrations and supplier access concurrency); backend had one failing static AST assertion because the expected number of supplier IntegrityError/Exception handler pairs had not been updated for the new transactional handler.
+- Updated the static test expectation from 7 to 8 matching handlers. Commit efc6d8b40631afeb0540a7f7c3133864d8ff2713.
+- A new CI run for the latest commit has not yet been observed. Supplier decision/review/revocation operations remain to be migrated. Phase 0 remains open.
