@@ -467,8 +467,8 @@ Repository/static hardening is substantially progressed, but the remaining gates
 - Review found seven supplier endpoint handlers converting all commit failures into HTTP 409, masking infrastructure errors as business conflicts.
 - Correction committed on `chore/phase0-stabilization`: only `IntegrityError` maps to HTTP 409; other exceptions trigger rollback and are re-raised.
 - Added a source-level AST regression test covering all seven handlers.
-- Previous relationship-transaction HEAD `d9a79d2e6c3490e7ff3ba4d7f3310684c3a04eab`: backend 275 passed / 1 skipped, frontend passed, PostgreSQL integration passed in run `45457207645`; a duplicate run's PostgreSQL job was still running at last observation.
-- Current supplier correction requires fresh CI. Phase 0 remains open.
+- Validation on supplier-correction HEAD `459a8fb668e845b71a3663d9add2a50713ebf28a`: backend **276 passed, 1 skipped**, frontend passed, PostgreSQL migrations and refresh-token integration passed (run `45457457094`).
+- A further PostgreSQL integration test now submits opposing dependency edges concurrently through the actual relationship API. Its CI run on HEAD `205f82a19ab496fa3f70127fc4c6a6144468ab14` is pending. Phase 0 remains open.
 
 
 ## PostgreSQL dependency graph concurrency validation — 2026-11-24
