@@ -488,3 +488,11 @@ Status: targeted code review recorded; additional runtime/API tests remain requi
 - Narrowed the conflict mapping to SQLAlchemy `IntegrityError`; unexpected database/runtime errors now roll back and propagate unchanged.
 - Added an AST-based regression test that checks all seven handlers retain a specific integrity branch and that generic exception branches roll back and re-raise rather than returning HTTP 409.
 - This is a source-level regression guard. Backend CI and PostgreSQL integration on the new HEAD are required before considering it validated.
+
+
+### PostgreSQL concurrency test for dependency graph — 2026-11-24
+
+- Added a real PostgreSQL integration test that concurrently submits opposite `depends_on` edges through the actual asset relationship endpoint.
+- The expected outcome is exactly one successful edge and one HTTP 422 cycle rejection, with exactly one persisted relationship. This exercises the transaction-scoped advisory lock and cycle query together, rather than only testing the pure graph helper.
+- Updated the PostgreSQL CI job to run this test alongside refresh-token rotation after Alembic upgrade.
+- Validation is pending on the new HEAD; no concurrency result is claimed until the PostgreSQL job completes.
