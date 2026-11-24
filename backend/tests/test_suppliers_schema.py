@@ -356,12 +356,14 @@ async def test_terminate_supplier_asset_link_blocked_with_open_access_request():
     supplier_id = UUID("00000000-0000-0000-0000-000000000010")
     link_id = UUID("00000000-0000-0000-0000-000000000011")
     link = MagicMock(id=link_id, supplier_id=supplier_id, status="Actif")
+    supplier_lock_result = MagicMock()
+    supplier_lock_result.scalar_one_or_none.return_value = supplier_id
     link_result = MagicMock()
     link_result.scalar_one_or_none.return_value = link
     open_access_result = MagicMock()
     open_access_result.scalar_one_or_none.return_value = UUID("00000000-0000-0000-0000-000000000012")
     db = AsyncMock()
-    db.execute.side_effect = [link_result, open_access_result]
+    db.execute.side_effect = [supplier_lock_result, link_result, open_access_result]
 
     with pytest.raises(Exception) as exc:
         await terminate_supplier_asset_link(
