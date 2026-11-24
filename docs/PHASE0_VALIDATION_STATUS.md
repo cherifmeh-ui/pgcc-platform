@@ -666,3 +666,9 @@ Repository/static hardening is substantially progressed, but the remaining gates
 - Expanded the AST regression checks to cover these operations; the expected generic/specific database exception handler count is now 26. These checks verify source structure only.
 - Commits: `6e37ee3` (contracts/contacts), `4afaef0` (tests), `fcec651` (supplier CRUD/archive), `539165c` (tests).
 - Snapshot capture and its audit semantics still need explicit review. CI has not yet been observed for these commits; no runtime test result is claimed. Phase 0 remains open.
+
+### Supplier risk snapshot audit — 2026-11-24
+
+- Monthly TPRM snapshot capture now writes its audit-outbox event in the same transaction as the immutable snapshot.
+- Added the capture handler to the source-level audit ordering test and updated the expected exception-handler count to 27.
+- Commit: `09e5568` (implementation), `6c8847d` (test). PostgreSQL validation and CI for this sequence are still pending.
