@@ -722,3 +722,11 @@ Repository/static hardening is substantially progressed, but the remaining gates
 - Persisted roles are now normalized before admin/executive MFA enforcement. Access tokens must contain a non-empty string role claim matching the normalized persisted role.
 - Added focused tests for privileged MFA enforcement and role-claim validation.
 - Commits: 07c434f and 8149214. No CI result for these commits has yet been observed.
+
+
+## CI follow-up — RBAC role-claim test correction — 2026-11-24
+
+- Workflow run 45491802074 on the PR merge ref completed the frontend build successfully. Backend reported 292 passed, 13 skipped and one failing parametrized RBAC test.
+- The failing parameter expected a denial for token role viewer while the persisted user role was also viewer. The test case was corrected to use admin as the mismatched token role in commit f42e108. This was a test-data correction; the implementation behavior was correct.
+- PostgreSQL migration/integration job was still in progress at the time of this status update. Its final result must be checked separately.
+- The run was created before commit f42e108, so it does not validate that correction. A fresh PR workflow run is required.
