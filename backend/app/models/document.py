@@ -1,5 +1,5 @@
 # backend/app/models/document.py
-from sqlalchemy import Column, String, Integer, DateTime, LargeBinary, Text, Boolean
+from sqlalchemy import Column, String, Integer, DateTime, LargeBinary, Text, Boolean, Index, func, text
 from sqlalchemy.dialects.postgresql import UUID as PG_UUID
 from datetime import datetime
 from uuid import uuid4
@@ -21,6 +21,15 @@ class Document(Base):
     # Fichier original (Binaire) - Optionnel selon stratégie stockage
     file_data = Column(LargeBinary, nullable=True) 
     filename = Column(String(200), nullable=True)
+
+    __table_args__ = (
+        Index(
+            "uq_documents_filename_ci",
+            func.lower(func.btrim(filename)),
+            unique=True,
+            postgresql_where=text("filename IS NOT NULL AND btrim(filename) <> ''"),
+        ),
+    )
     
     # Métadonnées techniques
     file_size_kb = Column(Integer, nullable=True)
