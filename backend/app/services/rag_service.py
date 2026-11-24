@@ -1,11 +1,13 @@
 # backend/app/services/rag_service.py
 import httpx
-from typing import List
+from typing import List, Optional
+from fastapi import Request
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy import select
 from app.models.document import Document
 from app.models.document_chunk import DocumentChunk
 from app.core.config import settings
+from app.services.security_logger import enqueue_audit_event
 
 OLLAMA_URL = (settings.OLLAMA_BASE_URL or "http://host.docker.internal:11434").rstrip("/")
 EMBED_MODEL = "nomic-embed-text"
@@ -18,7 +20,10 @@ MAX_CHUNKS_PER_DOCUMENT = 2000
 
 class RAGService:
     @staticmethod
-    async def index_document(db: AsyncSession, doc_id: str) -> bool:
+    async def index_document(
+        db: AsyncSession, doc_id: str, *, user_email: Optional[str] = None,
+        request: Optional[Request] = None,
+    ) -> bool:
         """Generate all vectors first, then atomically replace a document's chunks."""
         result = await db.execute(select(Document).where(Document.id == doc_id).with_for_update())
         doc = result.scalar_one_or_none()
@@ -68,6 +73,12 @@ class RAGService:
                 ))
 
             doc.is_indexed = True
+            if user_email:
+                await enqueue_audit_event(
+                    db, user_email=user_email, action="INDEX", resource="documents",
+                    resource_id=str(doc.id), details=f"Document indexed: {doc.title}",
+                    event_type="DOCUMENT", request=request,
+                )
             await db.commit()
             return True
         except Exception:
