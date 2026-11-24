@@ -549,3 +549,12 @@ Status: targeted code review recorded; additional runtime/API tests remain requi
 - Review of `AIService.rewrite_risk_for_executive` found that user-controlled risk fields were interpolated into the instruction prompt without an explicit untrusted-data boundary. A malicious description could attempt to override the system's requested behavior.
 - The prompt now explicitly identifies risk JSON as untrusted data, instructs the model to ignore embedded directives and to retain the factual-only constraint. This is defense-in-depth; prompt wording is not a substitute for output validation or human review.
 - Added focused unit tests verifying the untrusted-data boundary, preservation of the original risk content, and factual-only instructions. CI validation is pending on the new HEAD.
+
+
+### Concurrent duplicate document uploads — 2026-11-24
+
+- Review found a TOCTOU race in upload: the endpoint checked for an existing filename, then inserted without a database uniqueness guarantee. Two concurrent uploads could both pass the pre-check and create duplicate records.
+- Added PostgreSQL partial unique expression index `uq_documents_filename_ci` on `lower(btrim(filename))`, with a migration preflight that fails explicitly if legacy duplicates exist. The model metadata declares the same index for schema consistency.
+- Upload now performs a normalized pre-check and translates the database uniqueness conflict into HTTP 409 after rollback.
+- Added migration integrity coverage and a PostgreSQL concurrency test that synchronizes two uploads after their pre-checks and expects exactly one 201 and one 409.
+- CI validation pending on the new HEAD.
