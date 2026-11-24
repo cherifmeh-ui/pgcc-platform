@@ -493,7 +493,7 @@ Repository/static hardening is substantially progressed, but the remaining gates
 
 - Added row-level serialization on the Risk row in both asset-risk link creation and risk deletion.
 - Added a PostgreSQL concurrency test exercising both real endpoints with independent sessions and checking that no orphaned association or deleted-but-linked risk can result.
-- CI validation pending. Phase 0 remains open.
+- CI run `45458697575` passed on HEAD `1a022b8e9f4197d77d940804d3448862e087b42c`: backend 277 passed / 3 skipped, frontend build passed, Alembic upgrade passed, PostgreSQL integration 3 passed. Phase 0 remains open.
 
 
 ## Supplier-risk references in risk deletion — 2026-11-24
