@@ -1386,9 +1386,22 @@ async def create_supplier_contact(
         raise HTTPException(status_code=404, detail="Fournisseur introuvable ou archivé")
     contact = SupplierContact(supplier_id=supplier_id, **data.model_dump())
     db.add(contact)
-    await db.commit()
+    try:
+        await db.flush()
+        await enqueue_audit_event(
+            db, user_email=current_user.email, action="CREATE_CONTACT",
+            resource="supplier_contacts", resource_id=str(contact.id),
+            details=f"Supplier contact created for supplier {supplier_id}",
+            event_type="SUPPLIER", request=request,
+        )
+        await db.commit()
+    except IntegrityError as exc:
+        await db.rollback()
+        raise HTTPException(status_code=409, detail="Conflit lors de la création du contact fournisseur") from exc
+    except Exception:
+        await db.rollback()
+        raise
     await db.refresh(contact)
-    await log_action(user_email=current_user.email, action="CREATE_CONTACT", resource="supplier_contacts", resource_id=str(contact.id), details=f"Supplier contact created for supplier {supplier_id}", event_type="SUPPLIER", request=request)
     return contact
 
 
@@ -1407,9 +1420,22 @@ async def update_supplier_contact(
         raise HTTPException(status_code=404, detail="Contact fournisseur introuvable")
     for field, value in data.model_dump(exclude_unset=True).items():
         setattr(contact, field, value)
-    await db.commit()
+    try:
+        await db.flush()
+        await enqueue_audit_event(
+            db, user_email=current_user.email, action="UPDATE_CONTACT",
+            resource="supplier_contacts", resource_id=str(contact.id),
+            details=f"Supplier contact updated for supplier {supplier_id}",
+            event_type="SUPPLIER", request=request,
+        )
+        await db.commit()
+    except IntegrityError as exc:
+        await db.rollback()
+        raise HTTPException(status_code=409, detail="Conflit lors de la mise à jour du contact fournisseur") from exc
+    except Exception:
+        await db.rollback()
+        raise
     await db.refresh(contact)
-    await log_action(user_email=current_user.email, action="UPDATE_CONTACT", resource="supplier_contacts", resource_id=str(contact.id), details=f"Supplier contact updated for supplier {supplier_id}", event_type="SUPPLIER", request=request)
     return contact
 
 
@@ -1531,15 +1557,21 @@ async def create_supplier_contract(
     contract = SupplierContract(supplier_id=supplier_id, **data.model_dump())
     db.add(contract)
     try:
+        await db.flush()
+        await enqueue_audit_event(
+            db, user_email=current_user.email, action="CREATE_CONTRACT",
+            resource="supplier_contracts", resource_id=str(contract.id),
+            details=f"Contract created for supplier {supplier_id}: {contract.reference}",
+            event_type="SUPPLIER", request=request,
+        )
         await db.commit()
-    except IntegrityError:
+    except IntegrityError as exc:
         await db.rollback()
-        raise HTTPException(status_code=409, detail="Référence contractuelle déjà utilisée ou contrainte invalide")
+        raise HTTPException(status_code=409, detail="Référence contractuelle déjà utilisée ou contrainte invalide") from exc
     except Exception:
         await db.rollback()
         raise
     await db.refresh(contract)
-    await log_action(user_email=current_user.email, action="CREATE_CONTRACT", resource="supplier_contracts", resource_id=str(contract.id), details=f"Contract created for supplier {supplier_id}: {contract.reference}", event_type="SUPPLIER", request=request)
     return contract
 
 
@@ -1572,15 +1604,21 @@ async def update_supplier_contract(
     for field, value in changes.items():
         setattr(contract, field, value)
     try:
+        await db.flush()
+        await enqueue_audit_event(
+            db, user_email=current_user.email, action="UPDATE_CONTRACT",
+            resource="supplier_contracts", resource_id=str(contract.id),
+            details=f"Contract updated: {contract.reference}",
+            event_type="SUPPLIER", request=request,
+        )
         await db.commit()
-    except IntegrityError:
+    except IntegrityError as exc:
         await db.rollback()
-        raise HTTPException(status_code=409, detail="Référence contractuelle déjà utilisée ou contrainte invalide")
+        raise HTTPException(status_code=409, detail="Référence contractuelle déjà utilisée ou contrainte invalide") from exc
     except Exception:
         await db.rollback()
         raise
     await db.refresh(contract)
-    await log_action(user_email=current_user.email, action="UPDATE_CONTRACT", resource="supplier_contracts", resource_id=str(contract.id), details=f"Contract updated: {contract.reference}", event_type="SUPPLIER", request=request)
     return contract
 
 
