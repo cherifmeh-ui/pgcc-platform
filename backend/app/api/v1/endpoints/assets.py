@@ -384,7 +384,7 @@ async def confirm_asset_csv_import(
     db.add_all(assets)
     try:
         await db.commit()
-    except Exception:
+    except IntegrityError:
         await db.rollback()
         raise HTTPException(status_code=409, detail="Import annulé : conflit ou contrainte invalide. Aucun actif n'a été importé.")
     await log_action(
@@ -594,7 +594,7 @@ async def create_asset(
     db.add(asset)
     try:
         await db.commit()
-    except Exception:
+    except IntegrityError:
         await db.rollback()
         raise HTTPException(status_code=409, detail="Référence d'actif déjà utilisée ou contrainte invalide")
     await db.refresh(asset)
@@ -673,7 +673,7 @@ async def update_asset(
         setattr(asset, key, value)
     try:
         await db.commit()
-    except Exception:
+    except IntegrityError:
         await db.rollback()
         raise HTTPException(status_code=409, detail="Référence d'actif déjà utilisée ou contrainte invalide")
     await db.refresh(asset)
