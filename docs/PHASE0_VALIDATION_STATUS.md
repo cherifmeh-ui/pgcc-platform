@@ -515,3 +515,9 @@ Repository/static hardening is substantially progressed, but the remaining gates
 - RAG indexing and document deletion now serialize on the source Document row using `SELECT ... FOR UPDATE`.
 - Added a PostgreSQL concurrency integration test proving deletion waits for indexation, then removes the source and all chunks.
 - Added the test to the PostgreSQL CI suite. Validation pending; Phase 0 remains open.
+
+
+## AI prompt-injection hardening — 2026-11-24
+
+- Executive risk-rewrite prompt now labels user-supplied risk fields as untrusted data and explicitly rejects embedded instructions.
+- Added focused tests for prompt construction and factual-only constraints. CI validation pending; Phase 0 remains open.
