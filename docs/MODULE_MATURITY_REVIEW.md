@@ -511,7 +511,7 @@ Status: targeted code review recorded; additional runtime/API tests remain requi
 - Static review identified a race: asset-risk linking checked that the risk existed without locking its row, while risk deletion checked association counts without locking the risk row. A concurrent link could pass its existence check while deletion passed its association count.
 - Both paths now lock the same risk row with `SELECT ... FOR UPDATE` before eligibility/count checks and mutation. The existing `ON DELETE RESTRICT` foreign key remains the final database safeguard.
 - Added a PostgreSQL integration test that races the real asset-risk link endpoint against the real risk-delete endpoint. The only valid outcomes are: link succeeds and delete returns 409, or delete succeeds and link returns 404.
-- PostgreSQL CI validation is pending on the new HEAD.
+- PostgreSQL CI run `45458697575` on HEAD `1a022b8e9f4197d77d940804d3448862e087b42c` passed: backend **277 passed, 3 skipped**, frontend build passed, Alembic upgrade passed, PostgreSQL integration **3 passed** (refresh rotation, dependency-edge concurrency, asset-risk link/delete concurrency).
 
 
 ### Supplier-risk references in risk deletion — 2026-11-24
@@ -519,3 +519,10 @@ Status: targeted code review recorded; additional runtime/API tests remain requi
 - Further review found that `risks.delete_risk` checked action items and asset-risk links but omitted supplier-risk links, despite `supplier_risk_links.risk_id` having an `ON DELETE RESTRICT` foreign key.
 - Risk deletion now returns an explicit HTTP 409 when supplier-risk links exist. Supplier-risk link creation also locks the Risk row, serializing it with risk deletion's row lock.
 - Added a route regression test for the supplier-risk deletion conflict. The PostgreSQL FK remains a final safeguard; dedicated supplier-link/delete concurrency coverage remains a follow-up.
+
+
+### Latest verified checkpoint — 2026-11-24
+
+- HEAD `1a022b8e9f4197d77d940804d3448862e087b42c` has a fully successful CI run `45458697575`.
+- PostgreSQL 16 migrations succeeded and all three integration tests passed: refresh-token rotation, opposing asset dependency-edge concurrency, and asset-risk link versus risk deletion.
+- Backend suite: 277 passed, 3 skipped. Frontend build passed.
