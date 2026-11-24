@@ -463,3 +463,11 @@ Status: targeted code review recorded; additional runtime/API tests remain requi
 - Updated the helper to call `_asset_is_retired`, making lifecycle status and `retired_at` consistent across impact analysis, risk linking, supplier linking, and relationship creation.
 - Added focused tests for missing endpoints, retired lifecycle states, and marker-only retirement.
 - CI pending.
+
+
+### Database error semantics — 2026-11-24
+
+- Static review found broad `except Exception` handlers around asset create, update and CSV import commits. They converted infrastructure/programming failures into HTTP 409 business conflicts, hiding the real failure class from API clients and observability.
+- The handlers now translate only SQLAlchemy `IntegrityError` into HTTP 409 and continue to roll back the failed transaction. Other exceptions propagate to normal server error handling.
+- Added regression tests for create/update: integrity conflicts remain 409 while unexpected database errors are not misclassified.
+- Validation evidence for the pre-fix HEAD `70e2bbf6bb57c462f8d320ed824bf8edd98bdacb`: Backend checks green (268 passed, 1 skipped), frontend build green, PostgreSQL migrations and refresh rotation integration test green. The corrective commit itself still requires CI validation.
