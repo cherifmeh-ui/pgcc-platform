@@ -11,6 +11,7 @@ from app.api.deps import require_permission
 from app.core.database import get_db
 from app.models.risk import Risk
 from app.models.asset import Asset, AssetRiskLink
+from app.models.supplier import SupplierRiskLink
 from app.models.action_item import ActionItem
 from app.models.user import User
 from app.schemas.risk import RiskCreate, RiskResponse, RiskUpdate
@@ -225,6 +226,15 @@ async def delete_risk(
         raise HTTPException(
             status_code=status.HTTP_409_CONFLICT,
             detail="Ce risque est associé à un ou plusieurs actifs. Supprimez explicitement les associations ou utilisez une procédure d'archivage.",
+        )
+
+    supplier_link_count_result = await db.execute(
+        select(func.count(SupplierRiskLink.id)).where(SupplierRiskLink.risk_id == risk.id)
+    )
+    if supplier_link_count_result.scalar_one() > 0:
+        raise HTTPException(
+            status_code=status.HTTP_409_CONFLICT,
+            detail="Ce risque est associé à un ou plusieurs fournisseurs. Supprimez explicitement les associations ou utilisez une procédure d'archivage.",
         )
 
     await db.delete(risk)
