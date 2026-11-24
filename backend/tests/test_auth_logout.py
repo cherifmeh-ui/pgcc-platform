@@ -1,7 +1,7 @@
 import pytest
 from uuid import uuid4
 from starlette.requests import Request
-from unittest.mock import AsyncMock
+from unittest.mock import AsyncMock, MagicMock
 
 from app.api.v1.endpoints import auth as auth_endpoint
 from app.api.v1.endpoints.auth import RefreshRequest
