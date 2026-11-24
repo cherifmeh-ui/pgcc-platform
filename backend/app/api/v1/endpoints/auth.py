@@ -30,7 +30,7 @@ from app.core.security import (
 )
 from app.models.user import User
 from app.models.refresh_token_session import RefreshTokenSession
-from app.services.security_logger import log_action
+from app.services.security_logger import enqueue_audit_event, log_action
 from app.services.auth_session_policy import refresh_denial_reason
 
 router = APIRouter(prefix="/auth", tags=["Authentification"])
@@ -468,6 +468,7 @@ async def change_password(
 @router.post("/refresh", response_model=TokenPairResponse)
 async def refresh_tokens(
     payload: RefreshRequest,
+    request: Request,
     db: AsyncSession = Depends(get_db),
 ):
     """Rotate a persisted refresh session exactly once; reject replay."""
@@ -501,6 +502,12 @@ async def refresh_tokens(
             .where(RefreshTokenSession.user_id == user.id, RefreshTokenSession.revoked_at.is_(None))
             .values(revoked_at=_now())
         )
+        await enqueue_audit_event(
+            db, user_email=user.email, action="REFRESH_DENIED_SESSIONS_REVOKED",
+            resource="auth", resource_id=str(user.id),
+            details=f"Refresh denied and active sessions revoked: {denial_reason}",
+            event_type="AUTH", request=request,
+        )
         await db.commit()
         denial_status = status.HTTP_423_LOCKED if user.is_locked else status.HTTP_403_FORBIDDEN if not user.is_active or user.must_change_password else status.HTTP_401_UNAUTHORIZED
         raise HTTPException(status_code=denial_status, detail=denial_reason)
@@ -520,6 +527,12 @@ async def refresh_tokens(
             .where(RefreshTokenSession.user_id == user.id, RefreshTokenSession.revoked_at.is_(None))
             .values(revoked_at=now)
         )
+        await enqueue_audit_event(
+            db, user_email=user.email, action="REFRESH_TOKEN_REUSE_DETECTED",
+            resource="auth", resource_id=str(user.id),
+            details="A revoked refresh token was replayed; all active sessions were revoked.",
+            event_type="AUTH", request=request,
+        )
         await db.commit()
         raise HTTPException(status_code=401, detail="Réutilisation d'un refresh token détectée. Sessions révoquées.")
 
@@ -528,6 +541,12 @@ async def refresh_tokens(
     new_hash = await _persist_refresh_session(db, user, refresh_token)
     session.revoked_at = now
     session.replaced_by_jti_hash = new_hash
+    await enqueue_audit_event(
+        db, user_email=user.email, action="REFRESH_TOKEN_ROTATED",
+        resource="auth", resource_id=str(session.id),
+        details="Refresh session rotated successfully.",
+        event_type="AUTH", request=request,
+    )
     await db.commit()
 
     return TokenPairResponse(
