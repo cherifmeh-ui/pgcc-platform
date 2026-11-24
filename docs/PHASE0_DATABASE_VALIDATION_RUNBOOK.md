@@ -25,7 +25,7 @@ Résultat attendu:
 - une seule tête de migration;
 - historique sans révision manquante;
 - upgrade terminé sans erreur;
-- `alembic current` indique `0021_refresh_token_sessions`.
+- `alembic current` indique `0024_audit_outbox` (tête actuelle du dépôt).
 
 Inspecter ensuite le schéma réel:
 - tables et colonnes;
@@ -33,6 +33,7 @@ Inspecter ensuite le schéma réel:
 - index;
 - extension pgvector et types vectoriels;
 - table `refresh_token_sessions`, unique JTI hash, FK utilisateur, index utilisateur/expiration et index de sessions actives;
+- tables `audit_outbox` et `security_logs`, contrainte d'append-only et index des événements en attente;
 - table `alembic_version`;
 - concordance avec les modèles SQLAlchemy.
 
@@ -92,4 +93,4 @@ La stratégie de récupération privilégiée en environnement réel est backup 
 
 ## 7. Limites actuelles
 
-Le baseline `0001_initial` appelle `Base.metadata.create_all()` à partir d'un ensemble de modèles importés. Cette approche est transitoire et peut dépendre des imports et de la metadata au moment de l'exécution. La validation sur PostgreSQL est donc obligatoire; le test statique du graphe Alembic ne la remplace pas.
+Le baseline `0001_initial` appelle `Base.metadata.create_all()` à partir d'un ensemble de modèles importés. Les migrations ultérieures actuelles vont jusqu'à `0024_audit_outbox`. Cette approche est transitoire et peut dépendre des imports et de la metadata au moment de l'exécution. La validation sur PostgreSQL est donc obligatoire; le test statique du graphe Alembic ne la remplace pas.
