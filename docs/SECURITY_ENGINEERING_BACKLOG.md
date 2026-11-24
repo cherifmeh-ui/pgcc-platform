@@ -37,8 +37,10 @@ Status: active engineering review. This is a static review backlog, not a securi
 - [x] Correct first-time MFA enrollment UI/API flow.
 - [x] Allow recovery codes in MFA verification.
 - [x] Consume recovery codes after successful use.
-- [ ] Persist refresh-token sessions and implement rotation/reuse detection.
-- [ ] Revoke sessions on password change, account disable, role change, and logout.
+- [x] Persist refresh-token sessions with hashed JTI, atomic rotation and reuse detection/revocation.
+- [x] Revoke active refresh sessions on password change and logout.
+- [ ] Proactively revoke persisted sessions on account disable, role change, MFA reset and administrator security reset.
+- [ ] Add durable audit-outbox events for refresh rotation, reuse detection, denial and logout; add HTTP-level PostgreSQL concurrency tests.
 - [x] Require dedicated change-password token for forced password change; remove access-token fallback.
 - [ ] Complete frontend forced-password-change flow and validate token issuance.
 - [x] Apply account lockout policy to MFA verification failures.
