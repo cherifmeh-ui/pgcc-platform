@@ -15,7 +15,7 @@ from app.models.supplier import SupplierRiskLink
 from app.models.action_item import ActionItem
 from app.models.user import User
 from app.schemas.risk import RiskCreate, RiskResponse, RiskUpdate
-from app.services.security_logger import enqueue_audit_event
+from app.services.security_logger import enqueue_audit_event, log_action  # log_action retained for test/integration patch compatibility
 from app.services.risk_scoring import calculate_risk_level
 from app.utils.rbac import role_has_permission
 
