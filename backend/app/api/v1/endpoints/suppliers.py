@@ -6,6 +6,7 @@ from uuid import UUID
 from fastapi import APIRouter, Depends, HTTPException, Query, Request, status
 from pydantic import BaseModel, ConfigDict, EmailStr, Field, field_validator
 from sqlalchemy import or_, select
+from sqlalchemy.exc import IntegrityError
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.api.deps import require_permission
@@ -752,9 +753,12 @@ async def link_supplier_to_risk(
     db.add(link)
     try:
         await db.commit()
-    except Exception:
+    except IntegrityError:
         await db.rollback()
         raise HTTPException(status_code=409, detail="Association fournisseur/risque déjà existante ou contrainte invalide")
+    except Exception:
+        await db.rollback()
+        raise
     await db.refresh(link)
     await log_action(
         user_email=current_user.email, action="LINK_SUPPLIER_RISK",
@@ -822,9 +826,12 @@ async def link_supplier_asset(
     db.add(link)
     try:
         await db.commit()
-    except Exception:
+    except IntegrityError:
         await db.rollback()
         raise HTTPException(status_code=409, detail="Relation fournisseur-actif déjà créée ou contrainte invalide")
+    except Exception:
+        await db.rollback()
+        raise
     await db.refresh(link)
     await log_action(user_email=current_user.email, action="LINK_SUPPLIER_ASSET", resource="supplier_asset_links", resource_id=str(link.id), details=f"Supplier {supplier_id} linked to asset {data.asset_id} ({data.relationship_type})", event_type="SUPPLIER", request=request)
     return link
@@ -905,9 +912,12 @@ async def create_supplier(
     db.add(supplier)
     try:
         await db.commit()
-    except Exception:
+    except IntegrityError:
         await db.rollback()
         raise HTTPException(status_code=409, detail="Code fournisseur déjà utilisé ou contrainte invalide")
+    except Exception:
+        await db.rollback()
+        raise
     await db.refresh(supplier)
     await log_action(user_email=current_user.email, action="CREATE", resource="suppliers", resource_id=str(supplier.id), details=f"Supplier created: {supplier.code}", event_type="SUPPLIER", request=request)
     return supplier
@@ -1030,9 +1040,12 @@ async def capture_supplier_risk_snapshot(
     db.add(snapshot)
     try:
         await db.commit()
-    except Exception:
+    except IntegrityError:
         await db.rollback()
         raise HTTPException(status_code=409, detail="Un instantané mensuel existe déjà ou une contrainte est invalide.")
+    except Exception:
+        await db.rollback()
+        raise
     await db.refresh(snapshot)
     return {
         "id": snapshot.id,
@@ -1191,9 +1204,12 @@ async def update_supplier(
         setattr(supplier, field, value)
     try:
         await db.commit()
-    except Exception:
+    except IntegrityError:
         await db.rollback()
         raise HTTPException(status_code=409, detail="Code fournisseur déjà utilisé ou contrainte invalide")
+    except Exception:
+        await db.rollback()
+        raise
     await db.refresh(supplier)
     await log_action(user_email=current_user.email, action="UPDATE", resource="suppliers", resource_id=str(supplier.id), details=f"Supplier updated: {supplier.code}", event_type="SUPPLIER", request=request)
     return supplier
@@ -1418,9 +1434,12 @@ async def create_supplier_contract(
     db.add(contract)
     try:
         await db.commit()
-    except Exception:
+    except IntegrityError:
         await db.rollback()
         raise HTTPException(status_code=409, detail="Référence contractuelle déjà utilisée ou contrainte invalide")
+    except Exception:
+        await db.rollback()
+        raise
     await db.refresh(contract)
     await log_action(user_email=current_user.email, action="CREATE_CONTRACT", resource="supplier_contracts", resource_id=str(contract.id), details=f"Contract created for supplier {supplier_id}: {contract.reference}", event_type="SUPPLIER", request=request)
     return contract
@@ -1456,9 +1475,12 @@ async def update_supplier_contract(
         setattr(contract, field, value)
     try:
         await db.commit()
-    except Exception:
+    except IntegrityError:
         await db.rollback()
         raise HTTPException(status_code=409, detail="Référence contractuelle déjà utilisée ou contrainte invalide")
+    except Exception:
+        await db.rollback()
+        raise
     await db.refresh(contract)
     await log_action(user_email=current_user.email, action="UPDATE_CONTRACT", resource="supplier_contracts", resource_id=str(contract.id), details=f"Contract updated: {contract.reference}", event_type="SUPPLIER", request=request)
     return contract
