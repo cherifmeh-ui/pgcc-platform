@@ -695,3 +695,11 @@ Repository/static hardening is substantially progressed, but the remaining gates
 - Added PostgreSQL rollback tests: upload must not persist a document if outbox enqueue fails; RAG re-index must preserve the previous chunk set and leave `is_indexed` false if audit enqueue fails.
 - The tests are committed but not yet executed by a fresh CI run. No runtime pass is claimed.
 - Commits: `5d3b449`, `dc10508`, `c7b6c24`, `393e02f`, `883927c`, `1257106`.
+
+## Authentication and migration documentation reconciliation — 2026-11-24
+
+- Rewrote `docs/AUTH_SESSION_SECURITY_REVIEW.md` to reflect implemented persisted refresh sessions, hashed JTI, rotation/reuse revocation, logout and password-change revocation. Remaining gaps are explicitly listed: administrative lifecycle revocation, refresh audit events, HTTP-level PostgreSQL concurrency, distributed rate limiting, MFA-secret encryption and frontend token storage.
+- Reconciled `docs/SECURITY_ENGINEERING_BACKLOG.md`: persisted refresh-session rotation and password-change/logout revocation are marked implemented; incomplete administrative revocation and refresh audit coverage remain open.
+- Corrected `docs/PHASE0_DATABASE_VALIDATION_RUNBOOK.md` to target Alembic head `0024_audit_outbox` rather than the stale `0021` revision.
+- Commits: `7cbb5ba` (auth review), `2e226c8` (backlog), `206dc53` (database runbook).
+- The latest commit has no workflow run returned by the PR-triggered workflow lookup. The last observed run `45486687055` had frontend and PostgreSQL integration jobs passing, while backend had 283 passed, 9 skipped and one incorrect AST-count assertion (27 expected, 20 observed). That assertion was corrected in `1c86005`; fresh validation of the corrected supplier test and subsequent document/RAG changes remains outstanding.
