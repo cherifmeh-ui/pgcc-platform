@@ -14,6 +14,7 @@ from sqlalchemy.ext.asyncio import async_sessionmaker, create_async_engine
 
 from app.models.document import Document
 from app.models.document_chunk import DocumentChunk
+from app.models.audit_outbox import AuditOutbox
 from app.models.iso_control_evidence import IsoControlEvidence
 from app.services import rag_service
 from app.api.v1.endpoints.documents import delete_document
@@ -97,11 +98,21 @@ async def test_rag_indexing_and_document_deletion_are_serialized(monkeypatch):
             remaining_chunks = (await verify.execute(
                 select(DocumentChunk).where(DocumentChunk.document_id == document_id)
             )).scalars().all()
+            audit_events = (await verify.execute(
+                select(AuditOutbox).where(
+                    AuditOutbox.payload["resource_id"].astext == str(document_id),
+                    AuditOutbox.payload["action"].astext.in_(["INDEX", "DELETE"]),
+                )
+            )).scalars().all()
             assert remaining_document is None
             assert remaining_chunks == []
+            assert {event.payload["action"] for event in audit_events} == {"INDEX", "DELETE"}
     finally:
         release_embedding.set()
         async with sessions() as cleanup:
+            await cleanup.execute(delete(AuditOutbox).where(
+                AuditOutbox.payload["resource_id"].astext == str(document_id)
+            ))
             await cleanup.execute(delete(IsoControlEvidence).where(
                 IsoControlEvidence.document_id == document_id
             ))
