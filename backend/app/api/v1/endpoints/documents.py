@@ -17,7 +17,7 @@ from app.models.document_chunk import DocumentChunk
 from app.models.iso_control_evidence import IsoControlEvidence
 from app.services.document_extractor import DocumentExtractor
 from app.models.user import User
-from app.services.security_logger import log_action
+from app.services.security_logger import enqueue_audit_event
 
 # ⬇️ IMPORT DU SERVICE RAG POUR L'INDEXATION VECTORIELLE
 try:
@@ -109,6 +109,12 @@ async def upload_document(
     
     db.add(new_doc)
     try:
+        await db.flush()
+        await enqueue_audit_event(
+            db, user_email=current_user.email, action="UPLOAD", resource="documents",
+            resource_id=str(new_doc.id), details=f"Document uploaded: {safe_filename}",
+            event_type="DOCUMENT", request=request,
+        )
         await db.commit()
     except IntegrityError as exc:
         await db.rollback()
@@ -116,12 +122,10 @@ async def upload_document(
             status_code=409,
             detail="Un document portant ce nom existe déjà.",
         ) from exc
+    except Exception:
+        await db.rollback()
+        raise
     await db.refresh(new_doc)
-    await log_action(
-        user_email=current_user.email, action="UPLOAD", resource="documents",
-        resource_id=str(new_doc.id), details=f"Document uploaded: {safe_filename}",
-        event_type="DOCUMENT", request=request,
-    )
     
     # CONSTRUCTION MANUELLE DE LA RÉPONSE POUR ÉVITER LES BUGS PYDANTIC
     return {
@@ -199,12 +203,20 @@ async def delete_document(
     for chunk in chunks_result.scalars().all():
         await db.delete(chunk)
     await db.delete(doc)
-    await db.commit()
-    await log_action(
-        user_email=current_user.email, action="DELETE", resource="documents",
-        resource_id=str(uid), details=f"Document deleted: {filename}",
-        event_type="DOCUMENT", request=request,
-    )
+    try:
+        await db.flush()
+        await enqueue_audit_event(
+            db, user_email=current_user.email, action="DELETE", resource="documents",
+            resource_id=str(uid), details=f"Document deleted: {filename}",
+            event_type="DOCUMENT", request=request,
+        )
+        await db.commit()
+    except IntegrityError as exc:
+        await db.rollback()
+        raise HTTPException(status_code=409, detail="Conflit lors de la suppression du document.") from exc
+    except Exception:
+        await db.rollback()
+        raise
 
 
 # ===================================================================
