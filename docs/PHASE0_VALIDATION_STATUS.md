@@ -460,3 +460,12 @@ Repository/static hardening is substantially progressed, but the remaining gates
 - Corrective change: relationship create/delete now explicitly roll back and re-raise unexpected database errors; create continues to map only `IntegrityError` to HTTP 409.
 - New API regression tests cover unexpected commit errors, duplicate constraint mapping, cycle rejection and delete rollback. CI for the new HEAD is pending.
 - Remaining: PostgreSQL concurrency test for opposing dependency edges, FK/RESTRICT behavior for relationship deletion and asset deletion, and end-to-end validation of supplier/application/risk link lifecycles. Phase 0 remains open.
+
+
+## Supplier database error handling — 2026-11-24
+
+- Review found seven supplier endpoint handlers converting all commit failures into HTTP 409, masking infrastructure errors as business conflicts.
+- Correction committed on `chore/phase0-stabilization`: only `IntegrityError` maps to HTTP 409; other exceptions trigger rollback and are re-raised.
+- Added a source-level AST regression test covering all seven handlers.
+- Previous relationship-transaction HEAD `d9a79d2e6c3490e7ff3ba4d7f3310684c3a04eab`: backend 275 passed / 1 skipped, frontend passed, PostgreSQL integration passed in run `45457207645`; a duplicate run's PostgreSQL job was still running at last observation.
+- Current supplier correction requires fresh CI. Phase 0 remains open.
