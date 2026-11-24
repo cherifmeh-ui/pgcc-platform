@@ -14,6 +14,7 @@ ASSET_ID = UUID("00000000-0000-0000-0000-000000000001")
 @pytest.mark.asyncio
 async def test_create_asset_maps_integrity_error_to_conflict():
     db = MagicMock()
+    db.flush = AsyncMock()
     db.commit = AsyncMock(side_effect=IntegrityError("insert", {}, Exception("duplicate")))
     db.rollback = AsyncMock()
 
@@ -32,6 +33,7 @@ async def test_create_asset_maps_integrity_error_to_conflict():
 @pytest.mark.asyncio
 async def test_create_asset_propagates_unexpected_database_error():
     db = MagicMock()
+    db.flush = AsyncMock()
     db.commit = AsyncMock(side_effect=RuntimeError("database connection lost"))
     db.rollback = AsyncMock()
 
@@ -53,6 +55,7 @@ async def test_update_asset_propagates_unexpected_database_error():
     result = MagicMock()
     result.scalar_one_or_none.return_value = asset
     db.execute = AsyncMock(return_value=result)
+    db.flush = AsyncMock()
     db.commit = AsyncMock(side_effect=RuntimeError("database unavailable"))
     db.rollback = AsyncMock()
 
