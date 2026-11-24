@@ -521,3 +521,11 @@ Repository/static hardening is substantially progressed, but the remaining gates
 
 - Executive risk-rewrite prompt now labels user-supplied risk fields as untrusted data and explicitly rejects embedded instructions.
 - Added focused tests for prompt construction and factual-only constraints. CI validation pending; Phase 0 remains open.
+
+
+## Document upload uniqueness and race prevention — 2026-11-24
+
+- Added migration `0022_document_filename_unique` and matching model metadata index for case-insensitive trimmed filename uniqueness.
+- Migration checks for pre-existing duplicates and stops with a remediation message rather than silently deleting or renaming data.
+- Upload endpoint returns HTTP 409 for concurrent uniqueness conflicts after transaction rollback.
+- Added static migration test and PostgreSQL concurrency test to CI. Validation pending; Phase 0 remains open.
