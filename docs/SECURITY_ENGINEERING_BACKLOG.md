@@ -62,6 +62,8 @@ Status: active engineering review. This is a static review backlog, not a securi
 - [x] Audit log for action-plan create/update/delete and bounded input validation.
 - [ ] Action-plan workflow with owner, evidence, validation, history and overdue tracking.
 - [x] Audit log for document upload, deletion and successful indexing.
+- [x] Couple document upload/deletion and RAG chunk replacement with the durable audit outbox in the same database transaction.
+- [ ] Add PostgreSQL runtime coverage for audit-outbox failure rollback, concurrent document deletion versus indexing, and duplicate upload races.
 - [ ] Audit trail for every sensitive business mutation.
 
 ## Phase 3 — Asset and application inventory
