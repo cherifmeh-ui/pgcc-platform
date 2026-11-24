@@ -501,3 +501,10 @@ Repository/static hardening is substantially progressed, but the remaining gates
 - Risk deletion now checks supplier-risk links and returns HTTP 409 instead of relying on a late FK violation.
 - Supplier-risk link creation locks the same Risk row as deletion to serialize concurrent operations.
 - Added a route-level regression test for the conflict response. Dedicated PostgreSQL supplier-link/delete concurrency coverage remains outstanding.
+
+
+## Supplier access/link lifecycle concurrency — 2026-11-24
+
+- Added row locks to access-request creation (Supplier → SupplierAssetLink → Asset), link termination (Supplier → SupplierAssetLink), and access approval (request → Supplier → SupplierAssetLink → Asset).
+- Added PostgreSQL integration test for concurrent access-request creation versus supplier-asset link termination.
+- Updated PostgreSQL CI to run this test alongside refresh-token and Cartography concurrency tests. Validation pending; Phase 0 remains open.
