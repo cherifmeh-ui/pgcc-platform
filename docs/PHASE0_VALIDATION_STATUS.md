@@ -647,3 +647,13 @@ Repository/static hardening is substantially progressed, but the remaining gates
 - Extended the static audit-order test to cover all seven supplier access/relationship lifecycle handlers and updated the expected number of IntegrityError/generic exception handler pairs to 15.
 - Latest implementation and test commits: 5c8b87575856dcdb84506004e5cf255a0b18cab8 and ab4927193e6434b78af9e7674f784ebc3f9e6fba. They require fresh CI validation.
 - Supplier contract and supplier assessment create/update/submit/validate endpoints still use post-commit log_action and remain outside the completed transactional outbox scope. Phase 0 remains open.
+
+## Supplier assessment transactional audit — 2026-11-24
+
+- Assessment creation, answer updates, submission and independent validation now enqueue audit-outbox events in the same AsyncSession and before the business commit.
+- Assessment answer edits, submission and validation lock the assessment row with `SELECT ... FOR UPDATE`; creation locks the active supplier row. This serializes concurrent state transitions and supplier archival/status changes for creation.
+- Existing controls retained: only the designated assessor edits/submits; a different user validates; high/critical risk cannot be unconditionally approved; submitted answers are immutable.
+- Unexpected failures roll back and propagate; only IntegrityError is translated to HTTP 409.
+- Added AST regression assertions for all four assessment lifecycle handlers and updated the expected database-handler count. These are source-structure checks, not proof of PostgreSQL concurrency behavior.
+- Commits: `a68e49a` (implementation), `ab0fccf` (focused test).
+- CI for the latest commits has not yet been observed. PostgreSQL-backed concurrent submit-vs-validation and rollback-on-outbox-failure tests remain required. Phase 0 remains open.
