@@ -17,7 +17,7 @@ from app.models.risk import Risk
 from app.utils.rbac import role_has_permission
 from app.models.document import Document
 from app.models.user import User
-from app.services.security_logger import log_action
+from app.services.security_logger import enqueue_audit_event, log_action
 from app.services.supplier_assessment import calculate_assessment_score, get_questionnaire_snapshot, validate_questionnaire, validate_answers
 
 router = APIRouter(prefix="/suppliers", tags=["Fournisseurs et tiers (TPRM)"])
@@ -512,9 +512,23 @@ async def create_supplier_access_request(
         requested_by_id=current_user.id, **data.model_dump(exclude={"supplier_asset_link_id"}),
     )
     db.add(access_request)
-    await db.commit()
+    try:
+        await db.flush()
+        await enqueue_audit_event(
+            db,
+            user_email=current_user.email,
+            action="CREATE_SUPPLIER_ACCESS_REQUEST",
+            resource="supplier_access_requests",
+            resource_id=str(access_request.id),
+            details=f"Access requested for supplier {supplier_id}, asset {link.asset_id}",
+            event_type="SUPPLIER",
+            request=request,
+        )
+        await db.commit()
+    except Exception:
+        await db.rollback()
+        raise
     await db.refresh(access_request)
-    await log_action(user_email=current_user.email, action="CREATE_SUPPLIER_ACCESS_REQUEST", resource="supplier_access_requests", resource_id=str(access_request.id), details=f"Access requested for supplier {supplier_id}, asset {link.asset_id}", event_type="SUPPLIER", request=request)
     return access_request
 
 
