@@ -1009,15 +1009,21 @@ async def create_supplier(
     supplier = Supplier(**data.model_dump())
     db.add(supplier)
     try:
+        await db.flush()
+        await enqueue_audit_event(
+            db, user_email=current_user.email, action="CREATE",
+            resource="suppliers", resource_id=str(supplier.id),
+            details=f"Supplier created: {supplier.code}",
+            event_type="SUPPLIER", request=request,
+        )
         await db.commit()
-    except IntegrityError:
+    except IntegrityError as exc:
         await db.rollback()
-        raise HTTPException(status_code=409, detail="Code fournisseur déjà utilisé ou contrainte invalide")
+        raise HTTPException(status_code=409, detail="Code fournisseur déjà utilisé ou contrainte invalide") from exc
     except Exception:
         await db.rollback()
         raise
     await db.refresh(supplier)
-    await log_action(user_email=current_user.email, action="CREATE", resource="suppliers", resource_id=str(supplier.id), details=f"Supplier created: {supplier.code}", event_type="SUPPLIER", request=request)
     return supplier
 
 
@@ -1301,15 +1307,21 @@ async def update_supplier(
     for field, value in changes.items():
         setattr(supplier, field, value)
     try:
+        await db.flush()
+        await enqueue_audit_event(
+            db, user_email=current_user.email, action="UPDATE",
+            resource="suppliers", resource_id=str(supplier.id),
+            details=f"Supplier updated: {supplier.code}",
+            event_type="SUPPLIER", request=request,
+        )
         await db.commit()
-    except IntegrityError:
+    except IntegrityError as exc:
         await db.rollback()
-        raise HTTPException(status_code=409, detail="Code fournisseur déjà utilisé ou contrainte invalide")
+        raise HTTPException(status_code=409, detail="Code fournisseur déjà utilisé ou contrainte invalide") from exc
     except Exception:
         await db.rollback()
         raise
     await db.refresh(supplier)
-    await log_action(user_email=current_user.email, action="UPDATE", resource="suppliers", resource_id=str(supplier.id), details=f"Supplier updated: {supplier.code}", event_type="SUPPLIER", request=request)
     return supplier
 
 
@@ -1350,9 +1362,22 @@ async def archive_supplier(
             detail="Archive impossible : des demandes d'accès sont encore ouvertes. Révoquez ou clôturez-les avant l'archivage.",
         )
     supplier.archived_at = datetime.now(timezone.utc)
-    await db.commit()
+    try:
+        await db.flush()
+        await enqueue_audit_event(
+            db, user_email=current_user.email, action="ARCHIVE",
+            resource="suppliers", resource_id=str(supplier.id),
+            details=f"Supplier archived: {supplier.code}",
+            event_type="SUPPLIER", request=request,
+        )
+        await db.commit()
+    except IntegrityError as exc:
+        await db.rollback()
+        raise HTTPException(status_code=409, detail="Conflit lors de l'archivage du fournisseur") from exc
+    except Exception:
+        await db.rollback()
+        raise
     await db.refresh(supplier)
-    await log_action(user_email=current_user.email, action="ARCHIVE", resource="suppliers", resource_id=str(supplier.id), details=f"Supplier archived: {supplier.code}", event_type="SUPPLIER", request=request)
     return supplier
 
 
