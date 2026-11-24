@@ -496,3 +496,11 @@ Status: targeted code review recorded; additional runtime/API tests remain requi
 - The expected outcome is exactly one successful edge and one HTTP 422 cycle rejection, with exactly one persisted relationship. This exercises the transaction-scoped advisory lock and cycle query together, rather than only testing the pure graph helper.
 - Updated the PostgreSQL CI job to run this test alongside refresh-token rotation after Alembic upgrade.
 - Validation is pending on the new HEAD; no concurrency result is claimed until the PostgreSQL job completes.
+
+
+### CI evidence — supplier error handling and asset graph concurrency — 2026-11-24
+
+- Supplier database error-handling regression suite passed in Backend checks run `45457457094`: **276 passed, 1 skipped**; frontend build and PostgreSQL migration/refresh-token job also passed.
+- The first PostgreSQL graph-concurrency run exposed a test harness mapper-registration issue (`Risk.actions` referenced `ActionItem` before that model was imported). The integration test now explicitly imports the model before ORM use.
+- Corrected PostgreSQL run on HEAD `306e966b72ff4c6b026fa130647a7c7282ca2ecb`, run `45457897057`: backend **276 passed, 2 skipped**, frontend build passed, Alembic upgrade passed, and PostgreSQL integration tests **2 passed** (refresh-token rotation plus concurrent opposing asset dependency edges).
+- The concurrency scenario is now runtime-verified on PostgreSQL 16: exactly one of the two opposing dependency edges is persisted; the other request is rejected as a cycle.
