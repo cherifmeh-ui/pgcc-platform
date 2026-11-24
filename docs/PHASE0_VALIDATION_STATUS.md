@@ -703,3 +703,14 @@ Repository/static hardening is substantially progressed, but the remaining gates
 - Corrected `docs/PHASE0_DATABASE_VALIDATION_RUNBOOK.md` to target Alembic head `0024_audit_outbox` rather than the stale `0021` revision.
 - Commits: `7cbb5ba` (auth review), `2e226c8` (backlog), `206dc53` (database runbook).
 - The latest commit has no workflow run returned by the PR-triggered workflow lookup. The last observed run `45486687055` had frontend and PostgreSQL integration jobs passing, while backend had 283 passed, 9 skipped and one incorrect AST-count assertion (27 expected, 20 observed). That assertion was corrected in `1c86005`; fresh validation of the corrected supplier test and subsequent document/RAG changes remains outstanding.
+
+
+## Refresh-session audit transaction — 2026-11-24
+
+- Refresh rotation now writes REFRESH_TOKEN_ROTATED to audit_outbox before committing replacement session creation and old-session revocation.
+- Reuse detection writes REFRESH_TOKEN_REUSE_DETECTED in the same transaction as revocation of all active sessions; eligibility denials write REFRESH_DENIED_SESSIONS_REVOKED with the reason.
+- Logout now locks the persisted session row, revokes it and enqueues REFRESH_SESSION_LOGOUT in the same transaction. Invalid or already-revoked tokens remain idempotent.
+- All three mutation paths explicitly roll back and re-raise if audit enqueue or commit fails.
+- Added PostgreSQL integration tests invoking the actual refresh endpoint concurrently with one token, verifying exactly one successful response, replay revocation and both audit events; added audit-enqueue-failure rollback coverage. Updated logout unit tests to verify audit event enqueue.
+- Commits: a5ff17b (refresh audit), b0adc25 (rollback), 9febb71 (logout audit), cd0f8db (PostgreSQL refresh tests), d0e51b9 and 801cb8a (logout tests), 44c12cf (backlog), 4ed8834 (auth review), defb67e (security findings).
+- These latest authentication tests have not yet been executed by a fresh CI run. Administrative session revocation on account disable/role change/MFA reset remains open.
