@@ -20,7 +20,7 @@ from app.models.supplier import Supplier, SupplierAssetLink, SupplierAccessReque
 from app.models.risk import Risk
 from app.models.application import Application
 from app.models.user import User
-from app.services.security_logger import log_action
+from app.services.security_logger import enqueue_audit_event, log_action  # log_action retained for compatibility with existing tests
 from app.utils.rbac import role_has_permission
 
 router = APIRouter(prefix="/assets", tags=["Cartographie des actifs"])
@@ -383,6 +383,11 @@ async def confirm_asset_csv_import(
     assets = [Asset(**row["data"]) for row in rows]
     db.add_all(assets)
     try:
+        await enqueue_audit_event(
+            db, user_email=current_user.email, action="IMPORT", resource="assets",
+            details=f"CSV asset import completed: {len(assets)} assets from {file.filename}",
+            event_type="ASSET", request=request,
+        )
         await db.commit()
     except IntegrityError:
         await db.rollback()
@@ -390,11 +395,6 @@ async def confirm_asset_csv_import(
     except Exception:
         await db.rollback()
         raise
-    await log_action(
-        user_email=current_user.email, action="IMPORT", resource="assets",
-        details=f"CSV asset import completed: {len(assets)} assets from {file.filename}",
-        event_type="ASSET", request=request,
-    )
     return {"imported": len(assets), "message": f"{len(assets)} actifs importés avec succès."}
 
 
@@ -596,6 +596,11 @@ async def create_asset(
     asset = Asset(**data.model_dump())
     db.add(asset)
     try:
+        await enqueue_audit_event(
+            db, user_email=current_user.email, action="CREATE", resource="assets",
+            resource_id=str(asset.id), details=f"Asset created: {asset.reference}",
+            event_type="ASSET", request=request,
+        )
         await db.commit()
     except IntegrityError:
         await db.rollback()
@@ -604,11 +609,6 @@ async def create_asset(
         await db.rollback()
         raise
     await db.refresh(asset)
-    await log_action(
-        user_email=current_user.email, action="CREATE", resource="assets",
-        resource_id=str(asset.id), details=f"Asset created: {asset.reference}",
-        event_type="ASSET", request=request,
-    )
     return asset
 
 
@@ -678,6 +678,11 @@ async def update_asset(
     for key, value in values.items():
         setattr(asset, key, value)
     try:
+        await enqueue_audit_event(
+            db, user_email=current_user.email, action="UPDATE", resource="assets",
+            resource_id=str(asset.id), details=f"Asset updated: {asset.reference}",
+            event_type="ASSET", request=request,
+        )
         await db.commit()
     except IntegrityError:
         await db.rollback()
@@ -686,11 +691,6 @@ async def update_asset(
         await db.rollback()
         raise
     await db.refresh(asset)
-    await log_action(
-        user_email=current_user.email, action="UPDATE", resource="assets",
-        resource_id=str(asset.id), details=f"Asset updated: {asset.reference}",
-        event_type="ASSET", request=request,
-    )
     return asset
 
 
@@ -709,12 +709,12 @@ async def retire_asset(
         asset.retired_at = asset.retired_at or datetime.now(timezone.utc)
         if asset.lifecycle_status not in {"Retiré", "Décommissionné"}:
             asset.lifecycle_status = "Retiré"
-        await db.commit()
-        await log_action(
-            user_email=current_user.email, action="RETIRE", resource="assets",
+        await enqueue_audit_event(
+            db, user_email=current_user.email, action="RETIRE", resource="assets",
             resource_id=str(asset.id), details=f"Asset retired: {asset.reference}",
             event_type="ASSET", request=request,
         )
+        await db.commit()
 
 
 
@@ -922,6 +922,12 @@ async def create_asset_relationship(
     )
     db.add(relationship)
     try:
+        await enqueue_audit_event(
+            db, user_email=current_user.email, action="CREATE_RELATIONSHIP", resource="asset_relationships",
+            resource_id=str(relationship.id),
+            details=f"Asset relationship created: {asset_id} -> {data.target_asset_id}",
+            event_type="ASSET", request=request,
+        )
         await db.commit()
     except IntegrityError:
         await db.rollback()
@@ -930,11 +936,6 @@ async def create_asset_relationship(
         await db.rollback()
         raise
     await db.refresh(relationship)
-    await log_action(
-        user_email=current_user.email, action="CREATE_RELATIONSHIP", resource="asset_relationships",
-        resource_id=str(relationship.id), details=f"Asset relationship created: {asset_id} -> {data.target_asset_id}",
-        event_type="ASSET", request=request,
-    )
     return relationship
 
 
@@ -957,15 +958,16 @@ async def delete_asset_relationship(
         raise HTTPException(status_code=404, detail="Relation introuvable pour cet actif")
     try:
         await db.delete(relationship)
+        await enqueue_audit_event(
+            db, user_email=current_user.email, action="DELETE_RELATIONSHIP", resource="asset_relationships",
+            resource_id=str(relationship.id),
+            details=f"Asset relationship deleted: {relationship.source_asset_id} -> {relationship.target_asset_id}",
+            event_type="ASSET", request=request,
+        )
         await db.commit()
     except Exception:
         await db.rollback()
         raise
-    await log_action(
-        user_email=current_user.email, action="DELETE_RELATIONSHIP", resource="asset_relationships",
-        resource_id=str(relationship.id), details=f"Asset relationship deleted: {relationship.source_asset_id} -> {relationship.target_asset_id}",
-        event_type="ASSET", request=request,
-    )
 
 
 @router.get("/{asset_id}/risks", response_model=list[AssetRiskLinkResponse])
@@ -1008,12 +1010,17 @@ async def link_asset_to_risk(
     link = AssetRiskLink(asset_id=asset_id, risk_id=data.risk_id, relationship_context=data.relationship_context, created_by=current_user.email)
     db.add(link)
     try:
+        await enqueue_audit_event(
+            db, user_email=current_user.email, action="LINK_RISK", resource="asset_risk_links",
+            resource_id=str(link.id),
+            details=f"Asset {asset.reference} linked to risk {risk.ref}",
+            event_type="ASSET_RISK", request=request,
+        )
         await db.commit()
     except IntegrityError:
         await db.rollback()
         raise HTTPException(status_code=409, detail="Association actif/risque déjà existante ou contrainte invalide")
     await db.refresh(link)
-    await log_action(user_email=current_user.email, action="LINK_RISK", resource="asset_risk_links", resource_id=str(link.id), details=f"Asset {asset.reference} linked to risk {risk.ref}", event_type="ASSET_RISK", request=request)
     return link
 
 
@@ -1038,5 +1045,9 @@ async def unlink_asset_from_risk(
     if link is None:
         raise HTTPException(status_code=404, detail="Association actif/risque introuvable")
     await db.delete(link)
+    await enqueue_audit_event(
+        db, user_email=current_user.email, action="UNLINK_RISK", resource="asset_risk_links",
+        resource_id=f"{asset_id}:{risk_id}", details="Asset-risk association removed",
+        event_type="ASSET_RISK", request=request,
+    )
     await db.commit()
-    await log_action(user_email=current_user.email, action="UNLINK_RISK", resource="asset_risk_links", resource_id=f"{asset_id}:{risk_id}", details="Asset-risk association removed", event_type="ASSET_RISK", request=request)
