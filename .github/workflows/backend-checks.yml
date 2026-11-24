@@ -87,10 +87,10 @@ jobs:
           DATABASE_URL: postgresql+asyncpg://pgcc_test:pgcc_test@localhost:5432/pgcc_test
           JWT_SECRET: integration-test-secret-that-is-long-enough
         run: alembic upgrade head
-      - name: Run PostgreSQL refresh rotation integration test
+      - name: Run PostgreSQL integration tests (refresh rotation and asset dependency concurrency)
         env:
           PYTHONPATH: backend
           DATABASE_URL: postgresql+asyncpg://pgcc_test:pgcc_test@localhost:5432/pgcc_test
           PGCC_INTEGRATION_DATABASE_URL: postgresql+asyncpg://pgcc_test:pgcc_test@localhost:5432/pgcc_test
           JWT_SECRET: integration-test-secret-that-is-long-enough
-        run: pytest -q backend/tests/test_refresh_rotation_postgres.py
+        run: pytest -q backend/tests/test_refresh_rotation_postgres.py backend/tests/test_asset_relationships_postgres.py
