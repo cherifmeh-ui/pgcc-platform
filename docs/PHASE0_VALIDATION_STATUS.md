@@ -508,3 +508,10 @@ Repository/static hardening is substantially progressed, but the remaining gates
 - Added row locks to access-request creation (Supplier → SupplierAssetLink → Asset), link termination (Supplier → SupplierAssetLink), and access approval (request → Supplier → SupplierAssetLink → Asset).
 - Added PostgreSQL integration test for concurrent access-request creation versus supplier-asset link termination.
 - Updated PostgreSQL CI to run this test alongside refresh-token and Cartography concurrency tests. Validation pending; Phase 0 remains open.
+
+
+## Document/RAG index-delete serialization — 2026-11-24
+
+- RAG indexing and document deletion now serialize on the source Document row using `SELECT ... FOR UPDATE`.
+- Added a PostgreSQL concurrency integration test proving deletion waits for indexation, then removes the source and all chunks.
+- Added the test to the PostgreSQL CI suite. Validation pending; Phase 0 remains open.
