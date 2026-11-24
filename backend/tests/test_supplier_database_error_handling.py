@@ -54,7 +54,7 @@ def test_supplier_conflict_handlers_only_map_integrity_errors_to_http_409():
             for item in generic.body
         ), "Unexpected database errors must not be converted into HTTP business conflicts"
 
-    assert matching_handlers == 8
+    assert matching_handlers == 12
 
 
 def test_supplier_access_lifecycle_writes_enqueue_audit_before_commit():
