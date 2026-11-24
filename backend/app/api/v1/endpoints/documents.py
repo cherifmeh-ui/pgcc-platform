@@ -2,7 +2,8 @@
 from fastapi import APIRouter, Depends, HTTPException, UploadFile, File, Form, Request
 from fastapi.responses import Response
 from sqlalchemy.ext.asyncio import AsyncSession
-from sqlalchemy import select
+from sqlalchemy import select, func
+from sqlalchemy.exc import IntegrityError
 from pydantic import BaseModel
 from typing import List, Optional
 import uuid
@@ -84,7 +85,11 @@ async def upload_document(
         raise HTTPException(status_code=400, detail=str(ve))
 
     size_kb = int((len(contents) + 1023) / 1024)
-    existing_q = await db.execute(select(Document).where(Document.filename == safe_filename))
+    existing_q = await db.execute(
+        select(Document).where(
+            func.lower(func.btrim(Document.filename)) == safe_filename.lower()
+        )
+    )
     if existing_q.scalar_one_or_none():
         raise HTTPException(status_code=409, detail="Un document portant ce nom existe déjà.")
 
@@ -103,7 +108,14 @@ async def upload_document(
     )
     
     db.add(new_doc)
-    await db.commit()
+    try:
+        await db.commit()
+    except IntegrityError as exc:
+        await db.rollback()
+        raise HTTPException(
+            status_code=409,
+            detail="Un document portant ce nom existe déjà.",
+        ) from exc
     await db.refresh(new_doc)
     await log_action(
         user_email=current_user.email, action="UPLOAD", resource="documents",
