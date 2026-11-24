@@ -59,7 +59,9 @@ async def test_rag_indexing_and_document_deletion_are_serialized(monkeypatch):
 
         async def index():
             async with sessions() as db:
-                return await rag_service.RAGService.index_document(db, str(document_id))
+                return await rag_service.RAGService.index_document(
+                    db, str(document_id), user_email="phase0@example.invalid"
+                )
 
         async def remove():
             async with sessions() as db:
@@ -103,6 +105,61 @@ async def test_rag_indexing_and_document_deletion_are_serialized(monkeypatch):
             await cleanup.execute(delete(IsoControlEvidence).where(
                 IsoControlEvidence.document_id == document_id
             ))
+            await cleanup.execute(delete(DocumentChunk).where(
+                DocumentChunk.document_id == document_id
+            ))
+            await cleanup.execute(delete(Document).where(Document.id == document_id))
+            await cleanup.commit()
+        await engine.dispose()
+
+@pytest.mark.asyncio
+async def test_rag_index_rolls_back_chunk_replacement_when_audit_enqueue_fails(monkeypatch):
+    engine = create_async_engine(DATABASE_URL, pool_size=2, max_overflow=0)
+    sessions = async_sessionmaker(engine, expire_on_commit=False)
+    document_id = uuid4()
+    original_text = "previous indexed content"
+
+    monkeypatch.setattr(
+        rag_service, "_generate_embeddings",
+        AsyncMock(return_value=[[0.0] * rag_service.EMBEDDING_DIMENSIONS]),
+    )
+    monkeypatch.setattr(
+        rag_service, "enqueue_audit_event",
+        AsyncMock(side_effect=RuntimeError("simulated outbox failure")),
+    )
+
+    try:
+        async with sessions() as setup:
+            document = Document(
+                id=document_id, title="RAG audit rollback", doc_type="PROCEDURE",
+                filename=f"phase0-rag-audit-{document_id}.pdf",
+                content_text="new content to index", file_data=b"%PDF-test",
+                file_size_kb=1, mime_type="application/pdf", is_indexed=False,
+            )
+            setup.add(document)
+            setup.add(DocumentChunk(
+                document_id=document_id, content_text=original_text,
+                embedding=[0.0] * rag_service.EMBEDDING_DIMENSIONS, chunk_index=0,
+            ))
+            await setup.commit()
+
+        async with sessions() as db:
+            with pytest.raises(RuntimeError, match="simulated outbox failure"):
+                await rag_service.RAGService.index_document(
+                    db, str(document_id), user_email="phase0@example.invalid"
+                )
+
+        async with sessions() as verify:
+            document = await verify.get(Document, document_id)
+            chunks = (await verify.execute(
+                select(DocumentChunk).where(DocumentChunk.document_id == document_id)
+            )).scalars().all()
+            assert document is not None
+            assert document.is_indexed is False
+            assert len(chunks) == 1
+            assert chunks[0].content_text == original_text
+    finally:
+        async with sessions() as cleanup:
             await cleanup.execute(delete(DocumentChunk).where(
                 DocumentChunk.document_id == document_id
             ))
