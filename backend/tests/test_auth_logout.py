@@ -1,4 +1,6 @@
 import pytest
+from uuid import uuid4
+from starlette.requests import Request
 from unittest.mock import AsyncMock
 
 from app.api.v1.endpoints import auth as auth_endpoint
@@ -9,7 +11,13 @@ from app.api.v1.endpoints.auth import RefreshRequest
 async def test_logout_invalid_token_is_idempotent(monkeypatch):
     db = AsyncMock()
     monkeypatch.setattr(auth_endpoint, "decode_token", lambda token, expected_type: (_ for _ in ()).throw(ValueError("invalid")))
-    result = await auth_endpoint.logout(RefreshRequest(refresh_token="invalid"), db)
+    result = await auth_endpoint.logout(
+        RefreshRequest(refresh_token="invalid"), request=Request({
+            "type": "http", "method": "POST", "path": "/auth/logout", "headers": [],
+            "client": ("127.0.0.1", 1234), "server": ("test", 80),
+            "scheme": "http", "query_string": b"",
+        }), db=db
+    )
     assert result is None
     db.execute.assert_not_awaited()
     db.commit.assert_not_awaited()
@@ -18,8 +26,24 @@ async def test_logout_invalid_token_is_idempotent(monkeypatch):
 @pytest.mark.asyncio
 async def test_logout_revokes_refresh_session_by_jti_hash(monkeypatch):
     db = AsyncMock()
+    session = MagicMock(id=uuid4(), user_id=uuid4(), revoked_at=None)
+    session_result = MagicMock()
+    session_result.scalar_one_or_none.return_value = session
+    user_result = MagicMock()
+    user_result.scalar_one_or_none.return_value = "logout@example.test"
+    db.execute.side_effect = [session_result, user_result]
+    audit = AsyncMock()
     monkeypatch.setattr(auth_endpoint, "decode_token", lambda token, expected_type: {"jti": "logout-jti", "type": expected_type})
-    result = await auth_endpoint.logout(RefreshRequest(refresh_token="refresh-jwt"), db)
+    monkeypatch.setattr(auth_endpoint, "enqueue_audit_event", audit)
+    request = Request({
+        "type": "http", "method": "POST", "path": "/auth/logout", "headers": [],
+        "client": ("127.0.0.1", 1234), "server": ("test", 80),
+        "scheme": "http", "query_string": b"",
+    })
+    result = await auth_endpoint.logout(RefreshRequest(refresh_token="refresh-jwt"), request=request, db=db)
     assert result is None
-    db.execute.assert_awaited_once()
+    assert session.revoked_at is not None
+    assert db.execute.await_count == 2
+    audit.assert_awaited_once()
+    assert audit.await_args.kwargs["action"] == "REFRESH_SESSION_LOGOUT"
     db.commit.assert_awaited_once()
