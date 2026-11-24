@@ -51,7 +51,7 @@ async def test_get_current_user_enforces_mfa_for_case_variant_privileged_role(mo
 
 
 @pytest.mark.asyncio
-@pytest.mark.parametrize("token_role", [None, "", "viewer", 7])
+@pytest.mark.parametrize("token_role", [None, "", "admin", 7])
 async def test_get_current_user_rejects_missing_or_mismatched_role_claim(monkeypatch, token_role):
     from app.api import deps
 
