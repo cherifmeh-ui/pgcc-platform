@@ -525,6 +525,12 @@ async def create_supplier_access_request(
             request=request,
         )
         await db.commit()
+    except IntegrityError as exc:
+        await db.rollback()
+        raise HTTPException(
+            status_code=409,
+            detail="Une demande d'accès fournisseur identique existe déjà",
+        ) from exc
     except Exception:
         await db.rollback()
         raise
