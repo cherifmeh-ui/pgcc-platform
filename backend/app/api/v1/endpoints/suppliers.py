@@ -1613,7 +1613,7 @@ async def create_supplier_assessment(
     db: AsyncSession = Depends(get_db),
     current_user: User = require_permission("suppliers", "assess"),
 ):
-    supplier = await db.execute(select(Supplier).where(Supplier.id == supplier_id, Supplier.archived_at.is_(None)))
+    supplier = await db.execute(select(Supplier).where(Supplier.id == supplier_id, Supplier.archived_at.is_(None)).with_for_update())
     if supplier.scalar_one_or_none() is None:
         raise HTTPException(status_code=404, detail="Fournisseur introuvable ou archivé")
     try:
@@ -1632,9 +1632,22 @@ async def create_supplier_assessment(
         next_review_at=data.next_review_at,
     )
     db.add(assessment)
-    await db.commit()
+    try:
+        await db.flush()
+        await enqueue_audit_event(
+            db, user_email=current_user.email, action="CREATE_ASSESSMENT",
+            resource="supplier_assessments", resource_id=str(assessment.id),
+            details=f"Assessment created for supplier {supplier_id}, questionnaire {assessment.questionnaire_version}",
+            event_type="SUPPLIER", request=request,
+        )
+        await db.commit()
+    except IntegrityError as exc:
+        await db.rollback()
+        raise HTTPException(status_code=409, detail="Conflit lors de la création de l'évaluation fournisseur") from exc
+    except Exception:
+        await db.rollback()
+        raise
     await db.refresh(assessment)
-    await log_action(user_email=current_user.email, action="CREATE_ASSESSMENT", resource="supplier_assessments", resource_id=str(assessment.id), details=f"Assessment created for supplier {supplier_id}, questionnaire {assessment.questionnaire_version}", event_type="SUPPLIER", request=request)
     return assessment
 
 
@@ -1673,9 +1686,22 @@ async def save_supplier_assessment_answers(
         if len(docs.scalars().all()) != len(set(evidence_ids)):
             raise HTTPException(status_code=422, detail="Une ou plusieurs preuves documentaires sont introuvables")
     assessment.answers = answers
-    await db.commit()
+    try:
+        await db.flush()
+        await enqueue_audit_event(
+            db, user_email=current_user.email, action="UPDATE_ASSESSMENT_ANSWERS",
+            resource="supplier_assessments", resource_id=str(assessment.id),
+            details=f"Assessment answers updated for supplier {supplier_id}",
+            event_type="SUPPLIER", request=request,
+        )
+        await db.commit()
+    except IntegrityError as exc:
+        await db.rollback()
+        raise HTTPException(status_code=409, detail="Conflit lors de l'enregistrement des réponses") from exc
+    except Exception:
+        await db.rollback()
+        raise
     await db.refresh(assessment)
-    await log_action(user_email=current_user.email, action="UPDATE_ASSESSMENT_ANSWERS", resource="supplier_assessments", resource_id=str(assessment.id), details=f"Assessment answers updated for supplier {supplier_id}", event_type="SUPPLIER", request=request)
     return assessment
 
 
@@ -1690,7 +1716,7 @@ async def submit_supplier_assessment(
     result = await db.execute(select(SupplierAssessment).where(
         SupplierAssessment.id == assessment_id,
         SupplierAssessment.supplier_id == supplier_id,
-    ))
+    ).with_for_update())
     assessment = result.scalar_one_or_none()
     if assessment is None:
         raise HTTPException(status_code=404, detail="Évaluation fournisseur introuvable")
@@ -1705,9 +1731,22 @@ async def submit_supplier_assessment(
     assessment.risk_level = risk_level
     assessment.status = "À valider"
     assessment.submitted_at = datetime.now(timezone.utc)
-    await db.commit()
+    try:
+        await db.flush()
+        await enqueue_audit_event(
+            db, user_email=current_user.email, action="SUBMIT_ASSESSMENT",
+            resource="supplier_assessments", resource_id=str(assessment.id),
+            details=f"Assessment submitted with score {score} and risk {risk_level}",
+            event_type="SUPPLIER", request=request,
+        )
+        await db.commit()
+    except IntegrityError as exc:
+        await db.rollback()
+        raise HTTPException(status_code=409, detail="Conflit lors de la soumission de l'évaluation") from exc
+    except Exception:
+        await db.rollback()
+        raise
     await db.refresh(assessment)
-    await log_action(user_email=current_user.email, action="SUBMIT_ASSESSMENT", resource="supplier_assessments", resource_id=str(assessment.id), details=f"Assessment submitted with score {score} and risk {risk_level}", event_type="SUPPLIER", request=request)
     return assessment
 
 
@@ -1723,7 +1762,7 @@ async def validate_supplier_assessment(
     result = await db.execute(select(SupplierAssessment).where(
         SupplierAssessment.id == assessment_id,
         SupplierAssessment.supplier_id == supplier_id,
-    ))
+    ).with_for_update())
     assessment = result.scalar_one_or_none()
     if assessment is None:
         raise HTTPException(status_code=404, detail="Évaluation fournisseur introuvable")
@@ -1738,8 +1777,21 @@ async def validate_supplier_assessment(
     assessment.validated_at = datetime.now(timezone.utc)
     assessment.next_review_at = data.next_review_at or assessment.next_review_at
     assessment.status = "Validée"
-    await db.commit()
+    try:
+        await db.flush()
+        await enqueue_audit_event(
+            db, user_email=current_user.email, action="VALIDATE_ASSESSMENT",
+            resource="supplier_assessments", resource_id=str(assessment.id),
+            details=f"Assessment validated: {data.decision}; {data.validation_comment}",
+            event_type="SUPPLIER", request=request,
+        )
+        await db.commit()
+    except IntegrityError as exc:
+        await db.rollback()
+        raise HTTPException(status_code=409, detail="Conflit lors de la validation de l'évaluation") from exc
+    except Exception:
+        await db.rollback()
+        raise
     await db.refresh(assessment)
-    await log_action(user_email=current_user.email, action="VALIDATE_ASSESSMENT", resource="supplier_assessments", resource_id=str(assessment.id), details=f"Assessment validated: {data.decision}; {data.validation_comment}", event_type="SUPPLIER", request=request)
     return assessment
 
