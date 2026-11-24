@@ -477,3 +477,13 @@ Repository/static hardening is substantially progressed, but the remaining gates
 - Expected invariant: one edge succeeds, the opposite edge is rejected as a cycle, and only one edge is persisted.
 - PostgreSQL CI now runs this test with the existing refresh-token concurrency test after applying Alembic migrations.
 - Validation pending. Phase 0 remains open.
+
+
+## Latest validated checkpoint — 2026-11-24
+
+- HEAD: `306e966b72ff4c6b026fa130647a7c7282ca2ecb` on `chore/phase0-stabilization`.
+- PR #1 remains open, Draft and unmerged.
+- CI run `45457897057`: Backend **276 passed, 2 skipped**; frontend build success; PostgreSQL 16 migrations success; PostgreSQL integration **2 passed** (refresh-token rotation and concurrent opposing dependency edges).
+- The PostgreSQL graph test initially failed because the test module had not registered the `ActionItem` mapper referenced by `Risk.actions`; an explicit model import fixed the test harness. The corrected run passed.
+- Supplier database error correction was validated on preceding HEAD `459a8fb668e845b71a3663d9add2a50713ebf28a`: backend 276 passed / 1 skipped, frontend and PostgreSQL integration jobs succeeded.
+- Phase 0 remains open: supplier-access concurrency, risk/asset deletion races, document/RAG ACL, audit durability, clean Docker stack and broader runtime validation remain under review.
