@@ -494,3 +494,10 @@ Repository/static hardening is substantially progressed, but the remaining gates
 - Added row-level serialization on the Risk row in both asset-risk link creation and risk deletion.
 - Added a PostgreSQL concurrency test exercising both real endpoints with independent sessions and checking that no orphaned association or deleted-but-linked risk can result.
 - CI validation pending. Phase 0 remains open.
+
+
+## Supplier-risk references in risk deletion — 2026-11-24
+
+- Risk deletion now checks supplier-risk links and returns HTTP 409 instead of relying on a late FK violation.
+- Supplier-risk link creation locks the same Risk row as deletion to serialize concurrent operations.
+- Added a route-level regression test for the conflict response. Dedicated PostgreSQL supplier-link/delete concurrency coverage remains outstanding.
