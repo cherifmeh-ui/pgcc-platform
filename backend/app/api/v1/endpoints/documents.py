@@ -163,7 +163,7 @@ async def delete_document(
     except ValueError:
         raise HTTPException(status_code=400, detail="ID invalide")
         
-    result = await db.execute(select(Document).where(Document.id == uid))
+    result = await db.execute(select(Document).where(Document.id == uid).with_for_update())
     doc = result.scalar_one_or_none()
     if not doc:
         raise HTTPException(status_code=404, detail="Document introuvable")
