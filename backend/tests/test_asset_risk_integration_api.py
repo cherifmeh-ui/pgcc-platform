@@ -218,3 +218,32 @@ async def test_asset_risk_link_creation_rejects_retired_marker():
     assert exc.value.status_code == 409
     db.add.assert_not_called()
     db.commit.assert_not_awaited()
+
+
+@pytest.mark.asyncio
+async def test_risk_deletion_is_blocked_when_supplier_risk_links_exist():
+    from app.api.v1.endpoints.risks import delete_risk
+
+    db = AsyncMock()
+    risk = MagicMock(ref="RISK-001", title="Risque lié à un fournisseur")
+    risk.id = RISK_ID
+    risk_result = MagicMock()
+    risk_result.scalar_one_or_none.return_value = risk
+    action_count = MagicMock()
+    action_count.scalar_one.return_value = 0
+    asset_link_count = MagicMock()
+    asset_link_count.scalar_one.return_value = 0
+    supplier_link_count = MagicMock()
+    supplier_link_count.scalar_one.return_value = 1
+    db.execute.side_effect = [risk_result, action_count, asset_link_count, supplier_link_count]
+
+    with pytest.raises(HTTPException) as exc:
+        await delete_risk(
+            risk_id=RISK_ID, request=MagicMock(), db=db,
+            current_user=MagicMock(role="admin", email="admin@example.test"),
+        )
+
+    assert exc.value.status_code == 409
+    assert "fournisseur" in exc.value.detail
+    db.delete.assert_not_awaited()
+    db.commit.assert_not_awaited()
