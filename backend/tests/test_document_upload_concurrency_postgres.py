@@ -14,6 +14,7 @@ from sqlalchemy import delete, select, func
 from sqlalchemy.ext.asyncio import async_sessionmaker, create_async_engine
 
 from app.models.document import Document
+from app.models.audit_outbox import AuditOutbox
 from app.api.v1.endpoints.documents import upload_document
 
 DATABASE_URL = os.getenv("PGCC_INTEGRATION_DATABASE_URL")
@@ -82,8 +83,18 @@ async def test_concurrent_uploads_with_same_filename_return_one_conflict(monkeyp
                 )
             )).scalars().all()
             assert len(matching) == 1
+            audit_events = (await verify.execute(
+                select(AuditOutbox).where(
+                    AuditOutbox.payload["resource_id"].astext == str(matching[0].id),
+                    AuditOutbox.payload["action"].astext == "UPLOAD",
+                )
+            )).scalars().all()
+            assert len(audit_events) == 1
     finally:
         async with sessions() as cleanup:
+            await cleanup.execute(delete(AuditOutbox).where(
+                AuditOutbox.payload["details"].astext == f"Document uploaded: {filename}"
+            ))
             await cleanup.execute(delete(Document).where(
                 func.lower(func.btrim(Document.filename)) == filename.lower()
             ))
