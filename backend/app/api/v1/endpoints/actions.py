@@ -16,7 +16,7 @@ from app.models.iso_control_assessment import IsoControlAssessment
 from app.models.action_verification import ActionVerification
 from app.models.document import Document
 from app.models.user import User
-from app.services.security_logger import log_action
+from app.services.security_logger import enqueue_audit_event, log_action  # log_action retained for patch compatibility
 from app.services.action_lifecycle import validate_action_transition
 
 router = APIRouter(prefix="/actions", tags=["Plans d'Action"])
@@ -211,13 +211,14 @@ async def create_action(
     action_dict = data.model_dump(exclude={"risk_id", "iso_control_ref"})
     action = ActionItem(**action_dict, risk_id=data.risk_id)
     db.add(action)
-    await db.commit()
-    await db.refresh(action)
-    await log_action(
+    await enqueue_audit_event(
+        db,
         user_email=current_user.email, action="CREATE", resource="actions",
         resource_id=str(action.id), details=f"Action créée: {action.title}",
         event_type="GRC_ACTION", request=request,
     )
+    await db.commit()
+    await db.refresh(action)
     return action
 
 
@@ -267,13 +268,14 @@ async def verify_action_effectiveness(
         notes=data.notes,
     )
     db.add(verification)
-    await db.commit()
-    await db.refresh(verification)
-    await log_action(
+    await enqueue_audit_event(
+        db,
         user_email=current_user.email, action="VERIFY_EFFECTIVENESS", resource="action_verifications",
         resource_id=str(verification.id), details=f"Action {action.id}: {data.outcome}",
         event_type="GRC_ACTION", request=request,
     )
+    await db.commit()
+    await db.refresh(verification)
     return verification
 
 
@@ -344,13 +346,14 @@ async def update_action(
     for key, value in update_data.items():
         setattr(action, key, value)
         
-    await db.commit()
-    await db.refresh(action)
-    await log_action(
+    await enqueue_audit_event(
+        db,
         user_email=current_user.email, action="UPDATE", resource="actions",
         resource_id=str(action.id), details=f"Action mise à jour: {action.title}; statut={action.status.value if action.status else None}",
         event_type="GRC_ACTION", request=request,
     )
+    await db.commit()
+    await db.refresh(action)
     return action
 
 
@@ -373,9 +376,10 @@ async def delete_action(
     action_id_str = str(action.id)
     action_title = action.title
     await db.delete(action)
-    await db.commit()
-    await log_action(
+    await enqueue_audit_event(
+        db,
         user_email=current_user.email, action="DELETE", resource="actions",
         resource_id=action_id_str, details=f"Action supprimée: {action_title}",
         event_type="GRC_ACTION", request=request,
     )
+    await db.commit()
