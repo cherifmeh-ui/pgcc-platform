@@ -253,15 +253,12 @@ async def trigger_indexation(
     # Lancer l'indexation (Attention : Bloquant si gros volume, idéalement Celery/RQ)
     # Pour MVP Dev, on attend le résultat directement.
     try:
-        success = await rag_service.index_document(db, str(uid))
+        success = await rag_service.index_document(
+            db, str(uid), user_email=current_user.email, request=request
+        )
     except RuntimeError as exc:
         raise HTTPException(status_code=502, detail="Échec de l'indexation documentaire. Vérifiez le service d'embeddings.") from exc
     if success:
-        await log_action(
-            user_email=current_user.email, action="INDEX", resource="documents",
-            resource_id=str(uid), details=f"Document indexed: {doc.title}",
-            event_type="DOCUMENT", request=request,
-        )
         return {"message": f"Indexation réussie pour '{doc.title}'.", "status": "indexed"}
     else:
         raise HTTPException(status_code=500, detail="Échec partiel ou complet de l'indexation.")
