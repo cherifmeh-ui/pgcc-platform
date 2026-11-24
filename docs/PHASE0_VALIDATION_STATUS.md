@@ -679,3 +679,11 @@ Repository/static hardening is substantially progressed, but the remaining gates
 - The sole failure was `test_supplier_conflict_handlers_only_map_integrity_errors_to_http_409`: its hard-coded expected AST count was 27 while the actual parser inventory returned 20. This is a test expectation defect; no application test failure was reported in that run.
 - Corrected the expected count from 27 to the observed 20 in commit `1c86005`. Fresh CI for that correction is pending; no passing result is claimed.
 - Note: this CI run's checked-out PR merge ref predates the latest supplier changes captured in `475b8fd` only insofar as the merge commit combines the then-current PR head and base; validation must be repeated after the correction and on the updated PR head.
+
+## Documents and RAG — transactional audit hardening — 2026-11-24
+
+- Document upload and deletion now enqueue audit-outbox rows in the same AsyncSession before committing the document/chunk mutation. Unexpected failures roll back and propagate; IntegrityError is mapped to HTTP 409.
+- RAG indexing now accepts the authenticated actor/request context and enqueues the INDEX event in the same transaction that replaces chunks and sets `is_indexed`. The endpoint no longer performs a post-commit, independent `log_action` call.
+- Added source-level regression tests for upload, delete, rollback and RAG audit ordering in `backend/tests/test_document_audit_transactionality.py`.
+- Commits: `be532ff` (upload/delete), `83a3ae1` (RAG service), `7b0fe01` (endpoint integration), `420482f` (tests).
+- These tests are AST/source-structure checks. PostgreSQL runtime tests for audit-outbox failure rollback, concurrent delete-vs-index, and concurrent duplicate upload are still required. Fresh CI after the supplier assertion correction and these document changes has not yet been observed.
