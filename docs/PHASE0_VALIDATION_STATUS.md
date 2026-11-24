@@ -441,3 +441,13 @@ Repository/static hardening is substantially progressed, but the remaining gates
 - The endpoint explicitly checks `suppliers:manage_risks` and `risks:update`, with backend deny-by-default RBAC.
 - Document/RAG endpoint paths were not discoverable through the attempted GitHub search queries; review is deferred until exact file paths are identified.
 - CI #1608 for supplier state row-lock hardening (`ca0fb162`) passed. CI #1612 for supplier access expiration locking (`4d030a33`) was IN PROGRESS at last observation. No result claimed for the latter.
+
+
+## Current checkpoint — 2026-11-24
+
+- Branch: `chore/phase0-stabilization`.
+- HEAD before this correction: `70e2bbf6bb57c462f8d320ed824bf8edd98bdacb`.
+- PR #1: open, draft, not merged; base `main`.
+- GitHub Actions for that exact HEAD: Backend checks success; backend tests **268 passed, 1 skipped**; frontend Vite build success; PostgreSQL 16 integration job success (Alembic upgrade to head and refresh-token concurrency test: **1 passed**).
+- Static review identified broad database exception mapping in asset create/update/CSV import; only `IntegrityError` should become HTTP 409. Fix and regression tests are being added on this branch.
+- Remaining: relationship create/delete and asset retirement/deletion behavior require broader PostgreSQL-backed API integration tests; full clean Docker application stack, document/RAG ACL and audit durability remain unverified. Phase 0 is **not closed**.
