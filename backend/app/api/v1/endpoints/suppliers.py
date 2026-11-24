@@ -481,7 +481,7 @@ async def create_supplier_access_request(
     db: AsyncSession = Depends(get_db),
     current_user: User = require_permission("suppliers", "request_access"),
 ):
-    supplier_result = await db.execute(select(Supplier).where(Supplier.id == supplier_id, Supplier.archived_at.is_(None)))
+    supplier_result = await db.execute(select(Supplier).where(Supplier.id == supplier_id, Supplier.archived_at.is_(None)).with_for_update())
     supplier = supplier_result.scalar_one_or_none()
     if supplier is None:
         raise HTTPException(status_code=404, detail="Fournisseur introuvable ou archivé")
@@ -493,11 +493,11 @@ async def create_supplier_access_request(
         SupplierAssetLink.id == data.supplier_asset_link_id,
         SupplierAssetLink.supplier_id == supplier_id,
         SupplierAssetLink.status == "Actif",
-    ))
+    ).with_for_update())
     link = link_result.scalar_one_or_none()
     if link is None:
         raise HTTPException(status_code=404, detail="Relation fournisseur-actif active introuvable")
-    asset_result = await db.execute(select(Asset).where(Asset.id == link.asset_id))
+    asset_result = await db.execute(select(Asset).where(Asset.id == link.asset_id).with_for_update())
     asset = asset_result.scalar_one_or_none()
     if asset is None or not _asset_allows_supplier_access(asset.lifecycle_status, asset.retired_at):
         raise HTTPException(status_code=422, detail="L'actif n'est pas éligible à une nouvelle autorisation")
@@ -542,17 +542,17 @@ async def decide_supplier_access_request(
         raise HTTPException(status_code=409, detail="Cette demande a déjà été traitée")
     if access_request.requested_by_id == current_user.id:
         raise HTTPException(status_code=403, detail="Le demandeur ne peut pas approuver sa propre demande")
-    supplier_result = await db.execute(select(Supplier).where(Supplier.id == supplier_id, Supplier.archived_at.is_(None)))
+    supplier_result = await db.execute(select(Supplier).where(Supplier.id == supplier_id, Supplier.archived_at.is_(None)).with_for_update())
     supplier = supplier_result.scalar_one_or_none()
     link_result = await db.execute(select(SupplierAssetLink).where(
         SupplierAssetLink.id == access_request.supplier_asset_link_id,
         SupplierAssetLink.status == "Actif",
-    ))
+    ).with_for_update())
     link = link_result.scalar_one_or_none()
     if data.decision == "Approuvé":
         if supplier is None or supplier.status not in ("Approuvé", "Approuvé sous conditions") or link is None:
             raise HTTPException(status_code=422, detail="Le fournisseur ou la relation à l’actif n’est plus éligible")
-        asset_result = await db.execute(select(Asset).where(Asset.id == access_request.asset_id))
+        asset_result = await db.execute(select(Asset).where(Asset.id == access_request.asset_id).with_for_update())
         asset = asset_result.scalar_one_or_none()
         if asset is None or not _asset_allows_supplier_access(asset.lifecycle_status, asset.retired_at):
             raise HTTPException(status_code=422, detail="L'actif n'est plus éligible à une autorisation d'accès")
@@ -845,10 +845,15 @@ async def terminate_supplier_asset_link(
     db: AsyncSession = Depends(get_db),
     current_user: User = require_permission("suppliers", "manage_assets"),
 ):
+    supplier_lock = await db.execute(
+        select(Supplier.id).where(Supplier.id == supplier_id).with_for_update()
+    )
+    if supplier_lock.scalar_one_or_none() is None:
+        raise HTTPException(status_code=404, detail="Fournisseur introuvable")
     result = await db.execute(select(SupplierAssetLink).where(
         SupplierAssetLink.id == link_id,
         SupplierAssetLink.supplier_id == supplier_id,
-    ))
+    ).with_for_update())
     link = result.scalar_one_or_none()
     if link is None:
         raise HTTPException(status_code=404, detail="Relation fournisseur-actif introuvable")
