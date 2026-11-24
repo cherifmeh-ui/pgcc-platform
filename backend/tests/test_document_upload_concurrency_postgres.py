@@ -89,3 +89,47 @@ async def test_concurrent_uploads_with_same_filename_return_one_conflict(monkeyp
             ))
             await cleanup.commit()
         await engine.dispose()
+
+@pytest.mark.asyncio
+async def test_upload_rolls_back_document_when_audit_outbox_enqueue_fails(monkeypatch):
+    engine = create_async_engine(DATABASE_URL, pool_size=2, max_overflow=0)
+    sessions = async_sessionmaker(engine, expire_on_commit=False)
+    filename = f"phase0-audit-failure-{uuid4().hex}.pdf"
+
+    monkeypatch.setattr(
+        "app.api.v1.endpoints.documents.DocumentExtractor.extract_text",
+        lambda _contents, _filename: ("safe extracted text", "PDF"),
+    )
+    monkeypatch.setattr(
+        "app.api.v1.endpoints.documents.enqueue_audit_event",
+        AsyncMock(side_effect=RuntimeError("simulated outbox failure")),
+    )
+
+    try:
+        async with sessions() as db:
+            with pytest.raises(RuntimeError, match="simulated outbox failure"):
+                await upload_document(
+                    request=Request({
+                        "type": "http", "method": "POST", "path": "/documents/upload",
+                        "headers": [], "client": ("127.0.0.1", 1234),
+                        "server": ("test", 80), "scheme": "http", "query_string": b"",
+                    }),
+                    file=UploadFile(filename=filename, file=BytesIO(b"%PDF-test")),
+                    title="Audit rollback test",
+                    doc_type="PSSI",
+                    version=None,
+                    author=None,
+                    db=db,
+                    current_user=MagicMock(email="phase0@example.invalid"),
+                )
+
+        async with sessions() as verify:
+            matching = (await verify.execute(
+                select(Document).where(Document.filename == filename)
+            )).scalars().all()
+            assert matching == []
+    finally:
+        async with sessions() as cleanup:
+            await cleanup.execute(delete(Document).where(Document.filename == filename))
+            await cleanup.commit()
+        await engine.dispose()
