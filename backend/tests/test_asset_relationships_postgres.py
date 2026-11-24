@@ -12,6 +12,7 @@ from sqlalchemy.ext.asyncio import async_sessionmaker, create_async_engine
 from unittest.mock import AsyncMock, MagicMock
 
 from app.api.v1.endpoints.assets import RelationshipCreate, create_asset_relationship
+from app.models.action_item import ActionItem  # register Risk.actions mapper target before ORM use
 from app.models.asset import Asset, AssetRelationship
 
 DATABASE_URL = os.getenv("PGCC_INTEGRATION_DATABASE_URL")
