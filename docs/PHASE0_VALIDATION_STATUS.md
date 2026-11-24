@@ -529,3 +529,14 @@ Repository/static hardening is substantially progressed, but the remaining gates
 - Migration checks for pre-existing duplicates and stops with a remediation message rather than silently deleting or renaming data.
 - Upload endpoint returns HTTP 409 for concurrent uniqueness conflicts after transaction rollback.
 - Added static migration test and PostgreSQL concurrency test to CI. Validation pending; Phase 0 remains open.
+
+
+## Verified CI checkpoint — 2026-11-24
+
+- Branch: `chore/phase0-stabilization`; HEAD: `526193721d68af4edd9c1cc4128a80999b0c6394`.
+- PR #1 remains open, Draft, unmerged.
+- GitHub Actions runs `45463003965` and `45463014164` completed successfully on this HEAD.
+- Backend: **280 passed, 6 skipped**, 9 warnings.
+- PostgreSQL 16: **6 passed**. Alembic applied all revisions through `0022_document_filename_unique`.
+- Frontend build: passed.
+- Phase 0 remains open; this is not a production-readiness or full-security sign-off.

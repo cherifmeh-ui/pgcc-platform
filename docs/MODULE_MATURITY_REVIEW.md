@@ -558,3 +558,12 @@ Status: targeted code review recorded; additional runtime/API tests remain requi
 - Upload now performs a normalized pre-check and translates the database uniqueness conflict into HTTP 409 after rollback.
 - Added migration integrity coverage and a PostgreSQL concurrency test that synchronizes two uploads after their pre-checks and expects exactly one 201 and one 409.
 - CI validation pending on the new HEAD.
+
+
+### CI validation addendum — 2026-11-24 — HEAD `526193721d68af4edd9c1cc4128a80999b0c6394`
+
+- Backend: **280 passed, 6 skipped**, 9 warnings.
+- PostgreSQL 16: **6 passed**, including Alembic upgrade through `0022_document_filename_unique`, supplier access/link lifecycle concurrency, document index/delete serialization and concurrent duplicate uploads.
+- Frontend: build passed.
+- The database log records the expected losing insert's unique-index violation during the duplicate-upload race; the endpoint translated it into HTTP 409, and the test confirmed one document persisted.
+- These checks validate the listed CI paths only; document-level ACL policy, malware scanning/parser sandboxing, full deployment and audit durability remain open.
