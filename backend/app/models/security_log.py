@@ -14,6 +14,7 @@ def utcnow():
 
 class SecurityLog(Base):
     __tablename__ = "security_logs"
+    # PostgreSQL migration 0023 enforces append-only semantics for UPDATE/DELETE/TRUNCATE.
 
     id = Column(UUID(as_uuid=True), primary_key=True, default=uuid.uuid4)
     timestamp = Column(DateTime(timezone=True), default=utcnow, index=True)

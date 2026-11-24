@@ -567,3 +567,13 @@ Status: targeted code review recorded; additional runtime/API tests remain requi
 - Frontend: build passed.
 - The database log records the expected losing insert's unique-index violation during the duplicate-upload race; the endpoint translated it into HTTP 409, and the test confirmed one document persisted.
 - These checks validate the listed CI paths only; document-level ACL policy, malware scanning/parser sandboxing, full deployment and audit durability remain open.
+
+
+### Security audit log append-only protection — 2026-11-24
+
+- Source review confirmed `log_action()` is best-effort and swallows persistence errors; the `security_logs` table had no SQL-level protection against UPDATE, DELETE or TRUNCATE.
+- Added migration `0023_security_logs_append_only` with PostgreSQL triggers rejecting those mutation operations using SQLSTATE 55000. Inserts remain permitted.
+- Added PostgreSQL integration coverage proving UPDATE and DELETE are rejected and the original row remains unchanged. The test rolls back its outer transaction and leaves no test record.
+- Boundary: a database owner/superuser can still disable/drop triggers or alter the schema. This is append-only protection against ordinary application SQL, not cryptographic tamper-proof storage.
+- Remaining control gap: `log_action()` still fails open; mutation handlers may succeed when audit persistence fails. A durable out-of-band sink or an explicitly designed transactional/fail-closed audit policy is still required before claiming audit completeness.
+- CI validation pending on the new HEAD.

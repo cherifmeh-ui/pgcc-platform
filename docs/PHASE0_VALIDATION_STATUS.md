@@ -540,3 +540,11 @@ Repository/static hardening is substantially progressed, but the remaining gates
 - PostgreSQL 16: **6 passed**. Alembic applied all revisions through `0022_document_filename_unique`.
 - Frontend build: passed.
 - Phase 0 remains open; this is not a production-readiness or full-security sign-off.
+
+
+## Security audit log append-only guard — 2026-11-24
+
+- Added Alembic migration `0023_security_logs_append_only`: PostgreSQL triggers reject UPDATE, DELETE and TRUNCATE on `security_logs`.
+- Added PostgreSQL integration test for UPDATE/DELETE rejection and unchanged evidence.
+- Scope limitation: privileged database owners can bypass/drop triggers; this is not cryptographic tamper-proofing. Audit writes remain best-effort because `log_action()` swallows failures; durable fail-closed/out-of-band audit delivery remains open.
+- PostgreSQL and backend CI validation pending; Phase 0 remains open.

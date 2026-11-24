@@ -350,3 +350,15 @@ def test_document_filename_unique_migration_matches_model_and_guards_duplicates(
     assert "postgresql_where" in model_source
     assert "btrim(filename)" in model_source
     assert "op.drop_index" in migration_source
+
+
+def test_security_log_append_only_migration_has_mutation_guards():
+    migration = MIGRATIONS_DIR / "0023_security_logs_append_only.py"
+    source = migration.read_text(encoding="utf-8")
+    assert 'revision = "0023_security_logs_append_only"' in source
+    assert 'down_revision = "0022_document_filename_unique"' in source
+    assert "BEFORE UPDATE OR DELETE ON security_logs" in source
+    assert "BEFORE TRUNCATE ON security_logs" in source
+    assert "ERRCODE = '55000'" in source
+    assert "DROP TRIGGER IF EXISTS" in source
+    assert "DROP FUNCTION IF EXISTS" in source
