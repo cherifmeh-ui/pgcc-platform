@@ -8,7 +8,7 @@ from unittest.mock import AsyncMock, MagicMock
 from uuid import uuid4
 
 import pytest
-from fastapi import HTTPException
+from fastapi import HTTPException, Request
 from sqlalchemy import delete, select
 from sqlalchemy.ext.asyncio import async_sessionmaker, create_async_engine
 
@@ -23,6 +23,19 @@ from app.api.v1.endpoints.suppliers import (
 )
 
 DATABASE_URL = os.getenv("PGCC_INTEGRATION_DATABASE_URL")
+
+
+def _request():
+    return Request({
+        "type": "http",
+        "method": "POST",
+        "path": "/phase0-supplier-test",
+        "headers": [(b"user-agent", b"phase0-supplier-postgres-test")],
+        "client": ("127.0.0.1", 12345),
+        "server": ("localhost", 80),
+        "scheme": "http",
+        "query_string": b"",
+    })
 
 pytestmark = pytest.mark.skipif(
     not DATABASE_URL,
@@ -58,7 +71,6 @@ async def test_access_request_creation_and_link_termination_are_serialized(monke
         asset_type="hardware",
         lifecycle_status="Actif",
     )
-    monkeypatch.setattr("app.api.v1.endpoints.suppliers.log_action", AsyncMock())
 
     link = None
     try:
@@ -100,7 +112,7 @@ async def test_access_request_creation_and_link_termination_are_serialized(monke
                     await create_supplier_access_request(
                         supplier_id=supplier.id,
                         data=request_data,
-                        request=MagicMock(),
+                        request=_request(),
                         db=db,
                         current_user=MagicMock(id=user_id, email=user.email),
                     )
@@ -114,7 +126,7 @@ async def test_access_request_creation_and_link_termination_are_serialized(monke
                     await terminate_supplier_asset_link(
                         supplier_id=supplier.id,
                         link_id=link.id,
-                        request=MagicMock(),
+                        request=_request(),
                         db=db,
                         current_user=MagicMock(id=user_id, email=user.email),
                     )
