@@ -615,3 +615,13 @@ Repository/static hardening is substantially progressed, but the remaining gates
 - Run 45474317861: frontend passed; PostgreSQL integration passed (including migrations and supplier access concurrency); backend had one failing static AST assertion because the expected number of supplier IntegrityError/Exception handler pairs had not been updated for the new transactional handler.
 - Updated the static test expectation from 7 to 8 matching handlers. Commit efc6d8b40631afeb0540a7f7c3133864d8ff2713.
 - A new CI run for the latest commit has not yet been observed. Supplier decision/review/revocation operations remain to be migrated. Phase 0 remains open.
+
+
+## Supplier access lifecycle transactionality — 2026-11-24
+
+- The previous HEAD CI run 45476795405 passed: backend 283 passed / 9 skipped, PostgreSQL integration 9 passed after applying migrations through 0024, frontend build passed.
+- CI logs exposed RuntimeWarnings for unawaited AsyncMock coroutines in asset relationship/audit tests and a SQLAlchemy document_chunks row-count warning. These warnings remain follow-up items; the green run does not establish that they are fixed.
+- Migrated supplier access decision, periodic review, explicit revocation, and expiration endpoints to enqueue audit events in the same AsyncSession before commit; all branches roll back and re-raise unexpected failures, and IntegrityError maps to HTTP 409.
+- Added a static source-order test covering the four lifecycle handlers. The test asserts audit enqueue precedes commit.
+- Latest code/test commits: ee12644, 9947204, 55db138. A new CI run for the latest HEAD has not yet been observed.
+- Supplier risk-link and supplier-asset link create/terminate operations still use post-commit log_action and remain to migrate. Phase 0 remains open.
