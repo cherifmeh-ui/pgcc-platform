@@ -15,7 +15,7 @@ from app.models.supplier import SupplierRiskLink
 from app.models.action_item import ActionItem
 from app.models.user import User
 from app.schemas.risk import RiskCreate, RiskResponse, RiskUpdate
-from app.services.security_logger import log_action
+from app.services.security_logger import enqueue_audit_event
 from app.services.risk_scoring import calculate_risk_level
 from app.utils.rbac import role_has_permission
 
@@ -88,10 +88,8 @@ async def create_risk(
 
     new_risk = Risk(**data)
     db.add(new_risk)
-    await db.commit()
-    await db.refresh(new_risk)
-
-    await log_action(
+    await enqueue_audit_event(
+        db,
         user_email=current_user.email,
         action="CREATE",
         resource="risks",
@@ -99,6 +97,8 @@ async def create_risk(
         details=f"Risque créé: {new_risk.title} (Niveau: {new_risk.risk_level})",
         request=request,
     )
+    await db.commit()
+    await db.refresh(new_risk)
 
     return RiskResponse(
         id=new_risk.id,
@@ -160,10 +160,8 @@ async def update_risk(
     for field, value in update_data.items():
         setattr(risk, field, value)
 
-    await db.commit()
-    await db.refresh(risk)
-
-    await log_action(
+    await enqueue_audit_event(
+        db,
         user_email=current_user.email,
         action="UPDATE",
         resource="risks",
@@ -171,6 +169,8 @@ async def update_risk(
         details=f"Risque modifié: {risk.title}",
         request=request,
     )
+    await db.commit()
+    await db.refresh(risk)
 
     return RiskResponse(
         id=risk.id,
@@ -238,9 +238,8 @@ async def delete_risk(
         )
 
     await db.delete(risk)
-    await db.commit()
-
-    await log_action(
+    await enqueue_audit_event(
+        db,
         user_email=current_user.email,
         action="DELETE",
         resource="risks",
@@ -248,6 +247,7 @@ async def delete_risk(
         details=f"Risque supprimé: {risk_title}",
         request=request,
     )
+    await db.commit()
 
     return {"message": f"Risque {risk_ref} supprimé"}
 

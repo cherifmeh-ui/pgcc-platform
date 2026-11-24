@@ -576,3 +576,12 @@ Repository/static hardening is substantially progressed, but the remaining gates
 - Frontend build: passed.
 - Two initial static-test assertion mismatches were corrected; final CI is green.
 - Limitation remains: business transactions and audit outbox enqueue are not yet atomic for all existing endpoints. Phase 0 remains open.
+
+
+## Transactional audit enqueue — first business slice — 2026-11-24
+
+- Added a caller-session audit enqueue helper without an internal commit.
+- Risk create/update/delete now write the outbox event in the same transaction as the risk mutation.
+- Added PostgreSQL test coverage asserting rollback removes the outbox row and commit preserves it.
+- Other endpoint families have not yet been migrated; Phase 0 remains open.
+- CI validation pending.

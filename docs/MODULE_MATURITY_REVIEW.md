@@ -605,3 +605,13 @@ Status: targeted code review recorded; additional runtime/API tests remain requi
 - Frontend build passed.
 - The first CI attempts exposed two overly literal static-test assertions (`CREATE TABLE` / `DROP TABLE` rather than SQLAlchemy Alembic operation calls). Both assertions were corrected to check `op.create_table(` and `op.drop_table(`; the final HEAD is green.
 - Outbox delivery is durable after enqueue and idempotent. Existing business operations still commit before calling `log_action()`; this does not yet guarantee atomic coupling of business writes and audit outbox records.
+
+
+### Transactional audit enqueue — first business slice — 2026-11-24
+
+- Added `enqueue_audit_event(session, ...)`, which flushes an outbox row into a caller-owned SQLAlchemy transaction without committing.
+- Refactored risk create, update and delete so their audit outbox rows are added before the business transaction commits. A rollback now removes both the business mutation and the audit event; a successful commit persists both.
+- The existing `log_action()` API remains backward-compatible for call sites not yet migrated.
+- Added PostgreSQL integration coverage for same-transaction commit and rollback behavior. The test is included in the existing outbox integration suite.
+- Scope is intentionally limited to the risk CRUD vertical slice. Actions, documents, suppliers, assets and authentication still require migration to the same transaction boundary.
+- CI validation pending.

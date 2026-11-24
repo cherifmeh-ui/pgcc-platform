@@ -9,6 +9,7 @@ from uuid import UUID
 
 from fastapi import Request
 from sqlalchemy import select, update
+from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.core.database import AsyncSessionLocal
 from app.models.audit_outbox import AuditOutbox
@@ -142,6 +143,39 @@ async def deliver_pending_audit_events(
     return delivered
 
 
+async def enqueue_audit_event(
+    session: AsyncSession,
+    *,
+    user_email: Optional[str],
+    action: str,
+    resource: Optional[str] = None,
+    resource_id: Optional[str] = None,
+    details: Optional[str] = None,
+    event_type: Optional[str] = None,
+    ip_address: Optional[str] = None,
+    request: Optional[Request] = None,
+) -> UUID:
+    """Add an audit event to the caller's transaction without committing it.
+
+    The business mutation and outbox row therefore commit or roll back together.
+    Delivery is left to the background worker after the transaction commits.
+    """
+    payload = _build_payload(
+        user_email=user_email,
+        action=action,
+        resource=resource,
+        resource_id=resource_id,
+        details=details,
+        event_type=event_type,
+        ip_address=ip_address or get_client_ip(request),
+        user_agent=get_user_agent(request),
+    )
+    event = AuditOutbox(payload=payload)
+    session.add(event)
+    await session.flush()
+    return event.id
+
+
 async def log_action(
     user_email: Optional[str],
     action: str,
@@ -157,27 +191,25 @@ async def log_action(
     Failure to deliver to security_logs leaves the committed outbox row pending.
     Failure to commit the outbox itself is surfaced to the caller.
     """
-    payload = _build_payload(
-        user_email=user_email,
-        action=action,
-        resource=resource,
-        resource_id=resource_id,
-        details=details,
-        event_type=event_type,
-        ip_address=ip_address or get_client_ip(request),
-        user_agent=get_user_agent(request),
-    )
     async with AsyncSessionLocal() as session:
-        event = AuditOutbox(payload=payload)
-        session.add(event)
         try:
+            event_id = await enqueue_audit_event(
+                session,
+                user_email=user_email,
+                action=action,
+                resource=resource,
+                resource_id=resource_id,
+                details=details,
+                event_type=event_type,
+                ip_address=ip_address,
+                request=request,
+            )
             await session.commit()
-            event_id = event.id
         except Exception as exc:
             await session.rollback()
             logger.exception(
-                "Audit outbox persistence failed (event_type=%s, resource=%s, action=%s)",
-                payload["event_type"], payload["resource"], payload["action"],
+                "Audit outbox persistence failed (resource=%s, action=%s)",
+                resource, action,
             )
             raise AuditOutboxPersistenceError(
                 "Audit event could not be durably queued"
