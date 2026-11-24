@@ -22,6 +22,7 @@ def _active_asset_rows():
 
 def _db_for_relationship_create(*, graph_edges=None, commit_error=None):
     db = AsyncMock()
+    db.add = MagicMock()
     advisory_lock_result = MagicMock()
     endpoint_result = MagicMock()
     endpoint_result.all.return_value = _active_asset_rows()
@@ -100,6 +101,7 @@ async def test_delete_relationship_rolls_back_and_propagates_commit_error():
     result = MagicMock()
     result.scalar_one_or_none.return_value = relationship
     db.execute.return_value = result
+    db.add = MagicMock()
     db.commit.side_effect = RuntimeError("database unavailable")
 
     with pytest.raises(RuntimeError, match="database unavailable"):
