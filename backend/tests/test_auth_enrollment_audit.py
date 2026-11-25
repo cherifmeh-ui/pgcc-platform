@@ -7,6 +7,7 @@ from app.services.mfa_encryption import MFA_SECRET_PREFIX, get_mfa_secret
 
 @pytest.mark.asyncio
 async def test_enrollment_audit_precedes_commit(monkeypatch):
+    monkeypatch.setattr(auth_endpoint, "enforce_auth_rate_limit", AsyncMock())
     user = MagicMock(
         id="user-123", email="enrollment@example.test", mfa_enabled=False,
         is_active=True, mfa_secret=None,
@@ -38,6 +39,7 @@ async def test_enrollment_audit_precedes_commit(monkeypatch):
 
 @pytest.mark.asyncio
 async def test_enrollment_rolls_back_when_audit_fails(monkeypatch):
+    monkeypatch.setattr(auth_endpoint, "enforce_auth_rate_limit", AsyncMock())
     user = MagicMock(
         id="user-456", email="enrollment-failure@example.test", mfa_enabled=False,
         is_active=True, mfa_secret=None,
@@ -62,6 +64,7 @@ async def test_enrollment_rolls_back_when_audit_fails(monkeypatch):
 
 @pytest.mark.asyncio
 async def test_mfa_enrollment_token_uses_bumped_auth_version(monkeypatch):
+    monkeypatch.setattr(auth_endpoint, "enforce_auth_rate_limit", AsyncMock())
     from fastapi import Response
 
     user = MagicMock(
