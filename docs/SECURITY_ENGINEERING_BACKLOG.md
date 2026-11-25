@@ -184,3 +184,15 @@ Status: active engineering review. This is a static review backlog, not a securi
 
 - `0001_initial.py` calls `Base.metadata.create_all()` rather than declaring an immutable initial schema. This is convenient for fresh development databases but is not a reproducible migration: its behavior changes with model metadata and cannot reliably describe schema drift.
 - Keep this baseline only for controlled fresh-install use until a schema snapshot is generated and reviewed. For existing installations, compare the live schema, back up, and stamp only after equivalence is confirmed. Subsequent migrations must be explicit Alembic operations; do not edit the initial migration after it has been applied.
+
+
+## Auth session transaction follow-up (2026-11-25)
+
+- [x] Enqueue PASSWORD_CHANGED in the same transaction as password update, old-session revocation and new refresh-session creation.
+- [x] Lock the user row during MFA enrollment start and enqueue MFA_ENROLLMENT_STARTED atomically with the pending MFA secret.
+- [x] Enqueue MFA_SUCCESS_PASSWORD_CHANGE_REQUIRED and MFA_ENROLLED_AND_LOGIN_SUCCESS with their user/session state changes.
+- [x] Add unit tests for password-change audit ordering and rollback, plus MFA enrollment audit ordering and rollback.
+- [ ] Add a supported administrator account/role/MFA lifecycle endpoint or service and revoke persisted refresh sessions transactionally on those changes.
+- [ ] Encrypt MFA secrets with a managed key, add key rotation and MFA reset/recovery workflow.
+- [ ] Add distributed rate limiting and complete frontend token-storage/CSRF review.
+- [ ] Run the new auth tests in CI; latest branch head currently has no associated PR workflow result returned.
