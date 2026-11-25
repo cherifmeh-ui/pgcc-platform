@@ -443,7 +443,7 @@ def test_document_acl_migration_adds_owner_department_and_restrictive_fk():
     assert 'ondelete="RESTRICT"' in source
     assert "ix_documents_owner_id" in source
     assert "ix_documents_department" in source
-    assert 'ForeignKey("users.id", ondelete="RESTRICT")' in model
+    assert 'ForeignKey("users.id", ondelete="RESTRICT", name="fk_documents_owner_id_users")' in model
     assert "owner_id" in model and "department" in model
     assert "document" in env_source
     assert "op.drop_column" in source
