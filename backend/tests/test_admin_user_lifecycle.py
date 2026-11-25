@@ -95,7 +95,7 @@ def test_admin_user_routes_are_registered_and_protected_by_users_manage():
     assert "admin_users_router" in router_source
     assert 'prefix="/admin/users"' in endpoint_source
     assert endpoint_source.count('require_permission("users", "manage")') == 5
-    assert '"users"' in PERMISSIONS
+    assert "users" in PERMISSIONS
 
 
 def test_mutating_admin_routes_revalidate_actor_under_row_locks():
