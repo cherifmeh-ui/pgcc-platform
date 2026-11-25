@@ -123,3 +123,12 @@ Le baseline `0001_initial` appelle `Base.metadata.create_all()` à partir d'un e
 - Fresh PostgreSQL 16 database migrated from baseline through Alembic head 0024_audit_outbox.
 - Includes refresh-cookie rotation/replay, supplier lifecycle, asset relationship integrity, document/RAG delete/index race, document classification ACL, encrypted MFA secret persistence/startup validation, upload uniqueness, append-only security log and audit outbox.
 - Legacy production revision upgrade, downgrade, schema drift comparison and backup/restore remain untested against the target environment.
+
+## Intégrité SHA-256 des originaux — 2026-11-25
+
+- Ajout du champ nullable `documents.file_sha256` et de la révision Alembic `0027_document_file_sha256`, chaînée après `0026_auth_rate_limit_buckets`.
+- La migration calcule le SHA-256 des binaires historiques par lots bornés de 100 lignes et vérifie qu'aucun binaire existant ne reste sans empreinte de 64 caractères. Les lignes sans fichier original conservent une empreinte NULL.
+- Les nouveaux uploads calculent et enregistrent l'empreinte SHA-256 au moment de la persistance.
+- Le téléchargement recalcule l'empreinte et compare en temps constant ; il refuse le fichier avec HTTP 409 si l'empreinte manque ou ne correspond pas.
+- Tests unitaires ajoutés pour empreinte correcte, altération du binaire et données manquantes ; test statique ajouté pour le chaînage et le backfill de migration.
+- À valider en CI : upgrade PostgreSQL propre jusqu'à 0027, backfill sur documents historiques, rollback, et comportement HTTP du téléchargement en cas d'altération. Aucun résultat de test n'est présumé avant le workflow.
