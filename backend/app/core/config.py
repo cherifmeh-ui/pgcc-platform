@@ -48,6 +48,11 @@ class Settings(BaseSettings):
     AUTH_RATE_LIMIT_HMAC_KEY: str = ""
     AUTH_TRUSTED_PROXY_IPS: str = ""
 
+    # --- Antivirus (ClamAV) ---
+    CLAMAV_HOST: str = ""
+    CLAMAV_PORT: int = 3310
+    CLAMAV_TIMEOUT_SECONDS: int = 30
+
     # --- CORS ---
     CORS_ORIGINS: str = "http://localhost:5173,http://localhost:3000"
 
@@ -120,6 +125,13 @@ class Settings(BaseSettings):
                 raise ValueError("CORS wildcard interdit en production.")
             if self.JWT_ALGORITHM == "HS256" and self.JWT_SECRET.startswith("CHANGE_ME"):
                 raise ValueError("JWT_SECRET placeholder interdit en production.")
+
+        if self.CLAMAV_PORT < 1 or self.CLAMAV_PORT > 65535:
+            raise ValueError("CLAMAV_PORT doit être compris entre 1 et 65535.")
+        if self.CLAMAV_TIMEOUT_SECONDS < 1 or self.CLAMAV_TIMEOUT_SECONDS > 300:
+            raise ValueError("CLAMAV_TIMEOUT_SECONDS doit être compris entre 1 et 300.")
+        if self.ENVIRONMENT.lower() != "development" and not self.CLAMAV_HOST.strip():
+            raise ValueError("CLAMAV_HOST est obligatoire hors développement : upload bloqué sans antivirus.")
 
         if self.ENVIRONMENT.lower() != "development":
             if not self.mfa_encryption_keys:
