@@ -1,6 +1,6 @@
 # backend/app/api/v1/endpoints/actions.py
 from fastapi import APIRouter, Depends, HTTPException, status, Query, Request
-from pydantic import BaseModel, Field, field_validator
+from pydantic import BaseModel, ConfigDict, Field, field_validator
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy import select, and_
 from typing import List, Optional
@@ -76,8 +76,7 @@ class ActionResponse(ActionBase):
     created_at: datetime
     updated_at: datetime
     
-    class Config:
-        from_attributes = True
+    model_config = ConfigDict(from_attributes=True)
 
 class ActionVerificationCreate(BaseModel):
     outcome: str
@@ -109,8 +108,7 @@ class ActionVerificationResponse(BaseModel):
     notes: str
     verified_at: datetime
 
-    class Config:
-        from_attributes = True
+    model_config = ConfigDict(from_attributes=True)
 
 
 # --- ENDPOINTS CRUD ---
