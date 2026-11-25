@@ -111,3 +111,38 @@ async def test_unlink_asset_risk_rolls_back_if_audit_enqueue_fails(monkeypatch):
     db.flush.assert_awaited_once()
     db.rollback.assert_awaited_once()
     db.commit.assert_not_awaited()
+
+@pytest.mark.asyncio
+async def test_link_asset_risk_rolls_back_if_audit_enqueue_fails(monkeypatch):
+    from app.api.v1.endpoints.assets import AssetRiskLinkCreate, link_asset_to_risk
+
+    asset = MagicMock(
+        id=ASSET_ID, reference="AST-004", lifecycle_status="Actif",
+        retired_at=None,
+    )
+    risk = MagicMock(id=RISK_ID, ref="RISK-004")
+    asset_result = MagicMock()
+    asset_result.scalar_one_or_none.return_value = asset
+    risk_result = MagicMock()
+    risk_result.scalar_one_or_none.return_value = risk
+
+    db = AsyncMock()
+    db.add = MagicMock()
+    db.execute.side_effect = [asset_result, risk_result]
+    audit = AsyncMock(side_effect=RuntimeError("outbox unavailable"))
+    monkeypatch.setattr("app.api.v1.endpoints.assets.enqueue_audit_event", audit)
+
+    with pytest.raises(RuntimeError, match="outbox unavailable"):
+        await link_asset_to_risk(
+            asset_id=ASSET_ID,
+            data=AssetRiskLinkCreate(risk_id=RISK_ID),
+            request=MagicMock(),
+            db=db,
+            current_user=MagicMock(role="admin", email="admin@example.test"),
+        )
+
+    db.add.assert_called_once()
+    db.flush.assert_awaited_once()
+    db.rollback.assert_awaited_once()
+    db.commit.assert_not_awaited()
+
