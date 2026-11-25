@@ -76,6 +76,9 @@ services:
     depends_on:
       postgres:
         condition: service_healthy
+      clamav:
+        condition: service_healthy
+        required: false
     extra_hosts:
       # Permet au conteneur Docker d'accéder à localhost:11434 de Windows/Mac/Linux Hôte
       - "host.docker.internal:host-gateway"
