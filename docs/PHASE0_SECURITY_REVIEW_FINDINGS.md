@@ -235,3 +235,5 @@ Do not close Phase 0 until evidence is attached for:
 - Les nouveaux uploads calculent SHA-256 avant persistance. Le téléchargement recalcule et compare l'empreinte en temps constant ; une absence ou altération bloque la livraison (HTTP 409).
 - Tests unitaires couvrent digest valide, binaire modifié et métadonnées manquantes ; un test statique vérifie le chaînage de migration et le backfill.
 - À confirmer par CI PostgreSQL : upgrade propre jusqu'à 0027, backfill d'une ligne historique, contrôle du digest, downgrade sur base jetable. Les contrôles antivirus et sandbox restent absents et distincts de SHA-256.
+
+- Le job PostgreSQL CI crée maintenant un document historique sans empreinte avant la migration 0027, vérifie le SHA-256 backfillé par comparaison indépendante, puis répète le contrôle après downgrade/re-upgrade. Le test d'accès PostgreSQL modifie le binaire sans modifier son digest et vérifie le blocage HTTP 409. Ces contrôles attendent encore un workflow vert sur le HEAD courant.
