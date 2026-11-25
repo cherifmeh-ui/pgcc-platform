@@ -113,7 +113,7 @@ def _clear_refresh_cookie(response: Response) -> None:
         key=REFRESH_COOKIE_NAME,
         path=REFRESH_COOKIE_PATH,
         httponly=True,
-        secure=settings.ENVIRONMENT.lower() == "production",
+        secure=settings.ENVIRONMENT.lower() != "development",
         samesite="strict",
     )
 
