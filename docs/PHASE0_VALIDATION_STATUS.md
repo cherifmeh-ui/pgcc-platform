@@ -998,3 +998,15 @@ Repository/static hardening is substantially progressed, but the remaining gates
 - La revue des documents et l'issue #3 consignent les risques résiduels : absence d'antivirus/quarantaine, absence de sandbox de parsing, indexation synchrone et absence de workflow de validation des preuves.
 - Les issues #2, #3 et #5 ont reçu un état d'avancement détaillé. Les critères de revue humaine, de sauvegarde réelle/RPO-RTO et de configuration de production restent ouverts.
 - La PR #1 reste ouverte, en brouillon, non fusionnée vers `main`. **Phase 0 reste ouverte.**
+
+
+## Point de contrôle — 2026-11-25 (cohérence du cycle de vie des actifs)
+
+- Le run GitHub Actions `45588465409` est entièrement **vert** sur le HEAD `9f1c5903e5944c848fbca08139910539a229bcec`.
+- Backend : **385 réussites, 32 tests ignorés** ; PostgreSQL : **32 tests d'intégration réussis** ; frontend et Docker Compose smoke réussis.
+- Revue Cartographie : correction d'un état incohérent où un actif pouvait porter un `retired_at` sans statut `Retiré`/`Décommissionné`. La route de retrait aligne désormais les deux champs et reste idempotente si l'état est déjà cohérent.
+- Les mutations de retrait et de liaison/déliaison actif-risque effectuent maintenant un `flush` avant l'audit et un rollback explicite si l'enqueue d'audit échoue.
+- Tests unitaires : cohérence du statut, idempotence et rollback en cas d'échec d'audit. Tests PostgreSQL : commit atomique du retrait et de l'événement d'audit, puis rollback complet lorsque l'enqueue échoue.
+- Le job PostgreSQL CI a été corrigé pour inclure explicitement `backend/tests/test_asset_lifecycle_postgres.py` ; les deux tests PostgreSQL de retrait sont inclus dans les 32 réussites.
+- Ces résultats renforcent le cycle de vie des actifs ; la revue métier des règles de réactivation, des relations historiques conservées après retrait et des droits de suppression logique reste à confirmer.
+- **Phase 0 reste ouverte** : sauvegarde réelle/RPO-RTO, revue humaine, ACL documentaires plus fines, antivirus/isolation du parsing, configuration de production et revue complète du diff restent requis.
