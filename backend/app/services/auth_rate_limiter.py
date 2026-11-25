@@ -82,7 +82,7 @@ def get_source_ip(request: Request) -> str:
     for address in reversed([*chain, peer_ip]):
         if not any(address in network for network in trusted_networks):
             return str(address)
-    return str(chain[0]) if chain else str(peer_ip)
+    return str(peer_ip)
 
 
 def rate_limit_bucket_key(scope: str, identity: str) -> str:
