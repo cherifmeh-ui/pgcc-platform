@@ -298,3 +298,102 @@ async def test_refresh_rolls_back_rotation_if_audit_enqueue_fails(monkeypatch):
             )
             await cleanup.commit()
         await engine.dispose()
+
+@pytest.mark.asyncio
+@pytest.mark.parametrize(
+    ("stored_role", "stored_mfa_enabled", "stored_confirmed_at", "token_role", "token_mfa_enabled", "token_confirmed_at"),
+    [
+        ("admin", True, datetime.now(timezone.utc), "viewer", True, None),
+        ("viewer", False, None, "viewer", True, int(datetime.now(timezone.utc).timestamp())),
+    ],
+    ids=["role-changed", "mfa-reset"],
+)
+async def test_refresh_revokes_sessions_after_role_or_mfa_policy_change(
+    monkeypatch,
+    stored_role,
+    stored_mfa_enabled,
+    stored_confirmed_at,
+    token_role,
+    token_mfa_enabled,
+    token_confirmed_at,
+):
+    engine = create_async_engine(DATABASE_URL, pool_size=3, max_overflow=0)
+    sessions = async_sessionmaker(engine, expire_on_commit=False)
+    user_id = uuid.uuid4()
+    jti = uuid.uuid4().hex
+    token_hash = hashlib.sha256(jti.encode()).hexdigest()
+    email = f"phase0-policy-change-{user_id.hex}@example.invalid"
+    now = datetime.now(timezone.utc)
+    token_confirmed = (
+        int(token_confirmed_at.timestamp())
+        if isinstance(token_confirmed_at, datetime)
+        else token_confirmed_at
+    )
+    token_payload = {
+        "sub": email, "jti": jti, "iat": int(now.timestamp()),
+        "exp": int((now + timedelta(days=1)).timestamp()), "type": "refresh",
+        "role": token_role, "mfa_enabled": token_mfa_enabled,
+        "mfa_confirmed_at": token_confirmed,
+    }
+    monkeypatch.setattr(
+        auth_endpoint, "decode_token",
+        lambda token, expected_type="access": token_payload,
+    )
+
+    async with sessions() as setup:
+        setup.add(User(
+            id=user_id, email=email, full_name="Refresh policy change",
+            role=stored_role, password_hash="not-used", must_change_password=False,
+            is_active=True, mfa_enabled=stored_mfa_enabled,
+            mfa_confirmed_at=stored_confirmed_at,
+        ))
+        await setup.commit()
+        setup.add(RefreshTokenSession(
+            user_id=user_id, token_jti_hash=token_hash,
+            expires_at=now + timedelta(days=1),
+        ))
+        await setup.commit()
+
+    request = Request({
+        "type": "http", "method": "POST", "path": "/auth/refresh",
+        "headers": [
+            (b"cookie", b"pgcc_refresh=old-refresh"),
+            (b"origin", b"http://localhost:5173"),
+        ],
+        "client": ("127.0.0.1", 1234),
+        "server": ("test", 80), "scheme": "http", "query_string": b"",
+    })
+    response = Response()
+    try:
+        async with sessions() as db:
+            with pytest.raises(HTTPException) as exc:
+                await auth_endpoint.refresh_tokens(
+                    request=request, response=response, db=db,
+                    refresh_cookie="old-refresh",
+                )
+            assert exc.value.status_code == 401
+            assert "Max-Age=0" in response.headers.get("set-cookie", "")
+
+        async with sessions() as verify:
+            stored = (await verify.execute(
+                select(RefreshTokenSession).where(
+                    RefreshTokenSession.token_jti_hash == token_hash
+                )
+            )).scalar_one()
+            assert stored.revoked_at is not None
+            events = (await verify.execute(
+                select(AuditOutbox).where(AuditOutbox.payload["user_email"].astext == email)
+            )).scalars().all()
+            assert any(event.payload["action"] == "REFRESH_SESSION_POLICY_CHANGED" for event in events)
+    finally:
+        async with sessions() as cleanup:
+            await cleanup.execute(
+                __import__("sqlalchemy").delete(AuditOutbox).where(
+                    AuditOutbox.payload["user_email"].astext == email
+                )
+            )
+            await cleanup.execute(
+                __import__("sqlalchemy").delete(User).where(User.id == user_id)
+            )
+            await cleanup.commit()
+        await engine.dispose()
