@@ -13,7 +13,7 @@ async def test_logout_invalid_token_is_idempotent(monkeypatch):
     db = AsyncMock()
     monkeypatch.setattr(auth_endpoint, "decode_token", lambda token, expected_type: (_ for _ in ()).throw(ValueError("invalid")))
     result = await auth_endpoint.logout(
-        RefreshRequest(refresh_token="invalid"), request=Request({
+        payload=RefreshRequest(refresh_token="invalid"), request=Request({
             "type": "http", "method": "POST", "path": "/auth/logout", "headers": [],
             "client": ("127.0.0.1", 1234), "server": ("test", 80),
             "scheme": "http", "query_string": b"",
@@ -41,7 +41,7 @@ async def test_logout_revokes_refresh_session_by_jti_hash(monkeypatch):
         "client": ("127.0.0.1", 1234), "server": ("test", 80),
         "scheme": "http", "query_string": b"",
     })
-    result = await auth_endpoint.logout(RefreshRequest(refresh_token="refresh-jwt"), request=request, response=Response(), db=db)
+    result = await auth_endpoint.logout(payload=RefreshRequest(refresh_token="refresh-jwt"), request=request, response=Response(), db=db)
     assert result is None
     assert session.revoked_at is not None
     assert db.execute.await_count == 2
