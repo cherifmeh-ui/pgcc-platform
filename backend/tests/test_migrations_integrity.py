@@ -409,3 +409,5 @@ def test_auth_rate_limit_bucket_migration_and_model_are_aligned():
 def test_auth_rate_limit_model_is_registered_for_alembic_autogeneration():
     env_source = (MIGRATIONS_DIR.parent / "env.py").read_text(encoding="utf-8")
     assert "auth_rate_limit_bucket" in env_source
+    assert "action_verification" in env_source
+    assert "iso_control_evidence" in env_source
