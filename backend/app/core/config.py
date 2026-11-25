@@ -130,9 +130,6 @@ class Settings(BaseSettings):
             raise ValueError("CLAMAV_PORT doit être compris entre 1 et 65535.")
         if self.CLAMAV_TIMEOUT_SECONDS < 1 or self.CLAMAV_TIMEOUT_SECONDS > 300:
             raise ValueError("CLAMAV_TIMEOUT_SECONDS doit être compris entre 1 et 300.")
-        if self.ENVIRONMENT.lower() != "development" and not self.CLAMAV_HOST.strip():
-            raise ValueError("CLAMAV_HOST est obligatoire hors développement : upload bloqué sans antivirus.")
-
         if self.ENVIRONMENT.lower() != "development":
             if not self.mfa_encryption_keys:
                 raise ValueError("MFA_ENCRYPTION_KEYS est obligatoire hors développement.")
@@ -146,6 +143,9 @@ class Settings(BaseSettings):
             raise ValueError("AUTH_RATE_LIMIT_HMAC_KEY doit contenir au moins 32 caractères.")
         if self.ENVIRONMENT.lower() != "development" and len(self.auth_rate_limit_hmac_key) < 32:
             raise ValueError("AUTH_RATE_LIMIT_HMAC_KEY est obligatoire hors développement.")
+
+        if self.ENVIRONMENT.lower() != "development" and not self.CLAMAV_HOST.strip():
+            raise ValueError("CLAMAV_HOST est obligatoire hors développement : upload bloqué sans antivirus.")
 
         if self.JWT_ALGORITHM == "RS256":
             if not self.JWT_PRIVATE_KEY_PATH:
