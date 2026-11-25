@@ -715,6 +715,24 @@ async def retire_asset(
     asset = result.scalar_one_or_none()
     if asset is None:
         raise HTTPException(status_code=404, detail="Actif introuvable")
+
+    open_access_result = await db.execute(
+        select(SupplierAccessRequest.id)
+        .where(
+            SupplierAccessRequest.asset_id == asset.id,
+            SupplierAccessRequest.status.in_(("Demandé", "Approuvé", "Suspendu")),
+        )
+        .limit(1)
+    )
+    if open_access_result.scalar_one_or_none() is not None:
+        raise HTTPException(
+            status_code=409,
+            detail=(
+                "Retrait impossible : une demande ou autorisation d'accès fournisseur "
+                "est encore ouverte. Refusez, révoquez ou clôturez-la d'abord."
+            ),
+        )
+
     if asset.lifecycle_status not in {"Retiré", "Décommissionné"} or asset.retired_at is None:
         if asset.retired_at is None:
             asset.retired_at = datetime.now(timezone.utc)
