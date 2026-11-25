@@ -153,3 +153,29 @@ async def test_get_current_user_accepts_matching_auth_version(monkeypatch):
         db=db,
     )
     assert current is user
+
+
+@pytest.mark.asyncio
+async def test_require_role_normalizes_persisted_and_allowed_role_whitespace():
+    from app.api.deps import require_role
+
+    dependency = require_role(" ADMIN ").dependency
+
+    class User:
+        role = " admin "
+
+    assert await dependency(current_user=User()) is not None
+
+
+@pytest.mark.asyncio
+async def test_require_role_rejects_unknown_and_empty_roles():
+    from app.api.deps import require_role
+
+    dependency = require_role("admin", " ").dependency
+
+    class User:
+        role = " "
+
+    with pytest.raises(HTTPException) as exc:
+        await dependency(current_user=User())
+    assert exc.value.status_code == 403
