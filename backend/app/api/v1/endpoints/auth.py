@@ -224,7 +224,11 @@ async def start_enrollment(
         raise HTTPException(status_code=401, detail="Pre-auth token invalide.")
 
     email = data.get("sub")
-    result = await db.execute(select(User).where(User.email == email))
+    if not isinstance(email, str) or not email:
+        raise HTTPException(status_code=401, detail="Jeton invalide.")
+    result = await db.execute(
+        select(User).where(User.email == email).with_for_update()
+    )
     user = result.scalar_one_or_none()
 
     if not user:
@@ -237,8 +241,18 @@ async def start_enrollment(
         raise HTTPException(status_code=403, detail="Compte désactivé.")
 
     secret = generate_mfa_secret()
-    user.mfa_secret = secret
-    await db.commit()
+    try:
+        user.mfa_secret = secret
+        await enqueue_audit_event(
+            db, user_email=user.email, action="MFA_ENROLLMENT_STARTED",
+            resource="auth", resource_id=str(user.id),
+            details="MFA enrollment secret generated for pre-authenticated user.",
+            event_type="AUTH", request=request,
+        )
+        await db.commit()
+    except Exception:
+        await db.rollback()
+        raise
 
     uri = get_mfa_uri(secret, user.email)
 
