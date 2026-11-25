@@ -11,6 +11,7 @@ import re
 import hashlib
 import hmac
 from datetime import datetime
+from uuid import UUID
 
 from app.api.deps import require_permission
 from app.core.database import get_db
@@ -55,6 +56,8 @@ def can_read_document(user: User, document: Document) -> bool:
         return True
 
     owner_id = getattr(document, "owner_id", None)
+    if not isinstance(owner_id, (UUID, str)):
+        owner_id = None
     user_id = getattr(user, "id", None)
     if owner_id is not None and user_id is not None and owner_id == user_id:
         return True
@@ -63,6 +66,8 @@ def can_read_document(user: User, document: Document) -> bool:
         return False
 
     document_department = getattr(document, "department", None)
+    if not isinstance(document_department, str):
+        document_department = None
     user_department = getattr(user, "department", None)
     if isinstance(document_department, str) and document_department.strip():
         return (
@@ -211,10 +216,11 @@ async def list_documents(
             Document.owner_id == current_user.id,
             and_(Document.owner_id.is_(None), Document.department.is_(None)),
         ]
-        if current_user.department and current_user.department.strip():
+        user_department = current_user.department
+        if isinstance(user_department, str) and user_department.strip():
             viewer_scope.append(
                 func.lower(func.btrim(Document.department))
-                == current_user.department.strip().lower()
+                == user_department.strip().lower()
             )
         query = query.where(
             func.upper(func.btrim(Document.doc_type)).in_(tuple(INTERNAL_DOCUMENT_TYPES)),
