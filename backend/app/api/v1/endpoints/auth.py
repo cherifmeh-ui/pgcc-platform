@@ -82,6 +82,15 @@ class TokenPairResponse(BaseModel):
 def _now():
     return datetime.now(timezone.utc)
 
+
+def _mfa_confirmed_at_epoch(user: User) -> int | None:
+    value = user.mfa_confirmed_at
+    if value is None:
+        return None
+    if value.tzinfo is None:
+        value = value.replace(tzinfo=timezone.utc)
+    return int(value.timestamp())
+
 REFRESH_COOKIE_NAME = "pgcc_refresh"
 REFRESH_COOKIE_PATH = "/api/v1/auth"
 
@@ -415,7 +424,12 @@ async def confirm_mfa(
         )
 
     access_token = create_access_token(subject=user.email, role=user.role)
-    refresh_token = create_refresh_token(subject=user.email)
+    refresh_token = create_refresh_token(
+        subject=user.email,
+        role=user.role,
+        mfa_enabled=user.mfa_enabled,
+        mfa_confirmed_at=_mfa_confirmed_at_epoch(user),
+    )
     try:
         await _persist_refresh_session(db, user, refresh_token)
         await enqueue_audit_event(
@@ -548,6 +562,38 @@ async def refresh_tokens(
     if not user:
         _clear_refresh_cookie(response)
         raise HTTPException(status_code=401, detail="Utilisateur non trouvé.")
+
+    expected_role = (user.role or "").strip().lower()
+    expected_mfa_confirmed_at = _mfa_confirmed_at_epoch(user)
+    if (
+        not isinstance(data.get("role"), str)
+        or data["role"].strip().lower() != expected_role
+        or not isinstance(data.get("mfa_enabled"), bool)
+        or data["mfa_enabled"] is not bool(user.mfa_enabled)
+        or data.get("mfa_confirmed_at") != expected_mfa_confirmed_at
+    ):
+        now = _now()
+        try:
+            await db.execute(
+                update(RefreshTokenSession)
+                .where(RefreshTokenSession.user_id == user.id, RefreshTokenSession.revoked_at.is_(None))
+                .values(revoked_at=now)
+            )
+            await enqueue_audit_event(
+                db, user_email=user.email, action="REFRESH_SESSION_POLICY_CHANGED",
+                resource="auth", resource_id=str(user.id),
+                details="Refresh token role/MFA snapshot differs from current account security state.",
+                event_type="AUTH", request=request,
+            )
+            await db.commit()
+        except Exception:
+            await db.rollback()
+            raise
+        _clear_refresh_cookie(response)
+        raise HTTPException(
+            status_code=401,
+            detail="L'état de sécurité du compte a changé. Veuillez vous reconnecter.",
+        )
 
     denial_reason = refresh_denial_reason(
         is_active=user.is_active,
