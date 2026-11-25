@@ -88,17 +88,18 @@ def create_access_token(subject, role: str, extra_claims=None) -> str:
 
 def create_refresh_token(
     subject,
-    role: str | None = None,
-    mfa_enabled: bool | None = None,
+    role: str,
+    mfa_enabled: bool,
     mfa_confirmed_at: int | None = None,
 ) -> str:
     # Snapshot security-sensitive account state so role/MFA changes invalidate
     # refresh sessions even when an administrator changes the user out of band.
-    claims = {}
-    if role is not None:
-        claims["role"] = role.strip().lower()
-    if mfa_enabled is not None:
-        claims["mfa_enabled"] = bool(mfa_enabled)
+    if not isinstance(role, str) or not role.strip():
+        raise ValueError("A normalized role is required for refresh tokens.")
+    claims = {
+        "role": role.strip().lower(),
+        "mfa_enabled": bool(mfa_enabled),
+    }
     if mfa_confirmed_at is not None:
         claims["mfa_confirmed_at"] = int(mfa_confirmed_at)
     return _create_token(
