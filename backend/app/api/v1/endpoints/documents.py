@@ -8,6 +8,8 @@ from pydantic import BaseModel, ConfigDict
 from typing import List, Optional
 import uuid
 import re
+import hashlib
+import hmac
 from datetime import datetime
 
 from app.api.deps import require_permission
@@ -36,6 +38,14 @@ PRIVILEGED_DOCUMENT_ROLES = frozenset({"admin", "executive", "auditor"})
 def document_classification(doc_type: str | None) -> str:
     normalized = (doc_type or "").strip().upper()
     return "INTERNAL" if normalized in INTERNAL_DOCUMENT_TYPES else "RESTRICTED"
+
+
+def document_integrity_valid(document: Document) -> bool:
+    """Return true only when stored bytes match their persisted SHA-256 digest."""
+    if not document.file_data or not document.file_sha256:
+        return False
+    actual = hashlib.sha256(document.file_data).hexdigest()
+    return hmac.compare_digest(actual, document.file_sha256)
 
 
 def can_read_document(user: User, document: Document) -> bool:
@@ -119,6 +129,7 @@ async def upload_document(
         filename=safe_filename,
         content_text=extracted_text,
         file_data=contents, # Stocker le binaire aussi (utile pour download futur)
+        file_sha256=hashlib.sha256(contents).hexdigest(),
         file_size_kb=size_kb,
         mime_type="application/pdf" if detected_format == "PDF" else "application/vnd.openxmlformats-officedocument.wordprocessingml.document",
         is_indexed=False # Pas encore vectorisé
@@ -304,6 +315,8 @@ async def download_document(
         raise HTTPException(status_code=404, detail="Document introuvable")
     if not doc.file_data:
         raise HTTPException(status_code=404, detail="Fichier original indisponible.")
+    if not document_integrity_valid(doc):
+        raise HTTPException(status_code=409, detail="Intégrité du fichier documentaire compromise. Téléchargement bloqué.")
 
     # Filenames are sanitized at upload; quote defensively for HTTP headers.
     filename = (doc.filename or "document").replace('"', "_").replace("\\r", "").replace("\\n", "")
