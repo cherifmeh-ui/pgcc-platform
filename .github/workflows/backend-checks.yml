@@ -55,7 +55,7 @@ jobs:
         shell: bash
         run: |
           npm audit --json > /tmp/pgcc-npm-audit.json || true
-          node -e "const a=require('/tmp/pgcc-npm-audit.json'); console.log(JSON.stringify(a.vulnerabilities || {}, null, 2));"
+          node -e "const a=require('/tmp/pgcc-npm-audit.json'); if (a.error || !a.metadata) { console.error(a.error || 'npm audit metadata missing'); process.exit(2); } console.log(JSON.stringify(a.vulnerabilities || {}, null, 2)); const total=a.metadata.vulnerabilities?.total ?? 0; if (total > 0) { console.error(total + ' npm vulnerabilities detected'); process.exit(1); }"
 
       - name: Build frontend
         working-directory: frontend
