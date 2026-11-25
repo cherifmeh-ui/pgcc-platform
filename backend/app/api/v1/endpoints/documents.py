@@ -213,21 +213,23 @@ async def list_documents(
     query = select(Document).order_by(Document.created_at.desc())
     if (current_user.role or "").strip().lower() == "viewer":
         viewer_scope = [
-            Document.owner_id == current_user.id,
             and_(Document.owner_id.is_(None), Document.department.is_(None)),
         ]
+        owner_access = None
+        if current_user.id is not None:
+            owner_access = Document.owner_id == current_user.id
+            viewer_scope.append(owner_access)
         user_department = current_user.department
         if isinstance(user_department, str) and user_department.strip():
             viewer_scope.append(
                 func.lower(func.btrim(Document.department))
                 == user_department.strip().lower()
             )
-        owner_access = Document.owner_id == current_user.id
         internal_scope = and_(
             func.upper(func.btrim(Document.doc_type)).in_(tuple(INTERNAL_DOCUMENT_TYPES)),
             or_(*viewer_scope),
         )
-        query = query.where(or_(owner_access, internal_scope))
+        query = query.where(or_(owner_access, internal_scope)) if owner_access is not None else query.where(internal_scope)
     result = await db.execute(query)
     docs = result.scalars().all()
     
