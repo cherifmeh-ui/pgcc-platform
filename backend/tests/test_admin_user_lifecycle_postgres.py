@@ -284,6 +284,17 @@ async def test_concurrent_admin_demotion_preserves_one_active_mfa_admin():
                 )
             ).scalars().all()
             assert len(remaining_admins) == 1
+            demotion_events = (
+                await verify.execute(
+                    select(AuditOutbox).where(
+                        AuditOutbox.payload["resource_id"].astext.in_(
+                            [str(actor_a_id), str(actor_b_id)]
+                        ),
+                        AuditOutbox.payload["action"].astext == "ADMIN_USER_UPDATED",
+                    )
+                )
+            ).scalars().all()
+            assert len(demotion_events) == 1
             actor_a = await verify.get(User, actor_a_id)
             actor_b = await verify.get(User, actor_b_id)
             assert {actor_a.role, actor_b.role} == {"admin", "auditor"}
