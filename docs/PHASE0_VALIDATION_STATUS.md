@@ -747,3 +747,13 @@ Repository/static hardening is substantially progressed, but the remaining gates
 - The configured PostgreSQL integration suite passed: 13 passed. It included actual endpoint refresh concurrency/replay and rollback, asset graph, supplier access lifecycle, document/RAG delete/index race, duplicate upload uniqueness, append-only security logs and durable outbox tests.
 - This closes the clean-database Alembic upgrade-to-head check for that PR head. It does not prove upgrade from an existing supported production revision, downgrade symmetry, schema drift comparison, backup/restore, or a full Docker Compose stack build/start.
 - The same run's frontend job passed. Backend unit job failed only the RBAC test-data case documented above; its corrected case is not yet covered by a new backend run.
+
+
+## Authentication follow-up — 2026-11-25
+
+- Commit e045baf couples password-change state, prior refresh-session revocation, replacement session issuance and PASSWORD_CHANGED outbox event in one transaction.
+- Commit 523b7d1 couples MFA completion audit events with their state/session transaction.
+- Commit 7b90394 locks the user row and audits MFA enrollment-start secret persistence transactionally.
+- Commit e914e90 adds tests for enrollment audit ordering and rollback. Commit 1f40707 adds tests for password-change audit ordering and rollback.
+- The latest head has not yet returned a PR workflow run; these tests are committed but not claimed as executed.
+- The account/role/MFA administration API is not present in the reviewed route tree, so proactive revocation on those administrative changes cannot yet be integrated into an existing handler. This is an explicit Phase 0 gap, not marked complete.
