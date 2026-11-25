@@ -195,3 +195,10 @@ Do not close Phase 0 until evidence is attached for:
 - Non-development startup now refuses to serve if any non-null `users.mfa_secret` remains plaintext. Added `backend/scripts/encrypt_mfa_secrets.py` with dry-run and key-rotation behavior, plus `docs/MFA_SECRET_ENCRYPTION_RUNBOOK.md`.
 - Added tests for encrypted-at-rest storage, legacy conversion, key rotation, invalid ciphertext, production key configuration and startup gate. Fresh CI validation pending.
 - Dependency `cryptography==50.0.2` added (PyPI release 2026-09-30).
+
+## MFA secret encryption validation status — 2026-11-25
+
+- Implemented Fernet ciphertext storage for new enrollments and decryption only for TOTP verification. Legacy plaintext is encrypted on first use; the operator script supports bulk migration and key rotation.
+- Non-development configuration requires a valid `MFA_ENCRYPTION_KEYS` key ring. Startup checks all non-null secrets: plaintext or undecryptable ciphertext prevents startup; previous-key ciphertext is rotated to the active key.
+- Added unit tests for encryption, legacy migration, rotation, invalid ciphertext, config and startup gate; added PostgreSQL persistence/startup verification test. Workflow 45574715908 is running; no result claimed yet.
+- Production rollout requires running the dry-run and migration script, safeguarding the key, and reviewing key custody/recovery.
