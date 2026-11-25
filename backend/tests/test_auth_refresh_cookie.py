@@ -6,6 +6,8 @@ from app.api.v1.endpoints.auth import (
     REFRESH_COOKIE_NAME,
     REFRESH_COOKIE_PATH,
     TokenPairResponse,
+    RefreshRequest,
+    refresh_tokens,
     _clear_refresh_cookie,
     _require_trusted_cookie_origin,
     _set_refresh_cookie,
@@ -65,3 +67,27 @@ def test_cookie_origin_rejects_missing_or_untrusted_origin(monkeypatch):
         with pytest.raises(HTTPException) as exc:
             _require_trusted_cookie_origin(request)
         assert exc.value.status_code == 403
+
+def test_refresh_request_accepts_empty_body_for_cookie_transport():
+    assert RefreshRequest().refresh_token is None
+
+
+@pytest.mark.asyncio
+async def test_refresh_rejects_untrusted_origin_before_database_access(monkeypatch):
+    from unittest.mock import AsyncMock
+
+    monkeypatch.setattr(settings, "CORS_ORIGINS", "https://pgcc.example")
+    request = Request({
+        "type": "http", "method": "POST", "path": "/api/v1/auth/refresh",
+        "headers": [(b"origin", b"https://attacker.example")],
+        "client": ("127.0.0.1", 1234), "server": ("pgcc.example", 443),
+        "scheme": "https", "query_string": b"",
+    })
+    db = AsyncMock()
+    with pytest.raises(HTTPException) as exc:
+        await refresh_tokens(
+            request=request, response=Response(), db=db,
+            payload=None, refresh_cookie="cookie-token",
+        )
+    assert exc.value.status_code == 403
+    db.execute.assert_not_awaited()
