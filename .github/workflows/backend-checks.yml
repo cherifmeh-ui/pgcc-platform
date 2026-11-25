@@ -109,6 +109,49 @@ jobs:
           JWT_SECRET: integration-test-secret-that-is-long-enough
         run: pytest -q backend/tests/test_refresh_rotation_postgres.py backend/tests/test_asset_relationships_postgres.py backend/tests/test_supplier_access_lifecycle_postgres.py backend/tests/test_document_rag_delete_postgres.py backend/tests/test_document_upload_concurrency_postgres.py backend/tests/test_security_log_append_only_postgres.py backend/tests/test_audit_outbox_postgres.py
 
+
+  refresh-frontend-lockfile:
+    if: github.event_name == 'pull_request' && github.event.pull_request.head.repo.full_name == github.repository
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+    steps:
+      - name: Checkout exact PR head
+        uses: actions/checkout@v4
+        with:
+          ref: ${{ github.event.pull_request.head.sha }}
+      - name: Set up Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: 20
+          cache: npm
+          cache-dependency-path: frontend/package-lock.json
+      - name: Regenerate lockfile without lifecycle scripts
+        working-directory: frontend
+        run: npm install --package-lock-only --ignore-scripts
+      - name: Commit lockfile only if PR head is unchanged
+        env:
+          PR_BRANCH: ${{ github.event.pull_request.head.ref }}
+          EXPECTED_HEAD: ${{ github.event.pull_request.head.sha }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          git fetch origin "$PR_BRANCH"
+          ACTUAL_HEAD=$(git rev-parse FETCH_HEAD)
+          if [ "$ACTUAL_HEAD" != "$EXPECTED_HEAD" ]; then
+            echo "PR branch moved during lockfile generation; refusing to push."
+            exit 1
+          fi
+          if git diff --quiet -- frontend/package-lock.json; then
+            echo "Lockfile already current."
+            exit 0
+          fi
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add frontend/package-lock.json
+          git commit -m "fix(deps): refresh frontend dependency lockfile"
+          git push origin "HEAD:refs/heads/$PR_BRANCH"
+
   compose-smoke:
     runs-on: ubuntu-latest
     timeout-minutes: 15
