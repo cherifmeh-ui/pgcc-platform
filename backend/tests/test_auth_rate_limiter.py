@@ -1,6 +1,4 @@
 """Unit tests for shared authentication rate-limit policy and keying."""
-from datetime import datetime, timezone
-
 import pytest
 from fastapi import HTTPException, Request
 from unittest.mock import AsyncMock
