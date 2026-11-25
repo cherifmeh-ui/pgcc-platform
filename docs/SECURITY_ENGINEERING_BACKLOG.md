@@ -257,3 +257,12 @@ Status: active engineering review. This is a static review backlog, not a securi
 - [x] Require managed Fernet key ring in staging/production and document backup/rotation.
 - [x] Add unit tests for encryption, legacy conversion, key rotation and fail-closed behavior.
 - [ ] Validate latest MFA encryption code and script in CI; run dry-run and migration against the target deployment database before production.
+
+## MFA secret protection backlog — 2026-11-25
+
+- [x] Implement Fernet encryption for new MFA secrets and legacy plaintext migration on verification.
+- [x] Require a managed key ring in non-development environments and validate key syntax.
+- [x] Add migration/rotation script and startup gate that rejects plaintext or undecryptable secrets.
+- [x] Add unit tests and PostgreSQL persistence test.
+- [ ] Validate workflow 45574715908 and run the dry-run/migration on the target deployment DB before production.
+- [ ] Define operational key custody, backup, rotation owner and MFA recovery procedure.
