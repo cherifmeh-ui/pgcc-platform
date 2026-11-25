@@ -788,7 +788,7 @@ async def list_supplier_risk_links(
     db: AsyncSession = Depends(get_db),
     current_user: User = require_permission("suppliers", "read"),
 ):
-    if not role_has_permission((current_user.role or "").lower(), "risks", "read"):
+    if not role_has_permission((current_user.role or "").strip().lower(), "risks", "read"):
         raise HTTPException(status_code=403, detail="Accès refusé : permission risks:read requise.")
     supplier_result = await db.execute(select(Supplier.id).where(Supplier.id == supplier_id, Supplier.archived_at.is_(None)))
     if supplier_result.scalar_one_or_none() is None:
@@ -807,7 +807,7 @@ async def link_supplier_to_risk(
     db: AsyncSession = Depends(get_db),
     current_user: User = require_permission("suppliers", "manage_risks"),
 ):
-    if not role_has_permission((current_user.role or "").lower(), "risks", "update"):
+    if not role_has_permission((current_user.role or "").strip().lower(), "risks", "update"):
         raise HTTPException(status_code=403, detail="Accès refusé : permission risks:update requise.")
     supplier_result = await db.execute(select(Supplier).where(Supplier.id == supplier_id, Supplier.archived_at.is_(None)))
     supplier = supplier_result.scalar_one_or_none()
@@ -1034,7 +1034,7 @@ async def get_supplier_risk_overview(
     current_user: User = require_permission("suppliers", "read"),
 ):
     """Return aggregate TPRM indicators without changing central risk scores."""
-    if not role_has_permission((current_user.role or "").lower(), "risks", "read"):
+    if not role_has_permission((current_user.role or "").strip().lower(), "risks", "read"):
         raise HTTPException(status_code=403, detail="La permission risks:read est requise pour consulter la synthèse consolidée.")
 
     from app.services.supplier_risk_overview import build_supplier_risk_overview
@@ -1173,7 +1173,7 @@ async def list_supplier_risk_snapshots(
     current_user: User = require_permission("suppliers", "read"),
 ):
     """List historical monthly supplier risk indicators."""
-    if not role_has_permission((current_user.role or "").lower(), "risks", "read"):
+    if not role_has_permission((current_user.role or "").strip().lower(), "risks", "read"):
         raise HTTPException(status_code=403, detail="La permission risks:read est requise.")
     result = await db.execute(
         select(SupplierRiskSnapshot)
@@ -1200,7 +1200,7 @@ async def get_supplier_risk_concentration(
     current_user: User = require_permission("suppliers", "read"),
 ):
     """Identify suppliers concentrating linked central risks and privileged access."""
-    if not role_has_permission((current_user.role or "").lower(), "risks", "read"):
+    if not role_has_permission((current_user.role or "").strip().lower(), "risks", "read"):
         raise HTTPException(status_code=403, detail="La permission risks:read est requise.")
     from app.services.supplier_risk_overview import build_supplier_risk_concentration
 
@@ -1241,7 +1241,7 @@ async def get_supplier_risk_trends(
     current_user: User = require_permission("suppliers", "read"),
 ):
     """Compare the two latest captured monthly TPRM snapshots."""
-    if not role_has_permission((current_user.role or "").lower(), "risks", "read"):
+    if not role_has_permission((current_user.role or "").strip().lower(), "risks", "read"):
         raise HTTPException(status_code=403, detail="La permission risks:read est requise.")
     from app.services.supplier_risk_overview import compare_supplier_risk_snapshots
 
