@@ -39,6 +39,22 @@ def test_refresh_cookie_is_cleared_with_matching_path(monkeypatch):
     assert f"Path={REFRESH_COOKIE_PATH}" in header
 
 
+@pytest.mark.parametrize("environment", ["development", "test", "staging", "production"])
+def test_refresh_cookie_clear_matches_secure_policy(environment, monkeypatch):
+    monkeypatch.setattr(settings, "ENVIRONMENT", environment)
+    issued = Response()
+    cleared = Response()
+
+    _set_refresh_cookie(issued, "test-refresh-token")
+    _clear_refresh_cookie(cleared)
+
+    issued_secure = "Secure" in issued.headers["set-cookie"]
+    cleared_secure = "Secure" in cleared.headers["set-cookie"]
+    expected_secure = environment != "development"
+    assert issued_secure is expected_secure
+    assert cleared_secure is expected_secure
+
+
 def test_token_pair_response_never_exposes_refresh_token():
     assert "refresh_token" not in TokenPairResponse.model_fields
 
