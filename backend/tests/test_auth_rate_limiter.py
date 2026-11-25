@@ -1,0 +1,69 @@
+"""Unit tests for shared authentication rate-limit policy and keying."""
+from datetime import datetime, timezone
+
+import pytest
+from fastapi import HTTPException, Request
+from unittest.mock import AsyncMock
+
+from app.core.config import settings
+from app.services.auth_rate_limiter import (
+    AUTH_RATE_LIMIT_POLICIES,
+    enforce_auth_rate_limit,
+    rate_limit_bucket_key,
+)
+
+
+def test_all_auth_rate_limit_policies_have_bounded_positive_values():
+    assert set(AUTH_RATE_LIMIT_POLICIES) == {
+        "login",
+        "mfa_confirm",
+        "mfa_enrollment",
+        "password_change",
+        "refresh",
+    }
+    for action, scopes in AUTH_RATE_LIMIT_POLICIES.items():
+        assert set(scopes) == {"ip", "account"}
+        for limit, window_seconds, cooldown_seconds in scopes.values():
+            assert limit > 1
+            assert window_seconds > 0
+            assert cooldown_seconds > 0
+
+
+def test_rate_limit_bucket_keys_are_hmac_scoped_and_do_not_expose_identity(monkeypatch):
+    monkeypatch.setattr(settings, "AUTH_RATE_LIMIT_HMAC_KEY", "k" * 48)
+    first = rate_limit_bucket_key("login:account", "User@Example.Test")
+    normalized = rate_limit_bucket_key("login:account", "user@example.test")
+    other_scope = rate_limit_bucket_key("mfa_confirm:account", "user@example.test")
+    other_identity = rate_limit_bucket_key("login:account", "other@example.test")
+
+    assert len(first) == 64
+    assert first == normalized
+    assert first != other_scope
+    assert first != other_identity
+    assert "user@example.test" not in first
+
+
+@pytest.mark.asyncio
+async def test_rate_limit_persistence_failure_fails_closed(monkeypatch):
+    monkeypatch.setattr(settings, "AUTH_RATE_LIMIT_HMAC_KEY", "k" * 48)
+    db = AsyncMock()
+    db.execute.side_effect = RuntimeError("database unavailable")
+    request = Request(
+        {
+            "type": "http",
+            "method": "POST",
+            "path": "/auth/login",
+            "headers": [],
+            "client": ("192.0.2.10", 1234),
+            "server": ("localhost", 80),
+            "scheme": "http",
+            "query_string": b"",
+        }
+    )
+
+    with pytest.raises(HTTPException) as denied:
+        await enforce_auth_rate_limit(db, request, "login", subject="user@example.test")
+
+    assert denied.value.status_code == 503
+    db.rollback.assert_awaited_once()
+    db.commit.assert_not_awaited()
