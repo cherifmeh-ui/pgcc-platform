@@ -1,9 +1,15 @@
 // frontend/src/services/api.js
 import axios from 'axios';
 
+let accessToken = null;
+export function setAccessToken(token) {
+  accessToken = token || null;
+}
+
 const apiClient = axios.create({
   baseURL: import.meta.env.VITE_API_BASE_URL || '/api/v1',
   timeout: 15000,
+  withCredentials: true,
   headers: {
     'Content-Type': 'application/json',
   },
@@ -14,9 +20,8 @@ const apiClient = axios.create({
 // ==============================
 apiClient.interceptors.request.use(
   (config) => {
-    const token = localStorage.getItem('pgcc_access_token');
-    if (token && !config.url.includes('/auth/login')) {
-      config.headers.Authorization = `Bearer ${token}`;
+    if (accessToken && !config.url.includes('/auth/login')) {
+      config.headers.Authorization = `Bearer ${accessToken}`;
     }
     return config;
   },
@@ -65,26 +70,15 @@ apiClient.interceptors.response.use(
     originalRequest._retry = true;
     isRefreshing = true;
 
-    const refreshToken = localStorage.getItem('pgcc_refresh_token');
-    if (!refreshToken) {
-      const authError = new Error('Session expirée : refresh token absent.');
-      processQueue(authError, null);
-      isRefreshing = false;
-      logoutAndRedirect();
-      return Promise.reject(error);
-    }
-
     try {
-      const { data } = await axios.post(`${apiClient.defaults.baseURL}/auth/refresh`, {
-        refresh_token: refreshToken,
+      const { data } = await axios.post(`${apiClient.defaults.baseURL}/auth/refresh`, {}, {
+        withCredentials: true,
       });
 
       const newAccessToken = data.access_token;
-      const newRefreshToken = data.refresh_token;
-
-      localStorage.setItem('pgcc_access_token', newAccessToken);
-      localStorage.setItem('pgcc_refresh_token', newRefreshToken);
-
+      setAccessToken(newAccessToken);
+      localStorage.removeItem('pgcc_access_token');
+      localStorage.removeItem('pgcc_refresh_token');
       apiClient.defaults.headers.common['Authorization'] = `Bearer ${newAccessToken}`;
       originalRequest.headers.Authorization = `Bearer ${newAccessToken}`;
 
@@ -102,6 +96,7 @@ apiClient.interceptors.response.use(
 
 function logoutAndRedirect() {
   delete apiClient.defaults.headers.common['Authorization'];
+  setAccessToken(null);
   localStorage.removeItem('pgcc_access_token');
   localStorage.removeItem('pgcc_refresh_token');
   localStorage.removeItem('pgcc_user_role');
