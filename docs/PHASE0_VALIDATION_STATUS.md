@@ -800,3 +800,10 @@ Repository/static hardening is substantially progressed, but the remaining gates
 - Docker Compose: config validation, backend image build, PostgreSQL/backend/frontend startup, API health and frontend-to-backend proxy all passed; stack cleanup passed.
 - Remaining frontend warning: one production JS chunk is 534 kB (gzip 177 kB); this is a performance/code-splitting improvement, not a failed build.
 - Remaining Phase 0 gates: document classification/ACL design, administrative session revocation integration, MFA secret encryption/key management, distributed rate limiting, legacy migration/downgrade/backup-restore review, and human security review.
+
+## Document ACL hardening — 2026-11-25
+
+- Implemented doc_type-derived INTERNAL/RESTRICTED classification and server-side viewer filtering for list, preview and download.
+- Unknown legacy document types default to RESTRICTED (fail closed). Privileged roles admin/executive/auditor retain access; viewer sees PSSI, PROCEDURE and REGLEMENT_INTERIEUR only.
+- API response and document library UI now display classification. Unit and PostgreSQL tests added; fresh CI pending.
+- RAG indexing remains admin-only; there is no semantic retrieval route today. Future RAG search must apply the same ACL before chunk retrieval.
