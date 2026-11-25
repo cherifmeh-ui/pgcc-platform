@@ -20,7 +20,7 @@ Statut : implémentation initiale des routes de liste, détail, modification, r�
 - Dépendance d'authentification existante appliquée à chaque route : compte actif, rôle cohérent, MFA obligatoire pour le rôle admin et contrôle `auth_version`.
 - Routes implémentées : liste paginée, détail, modification du nom/département/rôle/activation, reset MFA et révocation des sessions.
 - Les mutations ajoutent un événement à l'audit outbox dans la même transaction que les changements métier et la révocation des refresh sessions.
-- Les opérations de réduction du nombre d'administrateurs MFA actifs verrouillent les lignes concernées et refusent la perte du dernier administrateur MFA actif.
+- Les opérations de réduction du nombre d'administrateurs MFA actifs verrouillent les lignes concernées et refusent la perte du dernier administrateur MFA actif.\n- Les trois routes de mutation revalident également le rôle, l'activation, le MFA et la version de sécurité de l'acteur après acquisition des verrous, afin d'éviter qu'une requête autorisée avant une rétrogradation concurrente conserve ses privilèges (TOCTOU).
 - Les réponses n'exposent ni hash de mot de passe, ni secret MFA, ni hash de codes de secours. Les champs de sécurité internes ne sont pas modifiables via le schéma d'entrée.
 - Tests unitaires du contrat RBAC, des champs autorisés et de minimisation de réponse ajoutés dans `backend/tests/test_admin_user_lifecycle.py`.
 - **Non validé à ce stade :** exécution CI sur le HEAD contenant l'implémentation, tests PostgreSQL des courses concurrentes et du rollback d'audit, vérification effective de l'invalidation des access tokens et refresh tokens après chaque mutation.
