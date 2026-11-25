@@ -1,5 +1,3 @@
-import base64
-import hashlib
 from types import SimpleNamespace
 
 import pytest
