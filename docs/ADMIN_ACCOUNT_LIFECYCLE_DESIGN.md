@@ -2,7 +2,7 @@
 
 Date : 2026-11-25  
 Branche de référence : `chore/phase0-stabilization`  
-Statut : conception validée pour implémentation ; aucune route d'administration n'est déclarée disponible à ce stade.
+Statut : implémentation initiale des routes de liste, détail, modification, réinitialisation MFA et révocation des sessions ; validation CI et intégration PostgreSQL encore requises.
 
 ## 1. Constat vérifié
 
@@ -13,7 +13,20 @@ Statut : conception validée pour implémentation ; aucune route d'administratio
 - Aucun endpoint de gestion administrative des utilisateurs n'est inclus dans ce routeur.
 - La table `RefreshTokenSession` permet de révoquer les sessions de renouvellement actives.
 
-## 2. API cible proposée
+## 2.1 État de l'implémentation initiale — 2026-11-25
+
+- Routeur `/admin/users` ajouté et inclus dans l'API v1.
+- Permission RBAC dédiée `users:manage`, réservée au rôle `admin`.
+- Dépendance d'authentification existante appliquée à chaque route : compte actif, rôle cohérent, MFA obligatoire pour le rôle admin et contrôle `auth_version`.
+- Routes implémentées : liste paginée, détail, modification du nom/département/rôle/activation, reset MFA et révocation des sessions.
+- Les mutations ajoutent un événement à l'audit outbox dans la même transaction que les changements métier et la révocation des refresh sessions.
+- Les opérations de réduction du nombre d'administrateurs MFA actifs verrouillent les lignes concernées et refusent la perte du dernier administrateur MFA actif.
+- Les réponses n'exposent ni hash de mot de passe, ni secret MFA, ni hash de codes de secours. Les champs de sécurité internes ne sont pas modifiables via le schéma d'entrée.
+- Tests unitaires du contrat RBAC, des champs autorisés et de minimisation de réponse ajoutés dans `backend/tests/test_admin_user_lifecycle.py`.
+- **Non validé à ce stade :** exécution CI sur le HEAD contenant l'implémentation, tests PostgreSQL des courses concurrentes et du rollback d'audit, vérification effective de l'invalidation des access tokens et refresh tokens après chaque mutation.
+- La création/provisionnement de comptes reste volontairement hors périmètre de cette première tranche.
+
+## 3. API cible proposée
 
 Préfixe : `/admin/users`. Toutes les routes doivent exiger un compte actif de rôle `admin` et MFA actif, en plus d'une permission dédiée `users:manage`. L'autorisation est contrôlée côté serveur, jamais par le frontend seul.
 
@@ -27,7 +40,7 @@ Préfixe : `/admin/users`. Toutes les routes doivent exiger un compte actif de r
 
 La création initiale d'un compte reste un flux séparé à définir (invitation contrôlée ou provisioning). Aucun mot de passe temporaire ne doit être retourné en clair par une API d'administration.
 
-## 3. Invariants transactionnels obligatoires
+## 4. Invariants transactionnels obligatoires
 
 1. Verrouiller la ligne utilisateur cible avec `SELECT ... FOR UPDATE`.
 2. Vérifier l'identité de l'administrateur, son rôle, son MFA et ses permissions.
@@ -39,7 +52,7 @@ La création initiale d'un compte reste un flux séparé à définir (invitation
 8. L'API ne doit jamais accepter `auth_version`, `password_hash`, `mfa_secret` ou `backup_codes_hashed` depuis les payloads client.
 9. Protéger les opérations concurrentes de dernier administrateur par verrouillage cohérent des administrateurs actifs et tests PostgreSQL de concurrence.
 
-## 4. Tests d'acceptation
+## 5. Tests d'acceptation
 
 - Un utilisateur non-admin, un admin sans MFA et un compte désactivé reçoivent un refus.
 - Les rôles inconnus et champs sensibles injectés sont rejetés.
@@ -51,6 +64,6 @@ La création initiale d'un compte reste un flux séparé à définir (invitation
 - Les réponses n'exposent jamais les hashes de mot de passe, secret MFA ou hashes des codes de secours.
 - Tests API unitaires et intégration PostgreSQL couvrant les scénarios positifs, refus, rollback et concurrence.
 
-## 5. Critères de clôture
+## 6. Critères de clôture
 
 L'implémentation ne sera considérée validée qu'après tests backend, intégration PostgreSQL, revue RBAC, revue d'audit et CI complète verte sur le HEAD final de la branche. Ce document est une spécification, pas une preuve d'implémentation.
