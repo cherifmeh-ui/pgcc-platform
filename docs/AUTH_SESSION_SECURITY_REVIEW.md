@@ -55,3 +55,9 @@ Authentication/session security remains open until the HTTP-level PostgreSQL rot
 - Workflow 45572713404 passed backend (303 passed/13 skipped), PostgreSQL (13 passed), frontend build/audit and Docker Compose smoke.
 - Cookie-only refresh/logout transport, HttpOnly/Secure/SameSite cookie flags, Origin allowlist, in-memory access token, cookie-backed reload bootstrap and PostgreSQL rotation/replay tests are included in this green run.
 - Remaining: human review of production frontend/API same-site topology, deployment cookie settings, and administrative account/role/MFA reset flows.
+
+## MFA storage hardening — 2026-11-25
+
+- TOTP secrets are now encrypted at rest with Fernet. New enrollments persist ciphertext; legacy plaintext is lazily encrypted when MFA is used.
+- Non-development environments require a managed Fernet key ring and startup fails closed while plaintext rows remain. The one-time migration and rotation script is documented in `docs/MFA_SECRET_ENCRYPTION_RUNBOOK.md`.
+- Remaining: verify CI and run the migration on the target database before production rollout; back up keys securely and define operational rotation ownership.
