@@ -46,7 +46,10 @@ def get_mfa_secret(user) -> str | None:
         user.mfa_secret = encrypt_mfa_secret(stored)
         return stored
 
-    token = stored[len(MFA_SECRET_PREFIX):].encode("ascii")
+    try:
+        token = stored[len(MFA_SECRET_PREFIX):].encode("ascii")
+    except UnicodeEncodeError as exc:
+        raise MFASecretDecryptionError("Stored MFA secret is malformed.") from exc
     for index, key in enumerate(key_ring):
         try:
             plaintext = key.decrypt(token).decode("utf-8")
