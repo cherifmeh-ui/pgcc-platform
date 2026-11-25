@@ -55,7 +55,7 @@ La Phase 0 ne peut pas considérer la récupération comme validée sur la seule
 
 ## Résultats de la validation CI — 2026-11-25
 
-- Run `45585181919`, HEAD code `cf60e82` : tous les jobs CI sont verts.
+- Run `45586284593`, HEAD code `91ec0cc` : tous les jobs CI sont verts (backend 376 passed/26 skipped, PostgreSQL 26 passed, frontend et Compose réussis).
 - Mise à niveau depuis `0024_audit_outbox`, downgrade `0026 -> 0025`, puis upgrade `head` réussis.
 - `alembic check` : aucune opération de migration supplémentaire détectée.
 - Dump custom et restauration dans une base neuve réussis ; la révision `0026_auth_rate_limit_buckets` et la donnée témoin sont présentes.
