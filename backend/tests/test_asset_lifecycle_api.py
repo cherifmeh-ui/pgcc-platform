@@ -12,7 +12,7 @@ ASSET_ID = UUID("00000000-0000-0000-0000-000000000001")
 RISK_ID = UUID("00000000-0000-0000-0000-000000000002")
 
 
-def _db_for_asset(asset, *, open_access=False):
+def _db_for_asset(asset, *, open_access=False, active_supplier_link=False):
     db = AsyncMock()
     asset_result = MagicMock()
     asset_result.scalar_one_or_none.return_value = asset
@@ -20,7 +20,11 @@ def _db_for_asset(asset, *, open_access=False):
     access_result.scalar_one_or_none.return_value = (
         UUID("00000000-0000-0000-0000-000000000099") if open_access else None
     )
-    db.execute.side_effect = [asset_result, access_result]
+    active_link_result = MagicMock()
+    active_link_result.scalar_one_or_none.return_value = (
+        UUID("00000000-0000-0000-0000-000000000098") if active_supplier_link else None
+    )
+    db.execute.side_effect = [asset_result, access_result, active_link_result]
     return db
 
 
@@ -259,3 +263,28 @@ async def test_retire_asset_proceeds_when_no_supplier_access_is_open(monkeypatch
     db.commit.assert_awaited_once()
     audit.assert_awaited_once()
 
+
+
+@pytest.mark.asyncio
+async def test_retire_asset_is_blocked_while_supplier_asset_link_is_active(monkeypatch):
+    asset = MagicMock(
+        id=ASSET_ID, reference="AST-009", lifecycle_status="Actif",
+        retired_at=None,
+    )
+    db = _db_for_asset(asset, active_supplier_link=True)
+    audit = AsyncMock()
+    monkeypatch.setattr("app.api.v1.endpoints.assets.enqueue_audit_event", audit)
+
+    with pytest.raises(HTTPException) as exc:
+        await retire_asset(
+            asset_id=ASSET_ID, request=MagicMock(), db=db,
+            current_user=MagicMock(email="admin@example.test"),
+        )
+
+    assert exc.value.status_code == 409
+    assert "relation fournisseur-actif" in exc.value.detail
+    assert asset.lifecycle_status == "Actif"
+    assert asset.retired_at is None
+    audit.assert_not_awaited()
+    db.flush.assert_not_awaited()
+    db.commit.assert_not_awaited()
