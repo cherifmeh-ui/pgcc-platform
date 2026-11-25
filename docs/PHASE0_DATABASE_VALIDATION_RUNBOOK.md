@@ -94,3 +94,9 @@ La stratégie de récupération privilégiée en environnement réel est backup 
 ## 7. Limites actuelles
 
 Le baseline `0001_initial` appelle `Base.metadata.create_all()` à partir d'un ensemble de modèles importés. Les migrations ultérieures actuelles vont jusqu'à `0024_audit_outbox`. Cette approche est transitoire et peut dépendre des imports et de la metadata au moment de l'exécution. La validation sur PostgreSQL est donc obligatoire; le test statique du graphe Alembic ne la remplace pas.
+
+## Latest CI evidence — 2026-11-25
+
+- Workflow 45568463812: PostgreSQL integration job passed (13 passed, 6 warnings) after Alembic migration to head; backend job passed (297 passed, 13 skipped, 8 warnings); frontend build passed.
+- This run supersedes the prior RBAC test failure recorded for workflow 45491802074. The corrected test is now covered by a green backend job.
+- Legacy-upgrade, downgrade, schema-drift and backup/restore rehearsals remain open.
