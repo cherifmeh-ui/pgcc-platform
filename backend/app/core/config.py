@@ -1,6 +1,7 @@
 # backend/app/core/config.py
 import base64
 import hashlib
+import ipaddress
 from functools import lru_cache
 from typing import List
 from urllib.parse import urlparse, urlunparse
@@ -45,6 +46,7 @@ class Settings(BaseSettings):
     LOGIN_MAX_ATTEMPTS: int = 5
     LOGIN_LOCK_MINUTES: int = 15
     AUTH_RATE_LIMIT_HMAC_KEY: str = ""
+    AUTH_TRUSTED_PROXY_IPS: str = ""
 
     # --- CORS ---
     CORS_ORIGINS: str = "http://localhost:5173,http://localhost:3000"
@@ -73,6 +75,14 @@ class Settings(BaseSettings):
         return ""
 
     @property
+    def auth_trusted_proxy_ips(self) -> List[str]:
+        return [
+            item.strip()
+            for item in self.AUTH_TRUSTED_PROXY_IPS.split(",")
+            if item.strip()
+        ]
+
+    @property
     def mfa_encryption_keys(self) -> List[str]:
         configured = [key.strip() for key in self.MFA_ENCRYPTION_KEYS.split(",") if key.strip()]
         if configured:
@@ -96,6 +106,12 @@ class Settings(BaseSettings):
 
         if self.JWT_ALGORITHM == "HS256" and len(self.JWT_SECRET) < 32:
             raise ValueError("JWT_SECRET doit contenir au moins 32 caractères.")
+
+        try:
+            for network in self.auth_trusted_proxy_ips:
+                ipaddress.ip_network(network, strict=False)
+        except ValueError as exc:
+            raise ValueError("AUTH_TRUSTED_PROXY_IPS contient un réseau IP invalide.") from exc
 
         if self.AUTH_RATE_LIMIT_HMAC_KEY and len(self.AUTH_RATE_LIMIT_HMAC_KEY.strip()) < 32:
             raise ValueError("AUTH_RATE_LIMIT_HMAC_KEY doit contenir au moins 32 caractères.")
