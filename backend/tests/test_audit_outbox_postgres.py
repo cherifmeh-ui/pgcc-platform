@@ -60,6 +60,10 @@ async def test_audit_event_is_durable_and_retried_after_delivery_failure(monkeyp
             assert await security_logger.deliver_pending_audit_events(
                 limit=10, event_id=event_id
             ) == 1
+            # Re-running delivery for an already delivered event is idempotent.
+            assert await security_logger.deliver_pending_audit_events(
+                limit=10, event_id=event_id
+            ) == 0
 
             async with sessions() as verify:
                 queued = await verify.get(AuditOutbox, event_id)
