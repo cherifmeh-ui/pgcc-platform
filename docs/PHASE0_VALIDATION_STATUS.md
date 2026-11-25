@@ -974,3 +974,18 @@ Repository/static hardening is substantially progressed, but the remaining gates
 - Le test de concurrence a aussi été corrigé pour importer explicitement `asyncio` et nettoyer les événements d'audit des deux comptes de test.
 - **Limite de preuve :** ces résultats sont ceux de l'environnement CI éphémère. Ils ne remplacent pas une répétition de restauration d'une sauvegarde réelle chiffrée, ni une validation RPO/RTO avec les responsables d'exploitation.
 - **Phase 0 reste ouverte :** migration des refresh tokens du `localStorage` vers des cookies `HttpOnly`, validation complète des contrôles d'accès Documents/RAG et des droits par objet, revue de configuration proxy/secrets en production, observabilité des seuils anti-bruteforce et revue de sécurité humaine restent à traiter.
+
+
+## Point de contrôle — 2026-11-25 (cycle de vie administrateur et récupération validés)
+
+- Le run GitHub Actions `45586284593` est entièrement **vert sur le HEAD exact de la PR** `91ec0cc14c4dbefb50ac65df8400063bd1681ecd`.
+- Backend : **376 réussites, 26 ignorés**, aucune erreur.
+- PostgreSQL : **26 réussites**, incluant les tests de concurrence de rétrogradation de deux administrateurs, l'invalidation d'un ancien access token après révocation administrative, la révocation du refresh session, le rollback d'audit et le reset MFA.
+- Frontend : build réussi.
+- Docker Compose : build, démarrage, health API, proxy frontend et arrêt propre réussis.
+- `alembic check` : `No new upgrade operations detected`.
+- Upgrade depuis `0024_audit_outbox`, downgrade `0026 -> 0025`, puis upgrade `head` réussis.
+- Dump PostgreSQL 16 restauré dans une base neuve ; version Alembic et ligne témoin vérifiées. Durée CI mesurée : 0 seconde à la précision entière.
+- La concurrence des rétrogradations confirme qu'une seule identité administrateur active avec MFA demeure ; les mutations sans changement effectif ne génèrent pas d'événement d'audit superflu.
+- La PR #1 reste ouverte, Draft, non fusionnée vers `main`.
+- Les preuves CI ne remplacent pas la répétition de restauration d'une sauvegarde chiffrée de préproduction/production, la validation RPO/RTO, l'ajustement opérationnel des seuils de rate limiting et la revue de sécurité humaine. **Phase 0 reste ouverte.**
