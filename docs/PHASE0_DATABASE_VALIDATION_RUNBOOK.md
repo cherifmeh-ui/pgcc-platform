@@ -132,3 +132,8 @@ Le baseline `0001_initial` appelle `Base.metadata.create_all()` à partir d'un e
 - Le téléchargement recalcule l'empreinte et compare en temps constant ; il refuse le fichier avec HTTP 409 si l'empreinte manque ou ne correspond pas.
 - Tests unitaires ajoutés pour empreinte correcte, altération du binaire et données manquantes ; test statique ajouté pour le chaînage et le backfill de migration.
 - À valider en CI : upgrade PostgreSQL propre jusqu'à 0027, backfill sur documents historiques, rollback, et comportement HTTP du téléchargement en cas d'altération. Aucun résultat de test n'est présumé avant le workflow.
+
+
+### Vérification PostgreSQL du backfill SHA-256
+
+Le job d'intégration crée désormais, sur une base migrée jusqu'à `0024_audit_outbox`, un document historique contenant un binaire sans empreinte. Après migration vers `head`, il compare le SHA-256 persisté à l'empreinte calculée indépendamment par `sha256sum`. Il répète ensuite le contrôle après downgrade vers `0025_user_auth_version` puis nouvel upgrade vers `head`. Le test d'accès documentaire PostgreSQL altère aussi le binaire tout en conservant l'empreinte d'origine et attend HTTP 409 au téléchargement.
