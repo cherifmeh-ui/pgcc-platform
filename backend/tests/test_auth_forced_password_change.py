@@ -82,6 +82,7 @@ async def test_initial_mfa_enrollment_returns_backup_codes_for_forced_password_c
     response = await auth_endpoint.confirm_mfa(
         payload=ConfirmMfaRequest(pre_auth_token="preauth", mfa_code="123456"),
         request=MagicMock(),
+        response=Response(),
         db=db,
     )
 
@@ -162,7 +163,7 @@ async def test_password_change_rolls_back_if_audit_enqueue_fails(monkeypatch):
             ChangePasswordRequest(
                 change_password_token="change-token", new_password="StrongPassword!123",
                 confirm_password="StrongPassword!123",
-            ), request=MagicMock(), db=db,
+            ), request=MagicMock(), response=Response(), db=db,
         )
 
     db.rollback.assert_awaited_once()
