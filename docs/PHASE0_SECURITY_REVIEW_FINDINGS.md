@@ -209,3 +209,10 @@ Do not close Phase 0 until evidence is attached for:
 - Backend 341 passed / 14 skipped; PostgreSQL integration 14 passed; frontend build and npm audit zero findings passed; Docker Compose full stack smoke passed.
 - Viewer access is restricted to PSSI/procedures/regulations; contracts, audit reports and unknown legacy types are hidden from viewer. MFA secrets are encrypted at rest, with a non-development startup gate for plaintext or undecryptable secrets.
 - Production deployment still requires key generation/backup, dry-run and execution of the legacy secret migration script against the actual target database.
+
+## Final automated evidence for MFA encryption and document ACL — workflow 45574715908
+
+- Backend: 342 passed / 15 skipped; PostgreSQL: 15 passed; frontend npm audit: 0 vulnerabilities; Vite 6.4.6 build passed; Compose smoke passed.
+- MFA ciphertext-at-rest, legacy conversion, key rotation, managed key validation, non-development startup gate and PostgreSQL persistence are validated in CI.
+- Document INTERNAL/RESTRICTED viewer ACL is validated by unit and PostgreSQL tests.
+- Production deployment remains conditional on key generation/backup, legacy MFA migration script execution, same-site cookie topology review and human security approval.
