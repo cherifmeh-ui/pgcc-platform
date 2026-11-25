@@ -249,3 +249,11 @@ Status: active engineering review. This is a static review backlog, not a securi
 - [x] Add unit and PostgreSQL integration tests for list/preview/download ACL.
 - [ ] Validate ACL tests in fresh CI.
 - [ ] Any future RAG semantic retrieval endpoint must enforce document ACL before loading chunks; current index trigger remains admin-only and no user-facing retrieval endpoint exists.
+
+## MFA secret encryption backlog — 2026-11-25
+
+- [x] Encrypt new TOTP secrets before persistence and decrypt only for verification.
+- [x] Add legacy plaintext migration/rotation script with dry-run; non-development startup blocks while plaintext remains.
+- [x] Require managed Fernet key ring in staging/production and document backup/rotation.
+- [x] Add unit tests for encryption, legacy conversion, key rotation and fail-closed behavior.
+- [ ] Validate latest MFA encryption code and script in CI; run dry-run and migration against the target deployment database before production.
