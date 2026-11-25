@@ -57,7 +57,7 @@ async def test_get_current_user_rejects_missing_or_mismatched_role_claim(monkeyp
 
     user = MagicMock(
         email="viewer@example.test", role="viewer", is_active=True,
-        must_change_password=False, mfa_enabled=False,
+        must_change_password=False, mfa_enabled=False, auth_version=0,
     )
     result = MagicMock()
     result.scalar_one_or_none.return_value = user
