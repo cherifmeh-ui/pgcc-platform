@@ -222,3 +222,8 @@ Status: active engineering review. This is a static review backlog, not a securi
 - [ ] Fresh CI validation of cookie transport, frontend build and Compose smoke job.
 - [ ] Remove legacy JSON refresh-token fallback after client migration is verified.
 - [ ] Human review of same-site cookie deployment and CSRF model.
+
+## Cookie transport CI follow-up — 2026-11-25
+
+- [x] Replace FastAPI Cookie marker defaults with Annotated Cookie injection and actual None default (fixes direct endpoint tests while preserving request injection).
+- [ ] Fresh CI after commit 12efce0 and Compose smoke job; run 45569880462 is not green and does not validate this correction.
