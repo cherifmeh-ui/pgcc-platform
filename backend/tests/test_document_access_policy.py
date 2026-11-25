@@ -70,7 +70,13 @@ async def test_viewer_document_list_query_filters_to_internal_types():
     query = db.execute.await_args.args[0]
     compiled = query.compile(dialect=postgresql.dialect())
     assert "upper(documents.doc_type) IN" in str(compiled)
-    assert set(INTERNAL_DOCUMENT_TYPES).issubset(set(compiled.params.values()))
+    bound_values = []
+    for value in compiled.params.values():
+        if isinstance(value, (list, tuple, set, frozenset)):
+            bound_values.extend(value)
+        else:
+            bound_values.append(value)
+    assert set(INTERNAL_DOCUMENT_TYPES).issubset(set(bound_values))
     assert rows[0]["classification"] == "INTERNAL"
 
 
