@@ -5,7 +5,6 @@ from fastapi import Response
 from unittest.mock import AsyncMock, MagicMock
 
 from app.api.v1.endpoints import auth as auth_endpoint
-from app.api.v1.endpoints.auth import RefreshRequest
 
 
 @pytest.mark.asyncio
@@ -13,11 +12,12 @@ async def test_logout_invalid_token_is_idempotent(monkeypatch):
     db = AsyncMock()
     monkeypatch.setattr(auth_endpoint, "decode_token", lambda token, expected_type: (_ for _ in ()).throw(ValueError("invalid")))
     result = await auth_endpoint.logout(
-        payload=RefreshRequest(refresh_token="invalid"), request=Request({
-            "type": "http", "method": "POST", "path": "/auth/logout", "headers": [],
+        request=Request({
+            "type": "http", "method": "POST", "path": "/auth/logout",
+            "headers": [(b"origin", b"http://localhost:5173")],
             "client": ("127.0.0.1", 1234), "server": ("test", 80),
             "scheme": "http", "query_string": b"",
-        }), response=Response(), db=db
+        }), response=Response(), db=db, refresh_cookie="invalid"
     )
     assert result is None
     db.execute.assert_not_awaited()
