@@ -43,6 +43,10 @@ services:
       DATABASE_URL: postgresql+asyncpg://${POSTGRES_USER}:${POSTGRES_PASSWORD}@postgres:5432/${POSTGRES_DB}
       # Configuration IA Locale (Ollama tourne sur ta machine Windows hôte)
       OLLAMA_BASE_URL: http://host.docker.internal:11434
+      # Uploads fail closed when no external ClamAV daemon is configured.
+      CLAMAV_HOST: ${CLAMAV_HOST:-}
+      CLAMAV_PORT: ${CLAMAV_PORT:-3310}
+      CLAMAV_TIMEOUT_SECONDS: ${CLAMAV_TIMEOUT_SECONDS:-30}
       AI_ENABLED: ${AI_ENABLED:-false}
       ENVIRONMENT: development
     ports:
