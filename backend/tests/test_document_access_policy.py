@@ -69,7 +69,7 @@ async def test_viewer_document_list_query_filters_to_internal_types():
 
     query = db.execute.await_args.args[0]
     compiled = query.compile(dialect=postgresql.dialect())
-    assert "upper(documents.doc_type) IN" in str(compiled)
+    assert "upper(btrim(documents.doc_type)) IN" in str(compiled)
     bound_values = []
     for value in compiled.params.values():
         if isinstance(value, (list, tuple, set, frozenset)):
