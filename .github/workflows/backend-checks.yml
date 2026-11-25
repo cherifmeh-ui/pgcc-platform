@@ -88,8 +88,6 @@ jobs:
           cache-dependency-path: backend/requirements-dev.txt
       - name: Install backend dependencies
         run: python -m pip install --upgrade pip && pip install -r backend/requirements-dev.txt
-      - name: Install PostgreSQL client tools
-        run: sudo apt-get update && sudo apt-get install -y postgresql-client
       - name: Apply migrations to PostgreSQL
         working-directory: backend
         env:
@@ -101,36 +99,37 @@ jobs:
         env:
           DATABASE_URL: postgresql+asyncpg://pgcc_test:pgcc_test@localhost:5432/pgcc_test
           JWT_SECRET: integration-test-secret-that-is-long-enough
-          PGPASSWORD: pgcc_test
         shell: bash
         run: |
-          dropdb --if-exists -h localhost -U pgcc_test pgcc_legacy_test
-          createdb -h localhost -U pgcc_test pgcc_legacy_test
+          postgres_container=$(docker ps --filter ancestor=pgvector/pgvector:pg16 --format '{{.ID}}' | head -n1)
+          test -n "$postgres_container"
+          docker exec "$postgres_container" dropdb -U pgcc_test --if-exists pgcc_legacy_test
+          docker exec "$postgres_container" createdb -U pgcc_test pgcc_legacy_test
           DATABASE_URL=postgresql+asyncpg://pgcc_test:pgcc_test@localhost:5432/pgcc_legacy_test alembic upgrade 0024_audit_outbox
           DATABASE_URL=postgresql+asyncpg://pgcc_test:pgcc_test@localhost:5432/pgcc_legacy_test alembic upgrade head
           DATABASE_URL=postgresql+asyncpg://pgcc_test:pgcc_test@localhost:5432/pgcc_legacy_test alembic downgrade 0025_user_auth_version
           DATABASE_URL=postgresql+asyncpg://pgcc_test:pgcc_test@localhost:5432/pgcc_legacy_test alembic upgrade head
-          version=$(psql -h localhost -U pgcc_test -d pgcc_legacy_test -Atc "SELECT version_num FROM alembic_version")
+          version=$(docker exec "$postgres_container" psql -U pgcc_test -d pgcc_legacy_test -Atc "SELECT version_num FROM alembic_version")
           test "$version" = "0026_auth_rate_limit_buckets"
       - name: Verify PostgreSQL backup and restore
-        env:
-          PGPASSWORD: pgcc_test
         shell: bash
         run: |
-          psql -h localhost -U pgcc_test -d pgcc_test -v ON_ERROR_STOP=1 -c "INSERT INTO auth_rate_limit_buckets (bucket_key, scope, window_started_at, attempts, updated_at) VALUES ('phase0-recovery-fixture', 'recovery:smoke', now(), 1, now()) ON CONFLICT (bucket_key) DO UPDATE SET attempts = EXCLUDED.attempts, updated_at = now()"
-          pg_dump -h localhost -U pgcc_test -d pgcc_test --format=custom --file=/tmp/pgcc-phase0-recovery.dump
-          dropdb --if-exists -h localhost -U pgcc_test pgcc_restore_test
-          createdb -h localhost -U pgcc_test pgcc_restore_test
+          postgres_container=$(docker ps --filter ancestor=pgvector/pgvector:pg16 --format '{{.ID}}' | head -n1)
+          test -n "$postgres_container"
+          docker exec "$postgres_container" psql -U pgcc_test -d pgcc_test -v ON_ERROR_STOP=1 -c "INSERT INTO auth_rate_limit_buckets (bucket_key, scope, window_started_at, attempts, updated_at) VALUES ('phase0-recovery-fixture', 'recovery:smoke', now(), 1, now()) ON CONFLICT (bucket_key) DO UPDATE SET attempts = EXCLUDED.attempts, updated_at = now()"
+          docker exec "$postgres_container" pg_dump -U pgcc_test -d pgcc_test --format=custom > /tmp/pgcc-phase0-recovery.dump
+          docker exec "$postgres_container" dropdb -U pgcc_test --if-exists pgcc_restore_test
+          docker exec "$postgres_container" createdb -U pgcc_test pgcc_restore_test
           started_at=$(date +%s)
-          pg_restore --exit-on-error --no-owner --no-privileges -h localhost -U pgcc_test -d pgcc_restore_test /tmp/pgcc-phase0-recovery.dump
+          docker exec -i "$postgres_container" pg_restore --exit-on-error --no-owner --no-privileges -U pgcc_test -d pgcc_restore_test < /tmp/pgcc-phase0-recovery.dump
           ended_at=$(date +%s)
           echo "PostgreSQL restore duration: $((ended_at - started_at)) seconds"
-          restored_version=$(psql -h localhost -U pgcc_test -d pgcc_restore_test -Atc "SELECT version_num FROM alembic_version")
-          restored_fixture=$(psql -h localhost -U pgcc_test -d pgcc_restore_test -Atc "SELECT count(*) FROM auth_rate_limit_buckets WHERE bucket_key = 'phase0-recovery-fixture'")
+          restored_version=$(docker exec "$postgres_container" psql -U pgcc_test -d pgcc_restore_test -Atc "SELECT version_num FROM alembic_version")
+          restored_fixture=$(docker exec "$postgres_container" psql -U pgcc_test -d pgcc_restore_test -Atc "SELECT count(*) FROM auth_rate_limit_buckets WHERE bucket_key = 'phase0-recovery-fixture'")
           test "$restored_version" = "0026_auth_rate_limit_buckets"
           test "$restored_fixture" = "1"
-          dropdb -h localhost -U pgcc_test pgcc_legacy_test
-          dropdb -h localhost -U pgcc_test pgcc_restore_test
+          docker exec "$postgres_container" dropdb -U pgcc_test pgcc_legacy_test
+          docker exec "$postgres_container" dropdb -U pgcc_test pgcc_restore_test
       - name: Run PostgreSQL integration tests (sessions, asset graph, supplier access and document/RAG lifecycle, classification ACL, upload uniqueness and audit-log append-only/durable outbox)
         env:
           PYTHONPATH: backend
