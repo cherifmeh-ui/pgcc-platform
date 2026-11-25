@@ -84,8 +84,12 @@ async def test_postgres_document_list_preview_and_download_enforce_classificatio
             download = await download_document(str(docs[0].id), db=db, current_user=viewer)
             assert download.body == b"%PDF-policy"
 
-            # Persist a modified original while retaining its original digest.
-            docs[0].file_data = b"%PDF-policy-tampered"
+            # Reload the persisted row in this session before simulating tampering.
+            stored_document = await db.scalar(
+                select(Document).where(Document.id == docs[0].id)
+            )
+            assert stored_document is not None
+            stored_document.file_data = b"%PDF-policy-tampered"
             await db.commit()
             with pytest.raises(HTTPException) as integrity_denied:
                 await download_document(str(docs[0].id), db=db, current_user=viewer)
