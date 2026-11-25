@@ -13,7 +13,7 @@ from unittest.mock import AsyncMock
 import hashlib
 
 import pytest
-from fastapi import HTTPException
+from fastapi import HTTPException, Response
 from starlette.requests import Request
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import async_sessionmaker, create_async_engine
@@ -172,7 +172,7 @@ async def test_refresh_endpoint_rotation_and_replay_are_audited_atomically(monke
     async def rotate():
         async with sessions() as db:
             return await auth_endpoint.refresh_tokens(
-                RefreshRequest(refresh_token="old-refresh"), request=request, db=db
+                RefreshRequest(refresh_token="old-refresh"), request=request, response=Response(), db=db
             )
 
     try:
