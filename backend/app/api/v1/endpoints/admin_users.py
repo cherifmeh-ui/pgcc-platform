@@ -303,10 +303,17 @@ async def reset_user_mfa(
                 detail="Impossible de réinitialiser le MFA du dernier administrateur actif.",
             )
 
+        auth_version_before_reset = int(target.auth_version or 0)
         target.mfa_enabled = False
         target.mfa_secret = None
         target.mfa_confirmed_at = None
         target.backup_codes_hashed = None
+        # The model hook bumps auth_version when enabled/confirmed MFA changes.
+        # Also invalidate access tokens when cleaning stale MFA material from an
+        # account whose MFA was already disabled.
+        await db.flush()
+        if int(target.auth_version or 0) == auth_version_before_reset:
+            target.auth_version = auth_version_before_reset + 1
         revoked = await _revoke_refresh_sessions(db, target.id)
         await _audit(
             db, request, current_user, target, "ADMIN_USER_MFA_RESET",
