@@ -44,3 +44,8 @@ Authentication/session security remains open until the HTTP-level PostgreSQL rot
 - Cookie refresh/logout requests require an Origin in the configured explicit CORS allowlist. CORS already enables credentials and rejects wildcard origins in production.
 - Frontend stores access token in memory only, uses credentialed requests and restores a session from the cookie after reload. Concurrent restore calls share one in-flight promise.
 - Remaining validation: CI and production same-site deployment review. The temporary JSON refresh-token input remains for legacy compatibility and should be removed after migration is deployed.
+
+## CI cookie migration correction — 2026-11-25
+
+- Workflow 45569880462 found a test invocation mismatch, not a production request flaw: direct function calls inherited FastAPI's Cookie marker default. The endpoints now use Annotated Cookie parameters with a None default.
+- The browser cookie flow and Origin checks remain in place. Fresh CI validation is pending.
