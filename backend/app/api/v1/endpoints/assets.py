@@ -704,16 +704,22 @@ async def retire_asset(
     asset = result.scalar_one_or_none()
     if asset is None:
         raise HTTPException(status_code=404, detail="Actif introuvable")
-    if not _asset_is_retired(asset.lifecycle_status, asset.retired_at) or asset.retired_at is None:
-        asset.retired_at = asset.retired_at or datetime.now(timezone.utc)
+    if asset.lifecycle_status not in {"Retiré", "Décommissionné"} or asset.retired_at is None:
+        if asset.retired_at is None:
+            asset.retired_at = datetime.now(timezone.utc)
         if asset.lifecycle_status not in {"Retiré", "Décommissionné"}:
             asset.lifecycle_status = "Retiré"
-        await enqueue_audit_event(
-            db, user_email=current_user.email, action="RETIRE", resource="assets",
-            resource_id=str(asset.id), details=f"Asset retired: {asset.reference}",
-            event_type="ASSET", request=request,
-        )
-        await db.commit()
+        try:
+            await db.flush()
+            await enqueue_audit_event(
+                db, user_email=current_user.email, action="RETIRE", resource="assets",
+                resource_id=str(asset.id), details=f"Asset retired: {asset.reference}",
+                event_type="ASSET", request=request,
+            )
+            await db.commit()
+        except Exception:
+            await db.rollback()
+            raise
 
 
 
@@ -958,6 +964,7 @@ async def delete_asset_relationship(
         raise HTTPException(status_code=404, detail="Relation introuvable pour cet actif")
     try:
         await db.delete(relationship)
+        await db.flush()
         await enqueue_audit_event(
             db, user_email=current_user.email, action="DELETE_RELATIONSHIP", resource="asset_relationships",
             resource_id=str(relationship.id),
@@ -1021,6 +1028,9 @@ async def link_asset_to_risk(
     except IntegrityError:
         await db.rollback()
         raise HTTPException(status_code=409, detail="Association actif/risque déjà existante ou contrainte invalide")
+    except Exception:
+        await db.rollback()
+        raise
     await db.refresh(link)
     return link
 
@@ -1045,10 +1055,15 @@ async def unlink_asset_from_risk(
     link = result.scalar_one_or_none()
     if link is None:
         raise HTTPException(status_code=404, detail="Association actif/risque introuvable")
-    await db.delete(link)
-    await enqueue_audit_event(
-        db, user_email=current_user.email, action="UNLINK_RISK", resource="asset_risk_links",
-        resource_id=f"{asset_id}:{risk_id}", details="Asset-risk association removed",
-        event_type="ASSET_RISK", request=request,
-    )
-    await db.commit()
+    try:
+        await db.delete(link)
+        await db.flush()
+        await enqueue_audit_event(
+            db, user_email=current_user.email, action="UNLINK_RISK", resource="asset_risk_links",
+            resource_id=f"{asset_id}:{risk_id}", details="Asset-risk association removed",
+            event_type="ASSET_RISK", request=request,
+        )
+        await db.commit()
+    except Exception:
+        await db.rollback()
+        raise
