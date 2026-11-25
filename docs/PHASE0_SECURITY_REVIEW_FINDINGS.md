@@ -165,3 +165,8 @@ Do not close Phase 0 until evidence is attached for:
 - Fixed Compose Vite proxy target to use the backend service hostname inside Docker; pinned pgvector major to pg16 and switched dev frontend install to npm ci.
 - Added Compose CI smoke job for config validation, backend image build, full development stack startup, API health and frontend proxy.
 - Remaining: verify new CI, production same-site topology, remove legacy JSON refresh-token fallback, review warnings.
+
+## CI cookie test correction — 2026-11-25
+
+- Run 45569880462: frontend passed; backend 303 passed/13 skipped with one failed direct-call test; PostgreSQL 12 passed/one failed direct-call test. Both failed because direct calls inherited Cookie(...) marker instead of None.
+- Fixed with Annotated Cookie injection and explicit None default in commit 12efce0. The next workflow must validate this correction and the new Compose smoke job.
