@@ -99,6 +99,36 @@ async def _lock_active_mfa_admins(db: AsyncSession) -> list[User]:
     return list(result.scalars().all())
 
 
+async def _lock_authorized_admin(
+    db: AsyncSession,
+    current_user: User,
+    locked_admins: list[User],
+    expected_auth_version: int,
+) -> User:
+    """Revalidate the actor under the same locks to prevent stale-admin TOCTOU."""
+    actor = next((user for user in locked_admins if user.id == current_user.id), None)
+    if actor is None:
+        result = await db.execute(
+            select(User)
+            .where(User.id == current_user.id)
+            .with_for_update()
+            .execution_options(populate_existing=True)
+        )
+        actor = result.scalar_one_or_none()
+    if (
+        actor is None
+        or not actor.is_active
+        or (actor.role or "").strip().lower() != "admin"
+        or not actor.mfa_enabled
+        or int(actor.auth_version or 0) != expected_auth_version
+    ):
+        raise HTTPException(
+            status_code=403,
+            detail="Droits administrateur ou état de sécurité modifiés. Reconnectez-vous.",
+        )
+    return actor
+
+
 async def _lock_target_user(
     db: AsyncSession, user_id: UUID, locked_admins: list[User]
 ) -> User:
@@ -193,7 +223,11 @@ async def update_user(
         raise HTTPException(status_code=422, detail="Un champ obligatoire ne peut pas être nul.")
 
     try:
+        expected_auth_version = int(current_user.auth_version or 0)
         locked_admins = await _lock_active_mfa_admins(db)
+        await _lock_authorized_admin(
+            db, current_user, locked_admins, expected_auth_version
+        )
         target = await _lock_target_user(db, user_id, locked_admins)
 
         if target.id == current_user.id and (
@@ -254,7 +288,11 @@ async def reset_user_mfa(
     current_user: User = require_permission("users", "manage"),
 ):
     try:
+        expected_auth_version = int(current_user.auth_version or 0)
         locked_admins = await _lock_active_mfa_admins(db)
+        await _lock_authorized_admin(
+            db, current_user, locked_admins, expected_auth_version
+        )
         target = await _lock_target_user(db, user_id, locked_admins)
         if target.id == current_user.id:
             raise HTTPException(status_code=409, detail="Un administrateur ne peut pas réinitialiser son propre MFA.")
@@ -293,7 +331,11 @@ async def revoke_user_sessions(
     current_user: User = require_permission("users", "manage"),
 ):
     try:
+        expected_auth_version = int(current_user.auth_version or 0)
         locked_admins = await _lock_active_mfa_admins(db)
+        await _lock_authorized_admin(
+            db, current_user, locked_admins, expected_auth_version
+        )
         target = await _lock_target_user(db, user_id, locked_admins)
         revoked = await _revoke_refresh_sessions(db, target.id)
         # Invalidate access tokens as well; this field is intentionally managed
