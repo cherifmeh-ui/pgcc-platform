@@ -8,14 +8,17 @@ from uuid import uuid4
 
 import pytest
 from fastapi import HTTPException, Request
+from fastapi.security import HTTPAuthorizationCredentials
 from sqlalchemy import delete, select
 from sqlalchemy.ext.asyncio import async_sessionmaker, create_async_engine
 
 from app.api.v1.endpoints import admin_users
-from app.api.v1.endpoints.admin_users import AdminUserUpdate, update_user
+from app.api.deps import get_current_user
+from app.api.v1.endpoints.admin_users import AdminUserUpdate, update_user, revoke_user_sessions
 from app.models.audit_outbox import AuditOutbox
 from app.models.refresh_token_session import RefreshTokenSession
 from app.models.user import User
+from app.core.security import create_access_token
 
 DATABASE_URL = os.getenv("PGCC_INTEGRATION_DATABASE_URL")
 
@@ -303,5 +306,52 @@ async def test_concurrent_admin_demotion_preserves_one_active_mfa_admin():
             assert {actor_a.role, actor_b.role} == {"admin", "auditor"}
     finally:
         await _cleanup(sessions, actor_a_id, actor_b_id)
+        await engine.dispose()
+
+
+@pytest.mark.asyncio
+async def test_admin_session_revocation_rejects_existing_access_and_refresh_tokens():
+    engine = create_async_engine(DATABASE_URL, pool_size=5, max_overflow=0)
+    sessions = async_sessionmaker(engine, expire_on_commit=False)
+    actor_id, target_id, session_id = await _seed(sessions)
+    try:
+        async with sessions() as db:
+            actor = await db.get(User, actor_id)
+            target = await db.get(User, target_id)
+            access_token = create_access_token(
+                subject=target.email,
+                role=target.role,
+                auth_version=target.auth_version,
+            )
+            result = await revoke_user_sessions(
+                user_id=target_id,
+                request=_request(),
+                db=db,
+                current_user=actor,
+            )
+            assert result.auth_version == 1
+
+        async with sessions() as verify:
+            credentials = HTTPAuthorizationCredentials(
+                scheme="Bearer",
+                credentials=access_token,
+            )
+            with pytest.raises(HTTPException) as denied:
+                await get_current_user(credentials, verify)
+            assert denied.value.status_code == 401
+
+            refresh_session = await verify.get(RefreshTokenSession, session_id)
+            events = (
+                await verify.execute(
+                    select(AuditOutbox).where(
+                        AuditOutbox.payload["resource_id"].astext == str(target_id),
+                        AuditOutbox.payload["action"].astext == "ADMIN_USER_SESSIONS_REVOKED",
+                    )
+                )
+            ).scalars().all()
+            assert refresh_session.revoked_at is not None
+            assert len(events) == 1
+    finally:
+        await _cleanup(sessions, actor_id, target_id)
         await engine.dispose()
 
