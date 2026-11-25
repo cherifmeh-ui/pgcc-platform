@@ -27,7 +27,7 @@ async def scan_document_bytes(payload: bytes) -> None:
             asyncio.open_connection(host, settings.CLAMAV_PORT),
             timeout=settings.CLAMAV_TIMEOUT_SECONDS,
         )
-        writer.write(b"zINSTREAM\\0")
+        writer.write(b"zINSTREAM\0")
         for offset in range(0, len(payload), 64 * 1024):
             chunk = payload[offset:offset + 64 * 1024]
             writer.write(struct.pack("!I", len(chunk)))
@@ -35,10 +35,10 @@ async def scan_document_bytes(payload: bytes) -> None:
         writer.write(struct.pack("!I", 0))
         await asyncio.wait_for(writer.drain(), timeout=settings.CLAMAV_TIMEOUT_SECONDS)
         response = await asyncio.wait_for(
-            reader.readuntil(b"\\0"),
+            reader.readuntil(b"\0"),
             timeout=settings.CLAMAV_TIMEOUT_SECONDS,
         )
-        message = response.rstrip(b"\\0").decode("utf-8", errors="replace")
+        message = response.rstrip(b"\0").decode("utf-8", errors="replace")
     except (OSError, asyncio.TimeoutError, asyncio.IncompleteReadError, asyncio.LimitOverrunError) as exc:
         raise AntivirusUnavailable("Service antivirus indisponible.") from exc
     finally:
