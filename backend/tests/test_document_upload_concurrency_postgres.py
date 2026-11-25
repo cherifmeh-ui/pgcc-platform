@@ -14,6 +14,7 @@ from sqlalchemy import delete, select, func
 from sqlalchemy.ext.asyncio import async_sessionmaker, create_async_engine
 
 from app.models.document import Document
+from app.models.user import User
 from app.models.audit_outbox import AuditOutbox
 from app.api.v1.endpoints.documents import upload_document
 
@@ -30,6 +31,14 @@ async def test_concurrent_uploads_with_same_filename_return_one_conflict(monkeyp
     engine = create_async_engine(DATABASE_URL, pool_size=5, max_overflow=0)
     sessions = async_sessionmaker(engine, expire_on_commit=False)
     filename = f"phase0-{uuid4().hex}.pdf"
+    user = User(
+        email=f"phase0-upload-{uuid4().hex}@example.invalid",
+        full_name="Phase 0 upload owner",
+        role="admin",
+        password_hash="not-used",
+        department="IT",
+        is_active=True,
+    )
     prechecks_complete = asyncio.Event()
     precheck_count = 0
 
@@ -71,13 +80,16 @@ async def test_concurrent_uploads_with_same_filename_return_one_conflict(monkeyp
                     version=None,
                     author=None,
                     db=db,
-                    current_user=MagicMock(email="phase0@example.invalid"),
+                    current_user=MagicMock(id=user.id, department=user.department, email=user.email),
                 )
                 return 201
             except HTTPException as exc:
                 return exc.status_code
 
     try:
+        async with sessions() as setup:
+            setup.add(user)
+            await setup.commit()
         results = await asyncio.gather(upload_once(), upload_once())
         assert sorted(results) == [201, 409]
 
@@ -103,6 +115,7 @@ async def test_concurrent_uploads_with_same_filename_return_one_conflict(monkeyp
             await cleanup.execute(delete(Document).where(
                 func.lower(func.btrim(Document.filename)) == filename.lower()
             ))
+            await cleanup.execute(delete(User).where(User.id == user.id))
             await cleanup.commit()
         await engine.dispose()
 
@@ -111,6 +124,14 @@ async def test_upload_rolls_back_document_when_audit_outbox_enqueue_fails(monkey
     engine = create_async_engine(DATABASE_URL, pool_size=2, max_overflow=0)
     sessions = async_sessionmaker(engine, expire_on_commit=False)
     filename = f"phase0-audit-failure-{uuid4().hex}.pdf"
+    user = User(
+        email=f"phase0-audit-{uuid4().hex}@example.invalid",
+        full_name="Phase 0 audit rollback owner",
+        role="admin",
+        password_hash="not-used",
+        department="IT",
+        is_active=True,
+    )
 
     monkeypatch.setattr(
         "app.api.v1.endpoints.documents.scan_document_bytes",
@@ -127,6 +148,9 @@ async def test_upload_rolls_back_document_when_audit_outbox_enqueue_fails(monkey
     )
 
     try:
+        async with sessions() as setup:
+            setup.add(user)
+            await setup.commit()
         async with sessions() as db:
             with pytest.raises(RuntimeError, match="simulated outbox failure"):
                 await upload_document(
@@ -141,7 +165,7 @@ async def test_upload_rolls_back_document_when_audit_outbox_enqueue_fails(monkey
                     version=None,
                     author=None,
                     db=db,
-                    current_user=MagicMock(email="phase0@example.invalid"),
+                    current_user=MagicMock(id=user.id, department=user.department, email=user.email),
                 )
 
         async with sessions() as verify:
@@ -152,5 +176,6 @@ async def test_upload_rolls_back_document_when_audit_outbox_enqueue_fails(monkey
     finally:
         async with sessions() as cleanup:
             await cleanup.execute(delete(Document).where(Document.filename == filename))
+            await cleanup.execute(delete(User).where(User.id == user.id))
             await cleanup.commit()
         await engine.dispose()
