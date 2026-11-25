@@ -922,3 +922,14 @@ Repository/static hardening is substantially progressed, but the remaining gates
 - Le déballage a été corrigé. Un quatrième test PostgreSQL vérifie désormais qu'un administrateur chargé avant une rétrogradation concurrente ne peut pas réutiliser son objet ORM obsolète pour modifier un autre compte.
 - La suite PostgreSQL couvre aussi le reset MFA d'un compte déjà sans MFA mais conservant des données MFA résiduelles : l'opération doit toujours incrémenter `auth_version`, révoquer les refresh sessions et produire l'événement d'audit.
 - Dernier HEAD de code : `0aa5042`. Validation CI de ce HEAD en attente ; les résultats du run précédent ne sont pas considérés comme validation des corrections.
+
+
+## Point de contrôle — 2026-11-25 (CI complète verte sur la première tranche administrative)
+
+- Le run GitHub Actions `45580862849` est entièrement **vert sur le HEAD exact de la PR** : `ae22d23d2e695be0ac5645b6cceee0c0e5ca2d18`.
+- Backend : **366 réussites, 22 tests ignorés**, aucune erreur.
+- Intégration PostgreSQL : **22 réussites**, migrations Alembic appliquées jusqu'à `0025_user_auth_version`.
+- Frontend : build réussi.
+- Docker Compose : build, démarrage de la stack, vérification de `/health` et du proxy frontend réussis ; arrêt propre.
+- Les nouveaux tests PostgreSQL couvrent le changement de rôle avec révocation des refresh sessions et audit atomique, le rollback complet si l'audit échoue, le reset MFA d'un compte déjà désactivé, ainsi que le refus d'une mutation par un administrateur rétrogradé concurremment.
+- Cette réussite valide la tranche actuelle sur ce HEAD. Elle ne clôt pas Phase 0 : les tests de concurrence entre rétrogradations concurrentes, les scénarios complets de refus des access tokens pour chaque mutation, la limitation distribuée des tentatives, la répétition de restauration de sauvegarde et la revue de sécurité humaine restent ouverts.
