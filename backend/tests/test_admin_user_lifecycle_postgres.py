@@ -355,3 +355,86 @@ async def test_admin_session_revocation_rejects_existing_access_and_refresh_toke
         await _cleanup(sessions, actor_id, target_id)
         await engine.dispose()
 
+@pytest.mark.asyncio
+@pytest.mark.parametrize(
+    ("mutation", "expected_status", "expected_action"),
+    [
+        ("role", 403, "ADMIN_USER_UPDATED"),
+        ("deactivate", 403, "ADMIN_USER_UPDATED"),
+        ("mfa_reset", 401, "ADMIN_USER_MFA_RESET"),
+        ("sessions_revoke", 401, "ADMIN_USER_SESSIONS_REVOKED"),
+    ],
+)
+async def test_each_security_mutation_invalidates_existing_access_and_refresh_sessions(
+    mutation, expected_status, expected_action
+):
+    engine = create_async_engine(DATABASE_URL, pool_size=5, max_overflow=0)
+    sessions = async_sessionmaker(engine, expire_on_commit=False)
+    actor_id, target_id, session_id = await _seed(sessions)
+    try:
+        async with sessions() as db:
+            actor = await db.get(User, actor_id)
+            target = await db.get(User, target_id)
+            access_token = create_access_token(
+                subject=target.email,
+                role=target.role,
+                auth_version=target.auth_version,
+            )
+
+            if mutation == "role":
+                result = await update_user(
+                    user_id=target_id,
+                    payload=AdminUserUpdate(role="auditor"),
+                    request=_request(),
+                    db=db,
+                    current_user=actor,
+                )
+            elif mutation == "deactivate":
+                result = await update_user(
+                    user_id=target_id,
+                    payload=AdminUserUpdate(is_active=False),
+                    request=_request(),
+                    db=db,
+                    current_user=actor,
+                )
+            elif mutation == "mfa_reset":
+                result = await admin_users.reset_user_mfa(
+                    user_id=target_id,
+                    request=_request(),
+                    db=db,
+                    current_user=actor,
+                )
+            else:
+                result = await revoke_user_sessions(
+                    user_id=target_id,
+                    request=_request(),
+                    db=db,
+                    current_user=actor,
+                )
+
+            assert result.auth_version == 1
+
+        async with sessions() as verify:
+            credentials = HTTPAuthorizationCredentials(
+                scheme="Bearer",
+                credentials=access_token,
+            )
+            with pytest.raises(HTTPException) as denied:
+                await get_current_user(credentials, verify)
+            assert denied.value.status_code == expected_status
+
+            refresh_session = await verify.get(RefreshTokenSession, session_id)
+            assert refresh_session.revoked_at is not None
+            events = (
+                await verify.execute(
+                    select(AuditOutbox).where(
+                        AuditOutbox.payload["resource_id"].astext == str(target_id),
+                        AuditOutbox.payload["action"].astext == expected_action,
+                    )
+                )
+            ).scalars().all()
+            assert len(events) == 1
+    finally:
+        await _cleanup(sessions, actor_id, target_id)
+        await engine.dispose()
+
