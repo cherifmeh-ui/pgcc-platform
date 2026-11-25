@@ -83,6 +83,13 @@ async def test_postgres_document_list_preview_and_download_enforce_classificatio
 
             download = await download_document(str(docs[0].id), db=db, current_user=viewer)
             assert download.body == b"%PDF-policy"
+
+            # Persist a modified original while retaining its original digest.
+            docs[0].file_data = b"%PDF-policy-tampered"
+            await db.commit()
+            with pytest.raises(HTTPException) as integrity_denied:
+                await download_document(str(docs[0].id), db=db, current_user=viewer)
+            assert integrity_denied.value.status_code == 409
     finally:
         async with sessions() as cleanup:
             await cleanup.execute(
