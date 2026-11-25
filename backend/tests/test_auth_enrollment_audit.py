@@ -2,6 +2,7 @@ import pytest
 from unittest.mock import AsyncMock, MagicMock
 
 from app.api.v1.endpoints import auth as auth_endpoint
+from app.services.mfa_encryption import MFA_SECRET_PREFIX, get_mfa_secret
 
 
 @pytest.mark.asyncio
@@ -28,6 +29,8 @@ async def test_enrollment_audit_precedes_commit(monkeypatch):
         request=MagicMock(), credentials="token-placeholder", db=db,
     )
     assert response.secret == "TEST-SECRET"
+    assert user.mfa_secret.startswith(MFA_SECRET_PREFIX)
+    assert get_mfa_secret(user) == response.secret
     assert order.index("audit") < order.index("commit")
     assert order.index("select") < order.index("audit")
     db.commit.assert_awaited_once()
