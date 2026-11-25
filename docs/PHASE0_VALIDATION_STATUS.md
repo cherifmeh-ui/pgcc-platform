@@ -946,3 +946,16 @@ Repository/static hardening is substantially progressed, but the remaining gates
 - Les tests unitaires couvrent les politiques, la confidentialité HMAC, le mode fail-closed et la résolution IP derrière proxy explicitement approuvé. Les tests PostgreSQL valident la limite IP sous 25 appels concurrents et la limite compte depuis 12 IP différentes.
 - La clé `AUTH_RATE_LIMIT_HMAC_KEY` est désormais obligatoire hors développement et distincte du secret JWT. `AUTH_TRUSTED_PROXY_IPS` définit les seuls proxys autorisés à fournir une chaîne X-Forwarded-For.
 - **Phase 0 reste ouverte** : seuils à ajuster avec les métriques réelles, revue de la topologie proxy/clé en production, concurrence des mutations d'administrateurs, tests d'invalidation de tous les access tokens, répétition de restauration/backup et revue de sécurité humaine restent requis.
+
+
+## Point de contrôle — 2026-11-25 (migration drift, upgrade et restauration validés en CI)
+
+- Le run GitHub Actions `45585181919` est entièrement **vert sur le HEAD code** `cf60e82` : backend, PostgreSQL, frontend et Compose smoke.
+- Backend : **376 réussites, 24 ignorés**.
+- PostgreSQL : **24 réussites**.
+- `alembic upgrade head` passe sur une base vide ; `alembic check` conclut `No new upgrade operations detected`.
+- Le chemin historique `0024_audit_outbox -> head` passe ; le downgrade `0026 -> 0025` puis upgrade `head` passe.
+- Le dump custom PostgreSQL 16 a été restauré dans une base neuve ; la révision Alembic et la ligne témoin ont été vérifiées. Durée de restauration mesurée dans ce job CI : **0 seconde** (arrondie à la seconde).
+- Le job PostgreSQL a aussi exécuté les 24 tests d'intégration, dont les tests concurrents du limiteur et les scénarios transactionnels d'administration.
+- L'exécution de `alembic check` a permis d'identifier deux modèles non importés (`action_verification`, `iso_control_evidence`) ; leur enregistrement est corrigé. La migration initiale est maintenant limitée à ses dix tables historiques, afin que les migrations ultérieures créent les leurs.
+- Ces résultats valident le schéma et la procédure de récupération **dans l'environnement éphémère CI uniquement**. Une restauration réelle de sauvegarde chiffrée de préproduction/production, avec RPO/RTO approuvés, reste à réaliser.
