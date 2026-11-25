@@ -538,11 +538,13 @@ async def refresh_tokens(
 
     email = data.get("sub")
     if not email:
+        _clear_refresh_cookie(response)
         raise HTTPException(status_code=401, detail="Token invalide.")
 
     result = await db.execute(select(User).where(User.email == email).with_for_update())
     user = result.scalar_one_or_none()
     if not user:
+        _clear_refresh_cookie(response)
         raise HTTPException(status_code=401, detail="Utilisateur non trouvé.")
 
     denial_reason = refresh_denial_reason(
