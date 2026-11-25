@@ -124,7 +124,7 @@ async def test_refresh_endpoint_rotation_and_replay_are_audited_atomically(monke
         "old-refresh": {
             "sub": email, "jti": old_jti, "iat": int(now.timestamp()),
             "exp": int((now + timedelta(days=1)).timestamp()), "type": "refresh",
-            "role": "viewer", "mfa_enabled": False, "mfa_confirmed_at": None,
+            "role": "viewer", "auth_version": 0, "mfa_enabled": False, "mfa_confirmed_at": None,
         }
     }
     replacement_counter = 0
@@ -134,7 +134,7 @@ async def test_refresh_endpoint_rotation_and_replay_are_audited_atomically(monke
         assert payload["type"] == expected_type
         return payload
 
-    def create_refresh(subject, role=None, mfa_enabled=None, mfa_confirmed_at=None):
+    def create_refresh(subject, role=None, mfa_enabled=None, auth_version=0, mfa_confirmed_at=None):
         nonlocal replacement_counter
         replacement_counter += 1
         token = f"new-refresh-{replacement_counter}"
@@ -301,12 +301,13 @@ async def test_refresh_rolls_back_rotation_if_audit_enqueue_fails(monkeypatch):
 
 @pytest.mark.asyncio
 @pytest.mark.parametrize(
-    ("stored_role", "stored_mfa_enabled", "stored_confirmed_at", "token_role", "token_mfa_enabled", "token_confirmed_at"),
+    ("stored_role", "stored_mfa_enabled", "stored_confirmed_at", "token_role", "token_mfa_enabled", "token_confirmed_at", "stored_auth_version", "token_auth_version"),
     [
-        ("admin", True, datetime.now(timezone.utc), "viewer", True, None),
-        ("viewer", False, None, "viewer", True, int(datetime.now(timezone.utc).timestamp())),
+        ("admin", True, datetime.now(timezone.utc), "viewer", True, None, 0, 0),
+        ("viewer", False, None, "viewer", True, int(datetime.now(timezone.utc).timestamp()), 0, 0),
+        ("viewer", False, None, "viewer", False, None, 1, 0),
     ],
-    ids=["role-changed", "mfa-reset"],
+    ids=["role-changed", "mfa-reset", "auth-version-changed"],
 )
 async def test_refresh_revokes_sessions_after_role_or_mfa_policy_change(
     monkeypatch,
