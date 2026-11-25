@@ -57,7 +57,7 @@ async def test_postgres_document_list_preview_and_download_enforce_classificatio
             for doc in docs:
                 await setup.refresh(doc)
 
-        viewer = MagicMock(role="viewer")
+        viewer = MagicMock(role="viewer", id=None, department=None)
         admin = MagicMock(role="admin")
         async with sessions() as db:
             viewer_rows = await list_documents(db=db, current_user=viewer)
