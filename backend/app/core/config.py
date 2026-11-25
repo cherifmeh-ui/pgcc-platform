@@ -44,6 +44,7 @@ class Settings(BaseSettings):
     # --- Brute-force protection ---
     LOGIN_MAX_ATTEMPTS: int = 5
     LOGIN_LOCK_MINUTES: int = 15
+    AUTH_RATE_LIMIT_HMAC_KEY: str = ""
 
     # --- CORS ---
     CORS_ORIGINS: str = "http://localhost:5173,http://localhost:3000"
@@ -59,6 +60,17 @@ class Settings(BaseSettings):
     @property
     def cors_origins_list(self) -> List[str]:
         return [o.strip() for o in self.CORS_ORIGINS.split(",") if o.strip()]
+
+    @property
+    def auth_rate_limit_hmac_key(self) -> str:
+        configured = self.AUTH_RATE_LIMIT_HMAC_KEY.strip()
+        if configured:
+            return configured
+        if self.ENVIRONMENT.lower() == "development" and self.JWT_SECRET:
+            return hashlib.sha256(
+                ("pgcc-dev-rate-limit:" + self.JWT_SECRET).encode("utf-8")
+            ).hexdigest()
+        return ""
 
     @property
     def mfa_encryption_keys(self) -> List[str]:
@@ -84,6 +96,11 @@ class Settings(BaseSettings):
 
         if self.JWT_ALGORITHM == "HS256" and len(self.JWT_SECRET) < 32:
             raise ValueError("JWT_SECRET doit contenir au moins 32 caractères.")
+
+        if self.AUTH_RATE_LIMIT_HMAC_KEY and len(self.AUTH_RATE_LIMIT_HMAC_KEY.strip()) < 32:
+            raise ValueError("AUTH_RATE_LIMIT_HMAC_KEY doit contenir au moins 32 caractères.")
+        if self.ENVIRONMENT.lower() != "development" and len(self.auth_rate_limit_hmac_key) < 32:
+            raise ValueError("AUTH_RATE_LIMIT_HMAC_KEY est obligatoire hors développement.")
 
         if self.ENVIRONMENT.lower() == "production":
             if self.DEBUG:
