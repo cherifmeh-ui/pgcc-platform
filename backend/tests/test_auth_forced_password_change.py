@@ -10,6 +10,7 @@ from app.services.mfa_encryption import MFA_SECRET_PREFIX
 
 @pytest.mark.asyncio
 async def test_mfa_returns_change_password_token_for_forced_password_change(monkeypatch):
+    monkeypatch.setattr(auth_endpoint, "enforce_auth_rate_limit", AsyncMock())
     user = MagicMock(
         email="forced@example.test",
         role="viewer",
@@ -54,6 +55,7 @@ async def test_mfa_returns_change_password_token_for_forced_password_change(monk
 
 @pytest.mark.asyncio
 async def test_initial_mfa_enrollment_returns_backup_codes_for_forced_password_change(monkeypatch):
+    monkeypatch.setattr(auth_endpoint, "enforce_auth_rate_limit", AsyncMock())
     backup_codes = ["ABCDE-12345", "FGHIJ-67890"]
     user = MagicMock(
         email="newuser@example.test",
@@ -96,6 +98,7 @@ async def test_initial_mfa_enrollment_returns_backup_codes_for_forced_password_c
 
 @pytest.mark.asyncio
 async def test_password_change_audit_is_enqueued_before_commit(monkeypatch):
+    monkeypatch.setattr(auth_endpoint, "enforce_auth_rate_limit", AsyncMock())
     from uuid import uuid4
 
     user = MagicMock(
@@ -149,6 +152,7 @@ async def test_password_change_audit_is_enqueued_before_commit(monkeypatch):
 
 @pytest.mark.asyncio
 async def test_password_change_rolls_back_if_audit_enqueue_fails(monkeypatch):
+    monkeypatch.setattr(auth_endpoint, "enforce_auth_rate_limit", AsyncMock())
     from uuid import uuid4
 
     user = MagicMock(
