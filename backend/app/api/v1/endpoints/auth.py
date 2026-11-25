@@ -32,6 +32,7 @@ from app.models.user import User
 from app.models.refresh_token_session import RefreshTokenSession
 from app.services.security_logger import enqueue_audit_event, log_action
 from app.services.auth_session_policy import refresh_denial_reason
+from app.services.mfa_encryption import encrypt_mfa_secret, get_mfa_secret, MFASecretDecryptionError
 
 router = APIRouter(prefix="/auth", tags=["Authentification"])
 
@@ -270,7 +271,7 @@ async def start_enrollment(
 
     secret = generate_mfa_secret()
     try:
-        user.mfa_secret = secret
+        user.mfa_secret = encrypt_mfa_secret(secret)
         await enqueue_audit_event(
             db, user_email=user.email, action="MFA_ENROLLMENT_STARTED",
             resource="auth", resource_id=str(user.id),
@@ -329,6 +330,13 @@ async def confirm_mfa(
             status_code=400,
             detail="Aucune procédure d'enrôlement MFA active. Appelez /start-enrollment d'abord.",
         )
+    try:
+        mfa_secret = get_mfa_secret(user)
+    except MFASecretDecryptionError:
+        raise HTTPException(
+            status_code=503,
+            detail="Secret MFA indisponible. Contactez l'administrateur.",
+        )
 
     if not user.is_active:
         raise HTTPException(status_code=403, detail="Compte désactivé.")
@@ -338,7 +346,7 @@ async def confirm_mfa(
             detail="Compte temporairement verrouillé après plusieurs échecs MFA.",
         )
 
-    valid_totp = verify_mfa(user.mfa_secret, payload.mfa_code)
+    valid_totp = verify_mfa(mfa_secret, payload.mfa_code)
     remaining_backup_codes = None
     if not valid_totp and user.mfa_enabled:
         remaining_backup_codes = consume_backup_code(payload.mfa_code, user.backup_codes_hashed)
