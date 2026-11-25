@@ -426,31 +426,31 @@ async def change_password(
             detail="Ce token est réservé au changement obligatoire du mot de passe.",
         )
 
-    user.password_hash = hash_password(payload.new_password)
-    user.must_change_password = False
-    user.password_changed_at = _now()
+    try:
+        user.password_hash = hash_password(payload.new_password)
+        user.must_change_password = False
+        user.password_changed_at = _now()
 
-    # Password changes invalidate all previously issued refresh sessions.
-    await db.execute(
-        update(RefreshTokenSession)
-        .where(RefreshTokenSession.user_id == user.id, RefreshTokenSession.revoked_at.is_(None))
-        .values(revoked_at=user.password_changed_at)
-    )
+        # Password changes invalidate all previously issued refresh sessions.
+        await db.execute(
+            update(RefreshTokenSession)
+            .where(RefreshTokenSession.user_id == user.id, RefreshTokenSession.revoked_at.is_(None))
+            .values(revoked_at=user.password_changed_at)
+        )
 
-    access_token = create_access_token(subject=user.email, role=user.role)
-    refresh_token = create_refresh_token(subject=user.email)
-    await _persist_refresh_session(db, user, refresh_token)
-
-    await db.commit()
-
-    await log_action(
-        user_email=user.email,
-        action="PASSWORD_CHANGED",
-        resource="auth",
-        details="Mot de passe changé avec succès",
-        event_type="AUTH",
-        request=request,
-    )
+        access_token = create_access_token(subject=user.email, role=user.role)
+        refresh_token = create_refresh_token(subject=user.email)
+        await _persist_refresh_session(db, user, refresh_token)
+        await enqueue_audit_event(
+            db, user_email=user.email, action="PASSWORD_CHANGED",
+            resource="auth", resource_id=str(user.id),
+            details="Password changed; previous refresh sessions revoked and a new session issued.",
+            event_type="AUTH", request=request,
+        )
+        await db.commit()
+    except Exception:
+        await db.rollback()
+        raise
 
     return TokenPairResponse(
         access_token=access_token,
