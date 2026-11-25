@@ -151,3 +151,9 @@ Do not close Phase 0 until evidence is attached for:
 - MFA completion events (initial enrollment/login and mandatory-password-change path) are now enqueued before commit with rollback on audit failure.
 - Added focused unit tests for password-change audit ordering/rollback and MFA enrollment audit ordering/rollback. Added separate MFA enrollment test module.
 - Remaining: administrator lifecycle paths for account/role/MFA reset and session revocation; encrypted MFA secret storage; rate limiting; CI execution on latest head.
+
+## Warning cleanup and browser token finding — 2026-11-25
+
+- Confirmed CI warning sources: unawaited AsyncMock for synchronous session.add in MFA test, SQLAlchemy stale child-row count during document/chunk delete cascade, pytest-asyncio unset fixture loop scope.
+- Corrected test mock semantics, changed document deletion to bulk-delete chunks before parent, and added pytest.ini with explicit asyncio fixture loop scope. These changes await CI verification.
+- Browser auth review confirmed access and refresh tokens are both stored in localStorage. Open critical remediation tracked in issue #4: HttpOnly refresh cookie, CSRF/Origin controls, explicit credentialed CORS and frontend bootstrap without localStorage refresh token.
