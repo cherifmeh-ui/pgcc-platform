@@ -30,3 +30,10 @@ Status: active review; not a certification or production approval.
 ## Release gate
 
 Authentication/session security remains open until the HTTP-level PostgreSQL rotation/reuse tests, full session lifecycle revocation, durable audit coverage, rate limiting, MFA secret protection and frontend token-storage review are completed or explicitly risk-accepted by the system owner.
+
+## Frontend token-storage review — 2026-11-25
+
+- Confirmed current implementation stores both access and refresh tokens in browser localStorage (`pgcc_access_token`, `pgcc_refresh_token`) and the Axios interceptor reads the access token from localStorage on each request.
+- This exposes long-lived refresh credentials to any successful same-origin XSS. It is not a theoretical or closed item: the current implementation is not using HttpOnly cookies.
+- Target remediation: move refresh token to an HttpOnly, Secure, SameSite cookie with a narrow auth path; add CSRF/origin controls; remove refresh token from JSON and localStorage; keep access token short-lived and preferably memory-only; bootstrap the session via cookie refresh.
+- Do not implement only the frontend half: backend cookie issuance/rotation/clearing, CORS credentials, CSRF policy, integration tests and frontend state bootstrap must be deployed together.
