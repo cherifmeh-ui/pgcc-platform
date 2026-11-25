@@ -95,6 +95,7 @@ async def _lock_active_mfa_admins(db: AsyncSession) -> list[User]:
         )
         .order_by(User.id)
         .with_for_update()
+        .execution_options(populate_existing=True)
     )
     return list(result.scalars().all())
 
