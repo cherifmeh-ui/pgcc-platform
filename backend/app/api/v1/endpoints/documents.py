@@ -2,7 +2,7 @@
 from fastapi import APIRouter, Depends, HTTPException, UploadFile, File, Form, Request
 from fastapi.responses import Response
 from sqlalchemy.ext.asyncio import AsyncSession
-from sqlalchemy import select, func, delete
+from sqlalchemy import select, func, delete, or_, and_
 from sqlalchemy.exc import IntegrityError
 from pydantic import BaseModel, ConfigDict
 from typing import List, Optional
@@ -53,7 +53,26 @@ def can_read_document(user: User, document: Document) -> bool:
     role = (getattr(user, "role", None) or "").strip().lower()
     if role in PRIVILEGED_DOCUMENT_ROLES:
         return True
-    return role == "viewer" and document_classification(document.doc_type) == "INTERNAL"
+
+    owner_id = getattr(document, "owner_id", None)
+    user_id = getattr(user, "id", None)
+    if owner_id is not None and user_id is not None and owner_id == user_id:
+        return True
+
+    if role != "viewer" or document_classification(document.doc_type) != "INTERNAL":
+        return False
+
+    document_department = getattr(document, "department", None)
+    user_department = getattr(user, "department", None)
+    if isinstance(document_department, str) and document_department.strip():
+        return (
+            isinstance(user_department, str)
+            and user_department.strip().casefold() == document_department.strip().casefold()
+        )
+
+    # Legacy documents without owner/department metadata remain globally readable
+    # only when they are explicitly classified INTERNAL.
+    return document_department is None and owner_id is None
 
 
 class DocumentResponse(BaseModel):
@@ -139,6 +158,8 @@ async def upload_document(
         content_text=extracted_text,
         file_data=contents, # Stocker le binaire aussi (utile pour download futur)
         file_sha256=hashlib.sha256(contents).hexdigest(),
+        owner_id=current_user.id,
+        department=(current_user.department or "").strip() or None,
         file_size_kb=size_kb,
         mime_type="application/pdf" if detected_format == "PDF" else "application/vnd.openxmlformats-officedocument.wordprocessingml.document",
         is_indexed=False # Pas encore vectorisé
@@ -186,8 +207,18 @@ async def list_documents(
 ):
     query = select(Document).order_by(Document.created_at.desc())
     if (current_user.role or "").strip().lower() == "viewer":
+        viewer_scope = [
+            Document.owner_id == current_user.id,
+            and_(Document.owner_id.is_(None), Document.department.is_(None)),
+        ]
+        if current_user.department and current_user.department.strip():
+            viewer_scope.append(
+                func.lower(func.btrim(Document.department))
+                == current_user.department.strip().lower()
+            )
         query = query.where(
-            func.upper(func.btrim(Document.doc_type)).in_(tuple(INTERNAL_DOCUMENT_TYPES))
+            func.upper(func.btrim(Document.doc_type)).in_(tuple(INTERNAL_DOCUMENT_TYPES)),
+            or_(*viewer_scope),
         )
     result = await db.execute(query)
     docs = result.scalars().all()
