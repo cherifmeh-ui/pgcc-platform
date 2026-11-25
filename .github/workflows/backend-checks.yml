@@ -116,7 +116,7 @@ jobs:
           DATABASE_URL=postgresql+asyncpg://pgcc_test:pgcc_test@localhost:5432/pgcc_legacy_test alembic downgrade 0025_user_auth_version
           DATABASE_URL=postgresql+asyncpg://pgcc_test:pgcc_test@localhost:5432/pgcc_legacy_test alembic upgrade head
           version=$(docker exec "$postgres_container" psql -U pgcc_test -d pgcc_legacy_test -Atc "SELECT version_num FROM alembic_version")
-          test "$version" = "0026_auth_rate_limit_buckets"
+          test "$version" = "0027_document_file_sha256"
       - name: Verify PostgreSQL backup and restore
         shell: bash
         run: |
@@ -132,7 +132,7 @@ jobs:
           echo "PostgreSQL restore duration: $((ended_at - started_at)) seconds"
           restored_version=$(docker exec "$postgres_container" psql -U pgcc_test -d pgcc_restore_test -Atc "SELECT version_num FROM alembic_version")
           restored_fixture=$(docker exec "$postgres_container" psql -U pgcc_test -d pgcc_restore_test -Atc "SELECT count(*) FROM auth_rate_limit_buckets WHERE bucket_key = 'phase0-recovery-fixture'")
-          test "$restored_version" = "0026_auth_rate_limit_buckets"
+          test "$restored_version" = "0027_document_file_sha256"
           test "$restored_fixture" = "1"
           docker exec "$postgres_container" dropdb -U pgcc_test pgcc_legacy_test
           docker exec "$postgres_container" dropdb -U pgcc_test pgcc_restore_test
