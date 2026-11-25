@@ -113,11 +113,6 @@ class Settings(BaseSettings):
         except ValueError as exc:
             raise ValueError("AUTH_TRUSTED_PROXY_IPS contient un réseau IP invalide.") from exc
 
-        if self.AUTH_RATE_LIMIT_HMAC_KEY and len(self.AUTH_RATE_LIMIT_HMAC_KEY.strip()) < 32:
-            raise ValueError("AUTH_RATE_LIMIT_HMAC_KEY doit contenir au moins 32 caractères.")
-        if self.ENVIRONMENT.lower() != "development" and len(self.auth_rate_limit_hmac_key) < 32:
-            raise ValueError("AUTH_RATE_LIMIT_HMAC_KEY est obligatoire hors développement.")
-
         if self.ENVIRONMENT.lower() == "production":
             if self.DEBUG:
                 raise ValueError("DEBUG doit être désactivé en production.")
@@ -134,6 +129,11 @@ class Settings(BaseSettings):
                     Fernet(key.encode("ascii"))
             except Exception as exc:
                 raise ValueError("MFA_ENCRYPTION_KEYS doit contenir des clés Fernet valides.") from exc
+
+        if self.AUTH_RATE_LIMIT_HMAC_KEY and len(self.AUTH_RATE_LIMIT_HMAC_KEY.strip()) < 32:
+            raise ValueError("AUTH_RATE_LIMIT_HMAC_KEY doit contenir au moins 32 caractères.")
+        if self.ENVIRONMENT.lower() != "development" and len(self.auth_rate_limit_hmac_key) < 32:
+            raise ValueError("AUTH_RATE_LIMIT_HMAC_KEY est obligatoire hors développement.")
 
         if self.JWT_ALGORITHM == "RS256":
             if not self.JWT_PRIVATE_KEY_PATH:
