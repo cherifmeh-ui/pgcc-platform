@@ -133,3 +133,19 @@ def test_non_development_configuration_requires_dedicated_rate_limit_key():
     configured = Settings(**base, AUTH_RATE_LIMIT_HMAC_KEY="r" * 48)
     assert configured.auth_rate_limit_hmac_key == "r" * 48
 
+
+def test_all_trusted_forwarded_hops_fall_back_to_immediate_peer(monkeypatch):
+    monkeypatch.setattr(settings, "AUTH_TRUSTED_PROXY_IPS", "10.0.0.0/24")
+    request = Request(
+        {
+            "type": "http",
+            "method": "POST",
+            "path": "/auth/login",
+            "headers": [(b"x-forwarded-for", b"10.0.0.99, 10.0.0.10")],
+            "client": ("10.0.0.2", 1234),
+            "server": ("localhost", 80),
+            "scheme": "http",
+            "query_string": b"",
+        }
+    )
+    assert get_source_ip(request) == "10.0.0.2"
