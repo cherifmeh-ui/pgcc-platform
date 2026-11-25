@@ -895,3 +895,13 @@ Repository/static hardening is substantially progressed, but the remaining gates
 - Tests unitaires ajoutés pour la matrice RBAC, les rôles acceptés, le rejet des champs sensibles/inconnus et la minimisation des réponses.
 - Le premier run CI sur le commit intermédiaire a révélé deux erreurs de syntaxe dues à des retours à la ligne mal encodés dans le routeur API et la matrice RBAC. Ces erreurs ont été corrigées ; le nouveau HEAD déclenche un nouveau run CI. Les tests PostgreSQL de concurrence, rollback d'audit et invalidation réelle des access/refresh tokens restent à ajouter/exécuter. Cette tranche n'est donc pas encore déclarée validée.
 - Le provisionnement/création des comptes n'est pas implémenté ; il reste séparé pour éviter de définir un flux d'identité/invitation sans décision métier.
+
+
+## Point de contrôle — 2026-11-25 (tests administratifs et CI intermédiaire)
+
+- Le run `45579930331` sur le commit `b9ef6c5` a confirmé : PostgreSQL, frontend et smoke test Compose réussis ; backend en échec avec **365 réussites, 18 tests ignorés et 1 échec**.
+- L'échec backend était une assertion erronée du nouveau test unitaire (`"users" in PERMISSIONS` comparé à une chaîne avec guillemets intégrés). L'assertion a été corrigée.
+- Le même run a compilé les modules Python après correction des retours à la ligne mal encodés dans `router.py` et `rbac.py`.
+- Deux tests PostgreSQL dédiés au cycle de vie administratif ont été ajoutés : mutation rôle + révocation refresh + audit atomique, et rollback complet si l'enqueue audit échoue. Le workflow PostgreSQL les inclut désormais.
+- Le dernier HEAD `967ec09` contient ces corrections et tests. Le run CI associé n'est pas encore disponible ; aucune réussite n'est revendiquée sur ce HEAD.
+- Le test PostgreSQL existant sur le dernier run intermédiaire était vert, mais il ne comprenait pas encore les nouveaux tests administratifs.
