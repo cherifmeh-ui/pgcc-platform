@@ -34,6 +34,11 @@ async def test_concurrent_uploads_with_same_filename_return_one_conflict(monkeyp
     precheck_count = 0
 
     monkeypatch.setattr(
+        "app.api.v1.endpoints.documents.scan_document_bytes",
+        AsyncMock(return_value=None),
+    )
+
+    monkeypatch.setattr(
         "app.api.v1.endpoints.documents.DocumentExtractor.extract_text",
         lambda _contents, _filename: ("safe extracted text", "PDF"),
     )
@@ -106,6 +111,11 @@ async def test_upload_rolls_back_document_when_audit_outbox_enqueue_fails(monkey
     engine = create_async_engine(DATABASE_URL, pool_size=2, max_overflow=0)
     sessions = async_sessionmaker(engine, expire_on_commit=False)
     filename = f"phase0-audit-failure-{uuid4().hex}.pdf"
+
+    monkeypatch.setattr(
+        "app.api.v1.endpoints.documents.scan_document_bytes",
+        AsyncMock(return_value=None),
+    )
 
     monkeypatch.setattr(
         "app.api.v1.endpoints.documents.DocumentExtractor.extract_text",
