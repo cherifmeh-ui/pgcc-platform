@@ -61,3 +61,10 @@ Authentication/session security remains open until the HTTP-level PostgreSQL rot
 - TOTP secrets are now encrypted at rest with Fernet. New enrollments persist ciphertext; legacy plaintext is lazily encrypted when MFA is used.
 - Non-development environments require a managed Fernet key ring and startup fails closed while plaintext rows remain. The one-time migration and rotation script is documented in `docs/MFA_SECRET_ENCRYPTION_RUNBOOK.md`.
 - Remaining: verify CI and run the migration on the target database before production rollout; back up keys securely and define operational rotation ownership.
+
+## MFA and document ACL validation evidence — 2026-11-25
+
+- Workflow 45574537534 passed all four jobs: backend 341 passed/14 skipped; PostgreSQL 14 passed; frontend build/npm audit passed; Docker Compose stack/proxy smoke passed.
+- Fernet-encrypted MFA secret persistence, legacy conversion, key rotation, key-ring validation and startup integrity gate have automated unit/PostgreSQL coverage.
+- Document classification enforcement has unit and PostgreSQL coverage for viewer listing, direct preview and download denial.
+- Operational production steps remain: set/backup managed Fernet key ring, migrate existing plaintext secrets, review key rotation ownership and verify deployment same-site cookie behavior.
