@@ -132,7 +132,7 @@ PERMISSIONS: dict[str, dict[str, list[str]]] = {
     },
     
     # --- Assistant IA Souverain (Phi3/Llama3) ---
-    "ai_assistant": {
+    # --- Administration du cycle de vie des comptes ---\n    "users": {\n        "manage": [Role.ADMIN.value],\n    },\n\n    "ai_assistant": {
         "read": [Role.ADMIN.value, Role.EXECUTIVE.value, Role.AUDITOR.value],
         "use": [Role.ADMIN.value, Role.EXECUTIVE.value, Role.AUDITOR.value],
     },
