@@ -33,14 +33,17 @@ from app.utils.rbac import PERMISSIONS
 def test_endpoint_permissions_are_declared_in_rbac_matrix():
     endpoints_dir = Path(__file__).parents[1] / "app" / "api" / "v1" / "endpoints"
     declaration_pattern = re.compile(
-        r"""require_permission\\(\\s*['"]([^'"]+)['"]"""
-        r"""(?:\\s*,\\s*['"]([^'"]+)['"])?\\s*\\)"""
+        r"""require_permission\(\s*['"]([^'"]+)['"]"""
+        r"""(?:\s*,\s*['"]([^'"]+)['"])?\s*\)"""
     )
     undeclared = []
+    discovered = set()
     for endpoint_file in endpoints_dir.glob("*.py"):
         source = endpoint_file.read_text(encoding="utf-8")
         for match in declaration_pattern.finditer(source):
             module, action = match.group(1), match.group(2) or "read"
+            discovered.add((module, action))
             if module not in PERMISSIONS or action not in PERMISSIONS.get(module, {}):
                 undeclared.append(f"{endpoint_file.name}: {module}:{action}")
+    assert discovered, "No require_permission declarations were discovered; permission audit must not pass vacuously"
     assert undeclared == [], f"Endpoint permissions missing from RBAC matrix: {undeclared}"
