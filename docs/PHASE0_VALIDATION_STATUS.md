@@ -1127,3 +1127,17 @@ Un test PostgreSQL avec deux sessions concurrentes couvre maintenant la créatio
 - Les procédures RPO/RTO doivent être répétées et acceptées par les responsables opérationnels dans l'environnement cible ; le test CI de restauration n'est pas un exercice de reprise de production.
 - Les secrets, certificats TLS, reverse proxy, journaux centralisés, supervision ClamAV et politique de mise à jour des signatures doivent être configurés et vérifiés dans l'environnement de déploiement.
 - Revue humaine du diff complet et acceptation formelle des risques résiduels restent obligatoires avant fusion.
+
+
+## Durcissement de l'extraction documentaire — 2026-11-25
+
+- HEAD testé : `cef342a9d9726b026a3449dd35b987f36b91dcad`.
+- Workflow PR `45637328669` : backend, PostgreSQL, frontend et Compose terminés avec succès.
+- Backend : **422 tests réussis, 38 ignorés**.
+- PostgreSQL : **37 tests d'intégration réussis**.
+- Compose : health API/proxy validés ; daemon ClamAV réel démarré ; verdict propre accepté et EICAR détecté.
+- Le parseur PDF n'ignore plus silencieusement une page en erreur : l'extraction entière échoue pour empêcher l'indexation d'un contenu incomplet.
+- L'accumulation du texte PDF/DOCX est limitée progressivement ; les archives DOCX avec entrées dupliquées ou chiffrées sont refusées.
+- Les tests couvrent la page PDF illisible, le dépassement du budget d'extraction et les entrées DOCX dupliquées.
+- Un premier passage CI a détecté deux régressions de séparateurs de lignes dans les chaînes extraites ; elles ont été corrigées et le HEAD final ci-dessus a passé les tests.
+- **Limite persistante :** le parseur tourne encore dans le processus backend. L'isolation dans un conteneur/service séparé avec réseau et ressources limités demeure une porte de sortie obligatoire de Phase 0.
