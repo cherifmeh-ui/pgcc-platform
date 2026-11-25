@@ -140,3 +140,102 @@ async def test_asset_retirement_rolls_back_when_audit_enqueue_fails(monkeypatch)
     finally:
         await _cleanup(sessions, asset_id)
         await engine.dispose()
+
+@pytest.mark.asyncio
+async def test_asset_reactivation_and_audit_event_commit_together():
+    from app.api.v1.endpoints.assets import AssetUpdate, update_asset
+
+    engine = create_async_engine(DATABASE_URL, pool_size=3, max_overflow=0)
+    sessions = async_sessionmaker(engine, expire_on_commit=False)
+    asset_id = uuid4()
+    try:
+        async with sessions() as setup:
+            setup.add(Asset(
+                id=asset_id,
+                reference=f"PHASE0-REACTIVATE-{asset_id.hex[:10]}",
+                name="Phase 0 reactivation transaction",
+                asset_type="hardware",
+                lifecycle_status="Retiré",
+                retired_at=__import__("datetime").datetime(2026, 1, 1, tzinfo=__import__("datetime").timezone.utc),
+            ))
+            await setup.commit()
+
+        async with sessions() as db:
+            await update_asset(
+                asset_id=asset_id,
+                data=AssetUpdate(lifecycle_status="Actif"),
+                request=_request(),
+                db=db,
+                current_user=MagicMock(email="phase0@example.invalid"),
+            )
+
+        async with sessions() as verify:
+            persisted = await verify.get(Asset, asset_id)
+            events = (
+                await verify.execute(
+                    select(AuditOutbox).where(
+                        AuditOutbox.payload["resource_id"].astext == str(asset_id),
+                        AuditOutbox.payload["action"].astext == "REACTIVATE",
+                    )
+                )
+            ).scalars().all()
+            assert persisted.lifecycle_status == "Actif"
+            assert persisted.retired_at is None
+            assert len(events) == 1
+    finally:
+        await _cleanup(sessions, asset_id)
+        await engine.dispose()
+
+
+@pytest.mark.asyncio
+async def test_asset_reactivation_rolls_back_when_audit_enqueue_fails(monkeypatch):
+    from app.api.v1.endpoints import assets as assets_endpoint
+    from app.api.v1.endpoints.assets import AssetUpdate, update_asset
+
+    engine = create_async_engine(DATABASE_URL, pool_size=3, max_overflow=0)
+    sessions = async_sessionmaker(engine, expire_on_commit=False)
+    asset_id = uuid4()
+    monkeypatch.setattr(
+        assets_endpoint,
+        "enqueue_audit_event",
+        AsyncMock(side_effect=RuntimeError("simulated reactivation audit failure")),
+    )
+    try:
+        async with sessions() as setup:
+            setup.add(Asset(
+                id=asset_id,
+                reference=f"PHASE0-REACTIVATE-ROLLBACK-{asset_id.hex[:8]}",
+                name="Phase 0 reactivation rollback",
+                asset_type="hardware",
+                lifecycle_status="Décommissionné",
+                retired_at=__import__("datetime").datetime(2026, 1, 1, tzinfo=__import__("datetime").timezone.utc),
+            ))
+            await setup.commit()
+
+        async with sessions() as db:
+            with pytest.raises(RuntimeError, match="simulated reactivation audit failure"):
+                await update_asset(
+                    asset_id=asset_id,
+                    data=AssetUpdate(lifecycle_status="Actif"),
+                    request=_request(),
+                    db=db,
+                    current_user=MagicMock(email="phase0@example.invalid"),
+                )
+
+        async with sessions() as verify:
+            persisted = await verify.get(Asset, asset_id)
+            events = (
+                await verify.execute(
+                    select(AuditOutbox).where(
+                        AuditOutbox.payload["resource_id"].astext == str(asset_id),
+                        AuditOutbox.payload["action"].astext == "REACTIVATE",
+                    )
+                )
+            ).scalars().all()
+            assert persisted.lifecycle_status == "Décommissionné"
+            assert persisted.retired_at is not None
+            assert events == []
+    finally:
+        await _cleanup(sessions, asset_id)
+        await engine.dispose()
+
