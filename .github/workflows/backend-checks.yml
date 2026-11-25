@@ -50,6 +50,13 @@ jobs:
         working-directory: frontend
         run: npm ci
 
+      - name: Report frontend dependency advisories
+        working-directory: frontend
+        shell: bash
+        run: |
+          npm audit --json > /tmp/pgcc-npm-audit.json || true
+          node -e "const a=require('/tmp/pgcc-npm-audit.json'); console.log(JSON.stringify(a.vulnerabilities || {}, null, 2));"
+
       - name: Build frontend
         working-directory: frontend
         run: npm run build
@@ -122,8 +129,24 @@ jobs:
             fi
             sleep 2
           done
-          curl --fail --silent http://localhost:5173/ >/dev/null
-          status=$(curl --silent --output /dev/null --write-out "%{http_code}" http://localhost:5173/api/v1/me/profile)
+          for attempt in {1..60}; do
+            if curl --fail --silent http://localhost:5173/ >/dev/null; then
+              break
+            fi
+            if [ "$attempt" -eq 60 ]; then
+              docker compose logs
+              exit 1
+            fi
+            sleep 2
+          done
+          status=""
+          for attempt in {1..30}; do
+            status=$(curl --silent --output /dev/null --write-out "%{http_code}" http://localhost:5173/api/v1/me/profile || true)
+            if [ "$status" = "401" ]; then
+              break
+            fi
+            sleep 2
+          done
           test "$status" = "401"
       - name: Show stack logs on failure
         if: failure()
