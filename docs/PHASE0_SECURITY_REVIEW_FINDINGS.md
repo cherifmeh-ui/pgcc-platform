@@ -227,3 +227,11 @@ Do not close Phase 0 until evidence is attached for:
 - Le déclenchement d'indexation est protégé par la permission RBAC `documents:update`. Toute évolution de la matrice de rôles doit préserver une restriction aux opérateurs explicitement autorisés ; la recherche RAG devra filtrer les documents selon l'utilisateur et leur classification avant même de sélectionner les chunks.
 - Validation CI observée sur le HEAD PR `a117d14`, workflow `45613134288` : jobs backend, PostgreSQL, frontend et Compose terminés avec succès. Cette preuve couvre les tests automatisés du workflow, pas une sandbox antivirus ni une restauration de production.
 - Décision : ne pas déclarer l'intégrité SHA-256, l'antivirus, la sandbox ou les ACL RAG comme implémentés. Les conserver comme portes de sortie Phase 0.
+
+
+## Intégrité des binaires documentaires — implémentation en validation — 2026-11-25
+
+- Le modèle Document expose désormais `file_sha256`; la migration `0027_document_file_sha256` ajoute la colonne et calcule les empreintes des binaires historiques par lots bornés. Les lignes sans binaire restent sans empreinte.
+- Les nouveaux uploads calculent SHA-256 avant persistance. Le téléchargement recalcule et compare l'empreinte en temps constant ; une absence ou altération bloque la livraison (HTTP 409).
+- Tests unitaires couvrent digest valide, binaire modifié et métadonnées manquantes ; un test statique vérifie le chaînage de migration et le backfill.
+- À confirmer par CI PostgreSQL : upgrade propre jusqu'à 0027, backfill d'une ligne historique, contrôle du digest, downgrade sur base jetable. Les contrôles antivirus et sandbox restent absents et distincts de SHA-256.
