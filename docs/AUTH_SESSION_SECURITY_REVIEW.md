@@ -43,7 +43,7 @@ Authentication/session security remains open until the HTTP-level PostgreSQL rot
 - Refresh tokens are no longer included in TokenPairResponse. Backend sets an HttpOnly, SameSite=Strict cookie scoped to `/api/v1/auth`; Secure is enabled outside development.
 - Cookie refresh/logout requests require an Origin in the configured explicit CORS allowlist. CORS already enables credentials and rejects wildcard origins in production.
 - Frontend stores access token in memory only, uses credentialed requests and restores a session from the cookie after reload. Concurrent restore calls share one in-flight promise.
-- Remaining validation: CI and production same-site deployment review. The temporary JSON refresh-token input remains for legacy compatibility and should be removed after migration is deployed.
+- Remaining validation: CI and production same-site deployment review. The legacy JSON refresh-token input has been removed; refresh and logout now require the cookie transport. Fresh CI and production same-site deployment review remain pending.
 
 ## CI cookie migration correction — 2026-11-25
 
