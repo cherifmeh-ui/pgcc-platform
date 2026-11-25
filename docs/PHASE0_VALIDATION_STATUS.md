@@ -905,3 +905,12 @@ Repository/static hardening is substantially progressed, but the remaining gates
 - Deux tests PostgreSQL dédiés au cycle de vie administratif ont été ajoutés : mutation rôle + révocation refresh + audit atomique, et rollback complet si l'enqueue audit échoue. Le workflow PostgreSQL les inclut désormais.
 - Le dernier HEAD `967ec09` contient ces corrections et tests. Le run CI associé n'est pas encore disponible ; aucune réussite n'est revendiquée sur ce HEAD.
 - Le test PostgreSQL existant sur le dernier run intermédiaire était vert, mais il ne comprenait pas encore les nouveaux tests administratifs.
+
+
+## Point de contrôle — 2026-11-25 (diagnostic PostgreSQL du cycle de vie administratif)
+
+- Le run `45580289037` a validé le backend (**366 réussites, 18 ignorés**) et le frontend ; le smoke test Compose était encore en cours lors de la consultation.
+- Le job PostgreSQL a exécuté les migrations jusqu'à `0025_user_auth_version` et 18 tests ont réussi, mais les deux nouveaux tests administratifs échouaient au setup : les refresh sessions étaient insérées dans la même unité de travail que les utilisateurs, sans relation ORM ordonnant explicitement les inserts.
+- Le fixture a été corrigé pour valider d'abord les lignes `users`, puis insérer la session dépendante. Le nettoyage supprime aussi les événements d'outbox de test.
+- Une couverture supplémentaire du reset MFA a été ajoutée : même si MFA est déjà désactivé mais qu'il reste des données MFA résiduelles, le reset incrémente explicitement `auth_version`, révoque les refresh sessions et audite l'opération.
+- Ces corrections sont présentes dans le HEAD `1ee0b4e`. Le nouveau résultat CI est attendu ; aucun résultat du run précédent n'est extrapolé à ce HEAD.
