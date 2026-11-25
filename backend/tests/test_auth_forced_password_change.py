@@ -25,6 +25,8 @@ async def test_mfa_returns_change_password_token_for_forced_password_change(monk
     result = MagicMock()
     result.scalar_one_or_none.return_value = user
     db = AsyncMock()
+    db.add = MagicMock()
+    db.flush = AsyncMock()
     db.execute.return_value = result
     monkeypatch.setattr(auth_endpoint, "decode_token", lambda token, expected_type: {"sub": user.email})
     monkeypatch.setattr(auth_endpoint, "verify_mfa", lambda secret, code: True)
