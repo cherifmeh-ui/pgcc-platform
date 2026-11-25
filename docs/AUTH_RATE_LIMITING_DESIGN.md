@@ -59,7 +59,7 @@ Cette implémentation n'est pas considérée validée tant que les tests Postgre
 
 ## Résultat CI — 2026-11-25
 
-- Workflow `45583136393` : quatre jobs réussis sur le HEAD `1cad1e2`.
+- Workflow `45586284593` : quatre jobs réussis sur le HEAD `91ec0cc` (backend 376 réussites/26 ignorés, PostgreSQL 26 réussites, frontend et Compose réussis).
 - Backend : 375 tests réussis / 24 ignorés.
 - PostgreSQL : 24 tests réussis, dont les deux scénarios de concurrence du limiteur.
 - Frontend build et smoke test Docker Compose (health API + proxy frontend) réussis.
