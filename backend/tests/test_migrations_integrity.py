@@ -427,3 +427,23 @@ def test_document_sha256_migration_is_linked_and_backfills_existing_binaries():
     assert "_BATCH_SIZE = 100" in source
     assert "file_data.is_not(None)" in source
     assert "op.drop_column(_TABLE, _COLUMN)" in source
+
+
+def test_document_acl_migration_adds_owner_department_and_restrictive_fk():
+    migration = MIGRATIONS_DIR / "0028_document_acl.py"
+    source = migration.read_text(encoding="utf-8")
+    model = (
+        MIGRATIONS_DIR.parent.parent / "app" / "models" / "document.py"
+    ).read_text(encoding="utf-8")
+    env_source = (MIGRATIONS_DIR.parent / "env.py").read_text(encoding="utf-8")
+
+    assert 'revision = "0028_document_acl"' in source
+    assert 'down_revision = "0027_document_file_sha256"' in source
+    assert '"owner_id"' in source and '"department"' in source
+    assert 'ondelete="RESTRICT"' in source
+    assert "ix_documents_owner_id" in source
+    assert "ix_documents_department" in source
+    assert 'ForeignKey("users.id", ondelete="RESTRICT")' in model
+    assert "owner_id" in model and "department" in model
+    assert "document" in env_source
+    assert "op.drop_column" in source
