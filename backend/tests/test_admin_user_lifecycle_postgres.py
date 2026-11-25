@@ -86,7 +86,9 @@ async def _cleanup(sessions, actor_id, target_id):
     async with sessions() as db:
         await db.execute(
             delete(AuditOutbox).where(
-                AuditOutbox.payload["resource_id"].astext == str(target_id)
+                AuditOutbox.payload["resource_id"].astext.in_(
+                    [str(actor_id), str(target_id)]
+                )
             )
         )
         await db.execute(delete(User).where(User.id.in_([actor_id, target_id])))
