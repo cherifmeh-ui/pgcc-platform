@@ -827,3 +827,13 @@ Repository/static hardening is substantially progressed, but the remaining gates
 - Frontend: npm ci and npm audit zero-vulnerability gate passed; Vite production build passed.
 - Docker Compose: full stack and frontend-to-backend proxy smoke passed.
 - MFA code is validated, but before production deployment the operator must run the documented migration script against the target database, back up the Fernet key, and confirm the actual key custody/rotation procedure.
+
+## Latest green CI — workflow 45574715908 — 2026-11-25
+
+- 4/4 jobs passed on the PR head containing MFA Fernet encryption and document classification ACL.
+- Backend: 342 passed, 15 skipped.
+- PostgreSQL integration: 15 passed; clean PostgreSQL 16 migration chain through 0024_audit_outbox and real DB checks for document ACL and MFA encrypted persistence/startup validation.
+- Frontend: `npm ci`, `npm audit` (0 vulnerabilities) and Vite 6.4.6 production build passed.
+- Docker Compose: configuration, backend image build, full stack startup, API health, frontend proxy and cleanup passed.
+- Non-blocking observations: Node `url.parse()` deprecation comes from the Actions toolchain; Vite reports one JS chunk above 500 kB. Neither failed the build.
+- Remaining production gates are operational: run the MFA legacy migration on the target DB, back up/assign ownership for the Fernet key ring, confirm production same-site cookie topology, implement administrative session revocation/rate limiting, and rehearse legacy DB upgrade/restore.
