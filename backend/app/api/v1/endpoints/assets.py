@@ -7,7 +7,7 @@ from uuid import UUID
 
 from fastapi import APIRouter, Depends, HTTPException, Query, Request, UploadFile, File, status
 from fastapi.responses import Response
-from pydantic import BaseModel, Field, field_validator
+from pydantic import BaseModel, ConfigDict, Field, field_validator
 from sqlalchemy import select, func
 from sqlalchemy.exc import IntegrityError
 from sqlalchemy.orm import aliased
@@ -127,8 +127,7 @@ class AssetResponse(AssetFields):
     updated_at: datetime
     retired_at: datetime | None
 
-    class Config:
-        from_attributes = True
+    model_config = ConfigDict(from_attributes=True)
 
 
 class AssetRiskLinkCreate(BaseModel):
@@ -144,8 +143,7 @@ class AssetRiskLinkResponse(BaseModel):
     created_at: datetime
     created_by: str | None
 
-    class Config:
-        from_attributes = True
+    model_config = ConfigDict(from_attributes=True)
 
 
 class RelationshipCreate(BaseModel):
@@ -165,8 +163,7 @@ class RelationshipResponse(BaseModel):
     created_at: datetime
     created_by: str | None
 
-    class Config:
-        from_attributes = True
+    model_config = ConfigDict(from_attributes=True)
 
 
 
