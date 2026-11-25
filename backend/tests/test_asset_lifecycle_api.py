@@ -146,3 +146,64 @@ async def test_link_asset_risk_rolls_back_if_audit_enqueue_fails(monkeypatch):
     db.rollback.assert_awaited_once()
     db.commit.assert_not_awaited()
 
+@pytest.mark.asyncio
+async def test_reactivation_clears_retirement_marker_and_has_explicit_audit(monkeypatch):
+    from app.api.v1.endpoints.assets import AssetUpdate, update_asset
+
+    retired_at = datetime(2026, 1, 1, tzinfo=timezone.utc)
+    asset = MagicMock(
+        id=ASSET_ID,
+        reference="AST-005",
+        lifecycle_status="Retiré",
+        retired_at=retired_at,
+    )
+    db = _db_for_asset(asset)
+    audit = AsyncMock()
+    monkeypatch.setattr("app.api.v1.endpoints.assets.enqueue_audit_event", audit)
+
+    await update_asset(
+        asset_id=ASSET_ID,
+        data=AssetUpdate(lifecycle_status="Actif"),
+        request=MagicMock(),
+        db=db,
+        current_user=MagicMock(email="admin@example.test"),
+    )
+
+    assert asset.lifecycle_status == "Actif"
+    assert asset.retired_at is None
+    db.flush.assert_awaited_once()
+    db.commit.assert_awaited_once()
+    audit.assert_awaited_once()
+    assert audit.await_args.kwargs["action"] == "REACTIVATE"
+    assert "AST-005" in audit.await_args.kwargs["details"]
+
+
+@pytest.mark.asyncio
+async def test_reactivation_rolls_back_when_audit_enqueue_fails(monkeypatch):
+    from app.api.v1.endpoints.assets import AssetUpdate, update_asset
+
+    asset = MagicMock(
+        id=ASSET_ID,
+        reference="AST-006",
+        lifecycle_status="Décommissionné",
+        retired_at=datetime(2026, 1, 1, tzinfo=timezone.utc),
+    )
+    db = _db_for_asset(asset)
+    audit = AsyncMock(side_effect=RuntimeError("outbox unavailable"))
+    monkeypatch.setattr("app.api.v1.endpoints.assets.enqueue_audit_event", audit)
+
+    with pytest.raises(RuntimeError, match="outbox unavailable"):
+        await update_asset(
+            asset_id=ASSET_ID,
+            data=AssetUpdate(lifecycle_status="Actif"),
+            request=MagicMock(),
+            db=db,
+            current_user=MagicMock(email="admin@example.test"),
+        )
+
+    assert asset.lifecycle_status == "Actif"
+    assert asset.retired_at is None
+    db.flush.assert_awaited_once()
+    db.rollback.assert_awaited_once()
+    db.commit.assert_not_awaited()
+
