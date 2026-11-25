@@ -426,9 +426,6 @@ async def confirm_mfa(
     # Flush security-sensitive User changes first so the before_update
     # listener increments auth_version before it is embedded in the new JWT.
     await db.flush()
-    # Flush security-sensitive User changes first so the before_update
-    # listener increments auth_version before it is embedded in the new JWT.
-    await db.flush()
     access_token = create_access_token(subject=user.email, role=user.role, auth_version=user.auth_version)
     refresh_token = create_refresh_token(
         subject=user.email,
@@ -513,6 +510,8 @@ async def change_password(
             .values(revoked_at=user.password_changed_at)
         )
 
+        # Persist the security-state version bump before minting replacement tokens.
+        await db.flush()
         access_token = create_access_token(subject=user.email, role=user.role, auth_version=user.auth_version)
         refresh_token = create_refresh_token(
             subject=user.email,
