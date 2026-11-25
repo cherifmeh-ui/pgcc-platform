@@ -1,6 +1,7 @@
 import pytest
 from uuid import uuid4
 from starlette.requests import Request
+from fastapi import Response
 from unittest.mock import AsyncMock, MagicMock
 
 from app.api.v1.endpoints import auth as auth_endpoint
@@ -16,7 +17,7 @@ async def test_logout_invalid_token_is_idempotent(monkeypatch):
             "type": "http", "method": "POST", "path": "/auth/logout", "headers": [],
             "client": ("127.0.0.1", 1234), "server": ("test", 80),
             "scheme": "http", "query_string": b"",
-        }), db=db
+        }), response=Response(), db=db
     )
     assert result is None
     db.execute.assert_not_awaited()
@@ -40,7 +41,7 @@ async def test_logout_revokes_refresh_session_by_jti_hash(monkeypatch):
         "client": ("127.0.0.1", 1234), "server": ("test", 80),
         "scheme": "http", "query_string": b"",
     })
-    result = await auth_endpoint.logout(RefreshRequest(refresh_token="refresh-jwt"), request=request, db=db)
+    result = await auth_endpoint.logout(RefreshRequest(refresh_token="refresh-jwt"), request=request, response=Response(), db=db)
     assert result is None
     assert session.revoked_at is not None
     assert db.execute.await_count == 2
