@@ -401,6 +401,9 @@ def test_auth_rate_limit_bucket_migration_and_model_are_aligned():
     assert "blocked_until" in source and "blocked_until" in model
     assert "ck_auth_rate_limit_buckets_attempts_nonnegative" in source
     assert "ix_auth_rate_limit_buckets_updated_at" in source
+    assert "inspector.has_table(_TABLE)" in source
+    assert "get_indexes(_TABLE)" in source
+    assert "get_check_constraints(_TABLE)" in source
 
 
 def test_auth_rate_limit_model_is_registered_for_alembic_autogeneration():
