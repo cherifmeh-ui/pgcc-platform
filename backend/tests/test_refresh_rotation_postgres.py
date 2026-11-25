@@ -21,7 +21,6 @@ from sqlalchemy.ext.asyncio import async_sessionmaker, create_async_engine
 from app.models.refresh_token_session import RefreshTokenSession
 from app.models.audit_outbox import AuditOutbox
 from app.api.v1.endpoints import auth as auth_endpoint
-from app.api.v1.endpoints.auth import RefreshRequest
 from app.models.user import User
 
 DATABASE_URL = os.getenv("PGCC_INTEGRATION_DATABASE_URL")
