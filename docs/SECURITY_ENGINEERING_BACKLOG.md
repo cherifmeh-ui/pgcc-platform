@@ -266,3 +266,12 @@ Status: active engineering review. This is a static review backlog, not a securi
 - [x] Add unit tests and PostgreSQL persistence test.
 - [ ] Validate workflow 45574715908 and run the dry-run/migration on the target deployment DB before production.
 - [ ] Define operational key custody, backup, rotation owner and MFA recovery procedure.
+
+## Latest Phase 0 automated validation — 2026-11-25
+
+- [x] Document classification ACL unit and PostgreSQL tests green (workflow 45574537534).
+- [x] MFA Fernet encryption, legacy conversion, rotation, startup integrity gate and PostgreSQL persistence tests green (workflow 45574537534).
+- [x] Full CI: backend 341 passed/14 skipped; PostgreSQL 14 passed; frontend npm audit zero and build passed; Docker Compose full stack/proxy smoke passed.
+- [ ] Execute the MFA plaintext migration script on the target production database and confirm no plaintext rows remain before deployment.
+- [ ] Confirm key custody/backup/rotation owner and same-site production cookie topology.
+- [ ] Finish administrative session revocation, distributed rate limiting, and production migration/downgrade/backup-restore rehearsal.
