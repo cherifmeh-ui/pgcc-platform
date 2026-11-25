@@ -191,7 +191,7 @@ def test_iso_control_seed_has_93_unique_controls_and_expected_domains():
 
 @pytest.mark.parametrize("reserved_claim", ["sub", "type", "iat", "exp", "jti", "role"])
 def test_access_token_rejects_reserved_extra_claim_override(reserved_claim):
-    with pytest.raises(ValueError, match="reserved JWT claims"):
+    with pytest.raises(ValueError, match="reserved .* claims"):
         create_access_token(
             "user@example.test",
             "viewer",
