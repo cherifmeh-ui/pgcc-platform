@@ -113,7 +113,7 @@ async def upload_document(
     # 5. Créer l'objet ORM
     new_doc = Document(
         title=title,
-        doc_type=doc_type.upper(), 
+        doc_type=doc_type.strip().upper(), 
         version=version,
         author=author,
         filename=safe_filename,
@@ -167,7 +167,7 @@ async def list_documents(
     query = select(Document).order_by(Document.created_at.desc())
     if (current_user.role or "").strip().lower() == "viewer":
         query = query.where(
-            func.upper(Document.doc_type).in_(tuple(INTERNAL_DOCUMENT_TYPES))
+            func.upper(func.btrim(Document.doc_type)).in_(tuple(INTERNAL_DOCUMENT_TYPES))
         )
     result = await db.execute(query)
     docs = result.scalars().all()
