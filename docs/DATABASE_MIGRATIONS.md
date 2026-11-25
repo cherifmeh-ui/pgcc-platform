@@ -39,7 +39,7 @@ The PostgreSQL CI workflow now validates:
 - downgrade `0026 -> 0025` followed by upgrade to `head`;
 - custom-format `pg_dump` and `pg_restore` into a fresh database, including Alembic version and fixture checks.
 
-Run `45585181919` passed these checks on code HEAD `cf60e82`. This is CI evidence only; production backup/restore, encrypted backup custody, WAL retention, and approved RPO/RTO still require an operational rehearsal.
+Run `45586284593` passed these checks on code HEAD `91ec0cc` (26 PostgreSQL integration tests passed). This is CI evidence only; production backup/restore, encrypted backup custody, WAL retention, and approved RPO/RTO still require an operational rehearsal.
 
 The baseline still uses `Base.metadata.create_all()` for its frozen ten-table set. Before production, replace it with a reviewed deterministic schema snapshot or retain the transitional approach only with schema-equivalence checks and controlled imports.
 
