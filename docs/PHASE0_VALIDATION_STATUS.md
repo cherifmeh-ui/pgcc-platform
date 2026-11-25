@@ -933,3 +933,16 @@ Repository/static hardening is substantially progressed, but the remaining gates
 - Docker Compose : build, démarrage de la stack, vérification de `/health` et du proxy frontend réussis ; arrêt propre.
 - Les nouveaux tests PostgreSQL couvrent le changement de rôle avec révocation des refresh sessions et audit atomique, le rollback complet si l'audit échoue, le reset MFA d'un compte déjà désactivé, ainsi que le refus d'une mutation par un administrateur rétrogradé concurremment.
 - Cette réussite valide la tranche actuelle sur ce HEAD. Elle ne clôt pas Phase 0 : les tests de concurrence entre rétrogradations concurrentes, les scénarios complets de refus des access tokens pour chaque mutation, la limitation distribuée des tentatives, la répétition de restauration de sauvegarde et la revue de sécurité humaine restent ouverts.
+
+
+## Point de contrôle — 2026-11-25 (limitation distribuée des tentatives)
+
+- Le run GitHub Actions `45583136393` est entièrement **vert sur le HEAD exact** `1cad1e28fe0c3f2badd7491e3c5b3e9b059bb419`.
+- Backend : **375 réussites, 24 tests ignorés**, aucune erreur.
+- Intégration PostgreSQL : **24 réussites** ; migration `0026_auth_rate_limit_buckets` appliquée.
+- Frontend : build réussi.
+- Docker Compose : validation de configuration, build backend, démarrage complet, endpoint health, proxy frontend et arrêt propre réussis.
+- Le limiteur partagé PostgreSQL couvre login, confirmation/démarrage MFA, changement de mot de passe et refresh. Les buckets IP et compte sont atomiques entre sessions, les identifiants sont HMACés, les erreurs de persistance échouent en mode fermé, les réponses 429 fournissent `Retry-After`, et le nettoyage supprime les buckets inactifs après 48 heures.
+- Les tests unitaires couvrent les politiques, la confidentialité HMAC, le mode fail-closed et la résolution IP derrière proxy explicitement approuvé. Les tests PostgreSQL valident la limite IP sous 25 appels concurrents et la limite compte depuis 12 IP différentes.
+- La clé `AUTH_RATE_LIMIT_HMAC_KEY` est désormais obligatoire hors développement et distincte du secret JWT. `AUTH_TRUSTED_PROXY_IPS` définit les seuls proxys autorisés à fournir une chaîne X-Forwarded-For.
+- **Phase 0 reste ouverte** : seuils à ajuster avec les métriques réelles, revue de la topologie proxy/clé en production, concurrence des mutations d'administrateurs, tests d'invalidation de tous les access tokens, répétition de restauration/backup et revue de sécurité humaine restent requis.
