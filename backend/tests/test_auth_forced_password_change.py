@@ -5,6 +5,7 @@ from fastapi import Response
 from app.api.v1.endpoints import auth as auth_endpoint
 from app.api.v1.endpoints.auth import ConfirmMfaRequest, ChangePasswordRequiredResponse, ChangePasswordRequest
 from app.core.security import decode_token
+from app.services.mfa_encryption import MFA_SECRET_PREFIX
 
 
 @pytest.mark.asyncio
@@ -44,6 +45,7 @@ async def test_mfa_returns_change_password_token_for_forced_password_change(monk
     assert isinstance(response, ChangePasswordRequiredResponse)
     assert response.change_password_required is True
     assert response.user["must_change_password"] is True
+    assert user.mfa_secret.startswith(MFA_SECRET_PREFIX)
     assert decode_token(response.change_password_token, expected_type="change_password")["sub"] == user.email
     assert not hasattr(response, "access_token")
     assert not hasattr(response, "refresh_token")
@@ -89,6 +91,7 @@ async def test_initial_mfa_enrollment_returns_backup_codes_for_forced_password_c
     assert isinstance(response, ChangePasswordRequiredResponse)
     assert response.backup_codes == backup_codes
     assert user.mfa_enabled is True
+    assert user.mfa_secret.startswith(MFA_SECRET_PREFIX)
     assert user.backup_codes_hashed == ["hashed", "hashed"]
 
 @pytest.mark.asyncio
