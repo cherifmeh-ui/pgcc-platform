@@ -1081,10 +1081,10 @@ Un test PostgreSQL avec deux sessions concurrentes couvre maintenant la créatio
 - PostgreSQL : **37 tests d'intégration réussis**, dont migrations, absence de dérive du schéma, chemin de migration historique, sauvegarde/restauration et cycle de vie documents/RAG.
 - Frontend : build réussi.
 - Docker Compose : build et démarrage de la stack, health API et proxy frontend réussis.
-- Upload documentaire : ClamAV INSTREAM est désormais un prérequis avant extraction ; verdict malware = HTTP 422 ; service absent/indisponible ou réponse invalide = HTTP 503 (fail closed). Les tests du protocole sont simulés ; aucun daemon ClamAV réel n'est provisionné dans le pipeline.
+- Upload documentaire : ClamAV INSTREAM est un prérequis avant extraction ; verdict malware = HTTP 422 ; service absent/indisponible ou réponse invalide = HTTP 503 (fail closed). Le workflow Compose démarre désormais un daemon ClamAV réel et valide un verdict propre ainsi que la détection EICAR.
 - RAG : le endpoint de contexte IA réapplique désormais la classification documentaire canonique avant d'insérer les extraits dans le prompt. Les tests unitaires couvrent viewers, auditeurs et limite de sources.
-- Le fichier `.env.example` et Compose documentent `CLAMAV_HOST`, `CLAMAV_PORT` et `CLAMAV_TIMEOUT_SECONDS`. En staging/production, `CLAMAV_HOST` est obligatoire.
-- **Limites restantes avant clôture :** déployer et tester un daemon ClamAV réel ; isoler le parsing PDF/DOCX dans un environnement à privilèges réduits ; compléter les ACL documentaires par propriétaire/département et les tester sous PostgreSQL ; réaliser la revue de sécurité de production et l'acceptation formelle des risques résiduels.
+- Le fichier `.env.example` et Compose documentent `CLAMAV_HOST`, `CLAMAV_PORT` et `CLAMAV_TIMEOUT_SECONDS`. En staging/production, `CLAMAV_HOST` est obligatoire ; Compose permet de définir l'environnement via `ENVIRONMENT`.
+- **Limites restantes avant clôture :** isoler le parsing PDF/DOCX dans un service/sandbox dédié ; réaliser la revue de sécurité de production et l'acceptation formelle des risques résiduels.
 
 
 ## ACL documentaire propriétaire/département — 2026-11-25
@@ -1096,7 +1096,7 @@ Un test PostgreSQL avec deux sessions concurrentes couvre maintenant la créatio
 - Migration `0028_document_acl` appliquée ; `alembic check` sans dérive ; upgrade/downgrade historique et sauvegarde/restauration vérifiés au nouveau head `0028_document_acl`.
 - Le contrôle de liste, aperçu, téléchargement et contexte IA applique maintenant la politique propriétaire/département pour les documents nouvellement déposés. Le test PostgreSQL couvre l'accès au document du département, le refus d'un autre département et l'accès du propriétaire à son propre document restreint.
 - Les uploads enregistrent `owner_id` et le département de l'utilisateur. La FK restrictive interdit de supprimer un compte propriétaire avant réaffectation/suppression de ses documents.
-- **Phase 0 reste ouverte** : ClamAV réel non provisionné dans l'environnement CI/Compose (tests antivirus simulés uniquement), sandbox d'extraction PDF/DOCX à déployer, revue opérationnelle RPO/RTO et acceptation des risques de production à réaliser.
+- **Phase 0 reste ouverte** : sandbox d'extraction PDF/DOCX à déployer, revue opérationnelle RPO/RTO et acceptation des risques de production à réaliser. Le daemon ClamAV réel est validé par le workflow Compose depuis le HEAD `7da80e6`.
 
 
 ## ClamAV Compose profile — 2026-11-25
@@ -1106,7 +1106,7 @@ Un test PostgreSQL avec deux sessions concurrentes couvre maintenant la créatio
 - Le backend utilise `clamav` par défaut, attend le healthcheck du daemon si le profil est activé et conserve le comportement fail-closed si le scanner n'est pas joignable.
 - Configuration externe possible via `CLAMAV_HOST`, `CLAMAV_PORT`, `CLAMAV_TIMEOUT_SECONDS`.
 - Commande documentée : `docker compose --profile antivirus up -d`.
-- **Non encore démontré :** démarrage réel du conteneur ClamAV, téléchargement/actualisation des signatures, scan EICAR contrôlé, tests de charge et alertes. Le CI précédent ne lançait pas le profil antivirus ; ces points restent à valider avant clôture Phase 0.
+- **Validé en CI sur le HEAD `7da80e6` :** démarrage réel du conteneur ClamAV, préparation de la base de signatures, acceptation d'un fichier propre et détection EICAR. **Encore à faire en production :** définir les alertes, la supervision, les seuils de ressources et le processus de mise à jour des signatures.
 
 
 ## Validation ClamAV en conditions réelles — 2026-11-25
