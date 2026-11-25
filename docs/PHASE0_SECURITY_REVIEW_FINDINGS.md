@@ -237,3 +237,11 @@ Do not close Phase 0 until evidence is attached for:
 - À confirmer par CI PostgreSQL : upgrade propre jusqu'à 0027, backfill d'une ligne historique, contrôle du digest, downgrade sur base jetable. Les contrôles antivirus et sandbox restent absents et distincts de SHA-256.
 
 - Le job PostgreSQL CI crée maintenant un document historique sans empreinte avant la migration 0027, vérifie le SHA-256 backfillé par comparaison indépendante, puis répète le contrôle après downgrade/re-upgrade. Le test d'accès PostgreSQL modifie le binaire sans modifier son digest et vérifie le blocage HTTP 409. Ces contrôles attendent encore un workflow vert sur le HEAD courant.
+
+
+## Cartographie — cohérence des relations fournisseur/actif — 2026-11-25
+
+- La revue de concurrence a identifié une asymétrie : la création d'une relation fournisseur-actif verrouillait le fournisseur mais pas l'actif cible, tandis que le retrait d'un actif verrouille l'actif. La création verrouille maintenant aussi l'actif, ce qui sérialise les deux opérations sur la même ligne.
+- Le retrait d'un actif est désormais refusé (HTTP 409) tant qu'une relation fournisseur-actif est au statut `Actif`. Les relations doivent être terminées explicitement avant le retrait, afin de préserver la traçabilité de la dépendance fournisseur.
+- Un test PostgreSQL vérifie qu'un actif avec relation fournisseur active ne peut pas être retiré et que son état reste inchangé.
+- Le workflow `45625707397` sur le HEAD précédent `6f1c4bb` a terminé avec succès sur les quatre jobs (backend, PostgreSQL, frontend, Compose). Les modifications de cohérence ci-dessus ont été ajoutées après ce workflow et attendent leur propre validation CI.
