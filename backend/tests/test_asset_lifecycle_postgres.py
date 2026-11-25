@@ -1,6 +1,7 @@
 """PostgreSQL transaction tests for asset retirement and audit consistency."""
 from __future__ import annotations
 
+from datetime import datetime, timezone
 import os
 from unittest.mock import AsyncMock, MagicMock
 from uuid import uuid4
@@ -156,7 +157,7 @@ async def test_asset_reactivation_and_audit_event_commit_together():
                 name="Phase 0 reactivation transaction",
                 asset_type="hardware",
                 lifecycle_status="Retiré",
-                retired_at=__import__("datetime").datetime(2026, 1, 1, tzinfo=__import__("datetime").timezone.utc),
+                retired_at=datetime(2026, 1, 1, tzinfo=timezone.utc),
             ))
             await setup.commit()
 
