@@ -105,6 +105,12 @@ export const useAuthStore = defineStore('auth', {
       } catch {
         this.accessToken = null;
         setAccessToken(null);
+        localStorage.removeItem('pgcc_access_token');
+        localStorage.removeItem('pgcc_refresh_token');
+        localStorage.removeItem('pgcc_user_role');
+        localStorage.removeItem('pgcc_permissions');
+        this.role = null;
+        this.permissions = {};
         return false;
       } finally {
         this.isLoading = false;
