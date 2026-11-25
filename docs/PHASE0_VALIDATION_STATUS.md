@@ -1097,3 +1097,13 @@ Un test PostgreSQL avec deux sessions concurrentes couvre maintenant la créatio
 - Le contrôle de liste, aperçu, téléchargement et contexte IA applique maintenant la politique propriétaire/département pour les documents nouvellement déposés. Le test PostgreSQL couvre l'accès au document du département, le refus d'un autre département et l'accès du propriétaire à son propre document restreint.
 - Les uploads enregistrent `owner_id` et le département de l'utilisateur. La FK restrictive interdit de supprimer un compte propriétaire avant réaffectation/suppression de ses documents.
 - **Phase 0 reste ouverte** : ClamAV réel non provisionné dans l'environnement CI/Compose (tests antivirus simulés uniquement), sandbox d'extraction PDF/DOCX à déployer, revue opérationnelle RPO/RTO et acceptation des risques de production à réaliser.
+
+
+## ClamAV Compose profile — 2026-11-25
+
+- Un service `clamav/clamav:stable` est disponible dans le profil Compose optionnel `antivirus`.
+- Le daemon reste sur le réseau privé Compose, sans port publié sur l'hôte, et utilise le volume persistant `clamav_db`.
+- Le backend utilise `clamav` par défaut, attend le healthcheck du daemon si le profil est activé et conserve le comportement fail-closed si le scanner n'est pas joignable.
+- Configuration externe possible via `CLAMAV_HOST`, `CLAMAV_PORT`, `CLAMAV_TIMEOUT_SECONDS`.
+- Commande documentée : `docker compose --profile antivirus up -d`.
+- **Non encore démontré :** démarrage réel du conteneur ClamAV, téléchargement/actualisation des signatures, scan EICAR contrôlé, tests de charge et alertes. Le CI précédent ne lançait pas le profil antivirus ; ces points restent à valider avant clôture Phase 0.
