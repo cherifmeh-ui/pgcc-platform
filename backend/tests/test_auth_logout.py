@@ -37,14 +37,20 @@ async def test_logout_revokes_refresh_session_by_jti_hash(monkeypatch):
     monkeypatch.setattr(auth_endpoint, "decode_token", lambda token, expected_type: {"jti": "logout-jti", "type": expected_type})
     monkeypatch.setattr(auth_endpoint, "enqueue_audit_event", audit)
     request = Request({
-        "type": "http", "method": "POST", "path": "/auth/logout", "headers": [],
+        "type": "http", "method": "POST", "path": "/auth/logout",
+        "headers": [(b"origin", b"http://localhost:5173"), (b"cookie", b"pgcc_refresh=refresh-jwt")],
         "client": ("127.0.0.1", 1234), "server": ("test", 80),
         "scheme": "http", "query_string": b"",
     })
-    result = await auth_endpoint.logout(payload=RefreshRequest(refresh_token="refresh-jwt"), request=request, response=Response(), db=db)
+    response = Response()
+    result = await auth_endpoint.logout(
+        request=request, response=response, db=db,
+        payload=None, refresh_cookie="refresh-jwt",
+    )
     assert result is None
     assert session.revoked_at is not None
     assert db.execute.await_count == 2
     audit.assert_awaited_once()
     assert audit.await_args.kwargs["action"] == "REFRESH_SESSION_LOGOUT"
     db.commit.assert_awaited_once()
+    assert "Max-Age=0" in response.headers.get("set-cookie", "")
