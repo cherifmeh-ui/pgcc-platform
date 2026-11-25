@@ -19,13 +19,13 @@ Status: active review; not a certification or production approval.
 
 1. **Session lifecycle completeness:** explicitly revoke sessions when an account is disabled, a user's role changes, MFA is reset, or an administrator performs a security reset. Current access-token checks block inactive accounts and role-mismatched access tokens; refresh eligibility also blocks inactive users, but the persisted rows are not proactively revoked by every administrative lifecycle operation.
 2. **Refresh auditability:** rotation, reuse detection, eligibility denial and logout now enqueue durable audit-outbox events in the same transaction as session changes. The new paths still require fresh CI execution and operational delivery monitoring.
-3. **HTTP-level concurrency:** add PostgreSQL integration tests that call the actual /auth/refresh endpoint with the same token concurrently, assert exactly one success, and verify reuse revocation behavior.
+3. **HTTP-level concurrency:** PostgreSQL integration tests now call the actual /auth/refresh endpoint concurrently with the same token, assert exactly one success, verify replay revocation and test rollback when audit enqueue fails. Fresh CI execution on the latest branch head remains pending.
 4. **Rate limiting:** add distributed account/IP/device rate limiting for login, MFA, enrollment, refresh and password reset. Current database lockout counters are not a substitute for distributed rate limiting.
 5. **MFA secret protection:** mfa_secret is stored on the user record; design encryption at rest, key management and rotation, plus an administrator-approved MFA reset/recovery workflow.
 6. **Enrollment lifecycle:** constrain pre-auth enrollment state, prevent repeated enrollment-secret replacement abuse, and bind enrollment to a short-lived authenticated flow.
 7. **Password lifecycle:** define password reuse/history, reset and administrator recovery policy. Login and MFA failures currently share failed_login_attempts; assess separate counters and lockout semantics.
 8. **Browser token storage:** review the frontend bearer-token persistence and XSS exposure. Target design remains short-lived access token in memory and refresh token in HttpOnly, Secure, SameSite cookie with CSRF protection.
-9. **Audit delivery:** define and test security events for session creation, rotation, revocation, reuse detection, MFA enrollment/reset and password changes. Avoid silently dropping audit persistence failures.
+9. **Audit delivery:** refresh rotation, reuse, eligibility denial, logout, MFA enrollment start/success and password changes now enqueue durable outbox events in their business transaction. Remaining work: administrative MFA reset/session revocation events, monitoring/retention and tests for audit delivery retries.
 
 ## Release gate
 
