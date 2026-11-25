@@ -1,6 +1,5 @@
 """Administration sécurisée du cycle de vie des comptes utilisateurs."""
 from datetime import datetime, timezone
-from typing import Literal
 from uuid import UUID
 
 from fastapi import APIRouter, Depends, HTTPException, Query, Request, status
