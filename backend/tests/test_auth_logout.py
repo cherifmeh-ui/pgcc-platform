@@ -45,7 +45,7 @@ async def test_logout_revokes_refresh_session_by_jti_hash(monkeypatch):
     response = Response()
     result = await auth_endpoint.logout(
         request=request, response=response, db=db,
-        payload=None, refresh_cookie="refresh-jwt",
+        refresh_cookie="refresh-jwt",
     )
     assert result is None
     assert session.revoked_at is not None
