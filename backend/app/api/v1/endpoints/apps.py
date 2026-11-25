@@ -1,6 +1,6 @@
 # backend/app/api/v1/endpoints/apps.py
 from fastapi import APIRouter, Depends, HTTPException, Request, status
-from pydantic import BaseModel, Field
+from pydantic import BaseModel, ConfigDict, Field
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy import select
 from sqlalchemy.exc import IntegrityError
@@ -40,8 +40,7 @@ class AppUpdate(AppBase):
 
 class AppResponse(AppBase):
     id: UUID
-    class Config:
-        from_attributes = True
+    model_config = ConfigDict(from_attributes=True)
 
 
 @router.get("/", response_model=List[AppResponse])
