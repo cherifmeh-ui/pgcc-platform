@@ -1,7 +1,7 @@
 # backend/app/api/v1/endpoints/auth.py
 from datetime import datetime, timedelta, timezone
 import hashlib
-from typing import Optional
+from typing import Annotated, Optional
 
 import jwt
 from fastapi import APIRouter, Cookie, Depends, HTTPException, Header, Request, Response, status
@@ -521,7 +521,7 @@ async def refresh_tokens(
     response: Response,
     db: AsyncSession = Depends(get_db),
     payload: RefreshRequest | None = None,
-    refresh_cookie: str | None = Cookie(default=None, alias=REFRESH_COOKIE_NAME),
+    refresh_cookie: Annotated[str | None, Cookie(alias=REFRESH_COOKIE_NAME)] = None,
 ):
     """Rotate a persisted refresh session exactly once; reject replay."""
     refresh_token = refresh_cookie or (payload.refresh_token if payload else None)
