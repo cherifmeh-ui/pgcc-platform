@@ -27,11 +27,29 @@ except ImportError:
 
 router = APIRouter(prefix="/documents", tags=["Gestion Documentaire"])
 
+# Viewer access is limited to employee-facing policy/procedure material. Contracts,
+# audit reports and unknown legacy document types fail closed as RESTRICTED.
+INTERNAL_DOCUMENT_TYPES = frozenset({"PSSI", "PROCEDURE", "REGLEMENT_INTERIEUR"})
+PRIVILEGED_DOCUMENT_ROLES = frozenset({"admin", "executive", "auditor"})
+
+
+def document_classification(doc_type: str | None) -> str:
+    normalized = (doc_type or "").strip().upper()
+    return "INTERNAL" if normalized in INTERNAL_DOCUMENT_TYPES else "RESTRICTED"
+
+
+def can_read_document(user: User, document: Document) -> bool:
+    role = (getattr(user, "role", None) or "").strip().lower()
+    if role in PRIVILEGED_DOCUMENT_ROLES:
+        return True
+    return role == "viewer" and document_classification(document.doc_type) == "INTERNAL"
+
 
 class DocumentResponse(BaseModel):
     id: str          # String explicite pour éviter les bugs Pydantic v2 stricts
     title: str
     doc_type: str
+    classification: str
     filename: str
     version: Optional[str] = None
     author: Optional[str] = None
@@ -131,6 +149,7 @@ async def upload_document(
         "id": str(new_doc.id),
         "title": new_doc.title,
         "doc_type": new_doc.doc_type,
+        "classification": document_classification(new_doc.doc_type),
         "filename": new_doc.filename,
         "version": new_doc.version,
         "author": new_doc.author,
@@ -145,7 +164,12 @@ async def list_documents(
     db: AsyncSession = Depends(get_db),
     current_user: User = require_permission("documents", "read"),
 ):
-    result = await db.execute(select(Document).order_by(Document.created_at.desc()))
+    query = select(Document).order_by(Document.created_at.desc())
+    if (current_user.role or "").strip().lower() == "viewer":
+        query = query.where(
+            func.upper(Document.doc_type).in_(tuple(INTERNAL_DOCUMENT_TYPES))
+        )
+    result = await db.execute(query)
     docs = result.scalars().all()
     
     # ✅ MAPPING EXPLICITE VERS UN DICTIONNAIRE PYTHON STANDARD
@@ -155,6 +179,7 @@ async def list_documents(
             "id": str(doc.id),
             "title": doc.title,
             "doc_type": doc.doc_type,
+            "classification": document_classification(doc.doc_type),
             "filename": doc.filename,
             "version": doc.version,
             "author": doc.author,
@@ -275,7 +300,7 @@ async def download_document(
 
     result = await db.execute(select(Document).where(Document.id == uid))
     doc = result.scalar_one_or_none()
-    if not doc:
+    if not doc or not can_read_document(current_user, doc):
         raise HTTPException(status_code=404, detail="Document introuvable")
     if not doc.file_data:
         raise HTTPException(status_code=404, detail="Fichier original indisponible.")
@@ -304,7 +329,7 @@ async def preview_document(
 
     result = await db.execute(select(Document).where(Document.id == uid))
     doc = result.scalar_one_or_none()
-    if not doc:
+    if not doc or not can_read_document(current_user, doc):
         raise HTTPException(status_code=404, detail="Document introuvable")
 
     text_content = doc.content_text or ""
@@ -314,6 +339,7 @@ async def preview_document(
         "title": doc.title,
         "filename": doc.filename,
         "doc_type": doc.doc_type,
+        "classification": document_classification(doc.doc_type),
         "version": doc.version,
         "author": doc.author,
         "preview": text_content[:preview_limit],
