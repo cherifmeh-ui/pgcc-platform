@@ -1085,3 +1085,15 @@ Un test PostgreSQL avec deux sessions concurrentes couvre maintenant la créatio
 - RAG : le endpoint de contexte IA réapplique désormais la classification documentaire canonique avant d'insérer les extraits dans le prompt. Les tests unitaires couvrent viewers, auditeurs et limite de sources.
 - Le fichier `.env.example` et Compose documentent `CLAMAV_HOST`, `CLAMAV_PORT` et `CLAMAV_TIMEOUT_SECONDS`. En staging/production, `CLAMAV_HOST` est obligatoire.
 - **Limites restantes avant clôture :** déployer et tester un daemon ClamAV réel ; isoler le parsing PDF/DOCX dans un environnement à privilèges réduits ; compléter les ACL documentaires par propriétaire/département et les tester sous PostgreSQL ; réaliser la revue de sécurité de production et l'acceptation formelle des risques résiduels.
+
+
+## ACL documentaire propriétaire/département — 2026-11-25
+
+- HEAD validé : `0c31a36b53b20e829e44e7be7b89b10111035f00`.
+- Workflow GitHub Actions `45630763796` : **4/4 jobs réussis** (backend, PostgreSQL, frontend, Docker Compose).
+- Backend : **419 tests réussis, 38 ignorés**.
+- PostgreSQL : **37 tests d'intégration réussis**.
+- Migration `0028_document_acl` appliquée ; `alembic check` sans dérive ; upgrade/downgrade historique et sauvegarde/restauration vérifiés au nouveau head `0028_document_acl`.
+- Le contrôle de liste, aperçu, téléchargement et contexte IA applique maintenant la politique propriétaire/département pour les documents nouvellement déposés. Le test PostgreSQL couvre l'accès au document du département, le refus d'un autre département et l'accès du propriétaire à son propre document restreint.
+- Les uploads enregistrent `owner_id` et le département de l'utilisateur. La FK restrictive interdit de supprimer un compte propriétaire avant réaffectation/suppression de ses documents.
+- **Phase 0 reste ouverte** : ClamAV réel non provisionné dans l'environnement CI/Compose (tests antivirus simulés uniquement), sandbox d'extraction PDF/DOCX à déployer, revue opérationnelle RPO/RTO et acceptation des risques de production à réaliser.
