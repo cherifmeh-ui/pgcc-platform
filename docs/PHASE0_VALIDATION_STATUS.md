@@ -1107,3 +1107,23 @@ Un test PostgreSQL avec deux sessions concurrentes couvre maintenant la créatio
 - Configuration externe possible via `CLAMAV_HOST`, `CLAMAV_PORT`, `CLAMAV_TIMEOUT_SECONDS`.
 - Commande documentée : `docker compose --profile antivirus up -d`.
 - **Non encore démontré :** démarrage réel du conteneur ClamAV, téléchargement/actualisation des signatures, scan EICAR contrôlé, tests de charge et alertes. Le CI précédent ne lançait pas le profil antivirus ; ces points restent à valider avant clôture Phase 0.
+
+
+## Validation ClamAV en conditions réelles — 2026-11-25
+
+- HEAD testé : `7da80e6de754f58fe3a9a492032ad4e312202423`.
+- Workflow PR `45631930338` : **4/4 jobs réussis**.
+- Backend : **419 tests réussis, 38 ignorés**.
+- PostgreSQL : **37 tests d'intégration réussis** ; migration head `0028_document_acl`, contrôle de dérive, downgrade/upgrade historique et restauration sauvegarde exécutés.
+- Frontend : build réussi.
+- Docker Compose : configuration, build et démarrage complet réussis.
+- **ClamAV réel :** service démarré avec son profil Compose, base de signatures prête ; scan d'un contenu propre accepté et détection du fichier de test EICAR confirmée par le daemon.
+- Le chemin de dépôt appelle le scanner avant extraction, écriture DB et indexation RAG ; une indisponibilité du scanner entraîne un refus HTTP 503, une détection malveillante un refus HTTP 422.
+- Le profil antivirus est désormais testé en CI, sans publication du port ClamAV sur l'hôte.
+
+### Réserves Phase 0 encore ouvertes
+
+- Le parsing PDF/DOCX est borné et exécuté dans le conteneur backend non-root, mais n'est pas encore isolé dans un service/sandbox dédié avec limites OS et réseau propres.
+- Les procédures RPO/RTO doivent être répétées et acceptées par les responsables opérationnels dans l'environnement cible ; le test CI de restauration n'est pas un exercice de reprise de production.
+- Les secrets, certificats TLS, reverse proxy, journaux centralisés, supervision ClamAV et politique de mise à jour des signatures doivent être configurés et vérifiés dans l'environnement de déploiement.
+- Revue humaine du diff complet et acceptation formelle des risques résiduels restent obligatoires avant fusion.
