@@ -75,3 +75,10 @@ pgcc-platform/
 ├── docker-compose.yaml     # Orchestration des containers
 ├── .env.example            # Template variables d'environnement (SECRET_KEY, DB_PASS...)
 └── README.md               # Ce fichier
+## Antivirus documentaire
+
+- Le service ClamAV est fourni dans le profil Compose optionnel `antivirus` ; activation : `docker compose --profile antivirus up -d`.
+- Le daemon n'expose pas de port sur l'hôte, conserve ses signatures dans le volume `clamav_db` et dispose d'un healthcheck `clamdscan --ping=3`.
+- Le backend attend le healthcheck lorsque le profil est activé. Sans service opérationnel, l'upload échoue volontairement en mode fail-closed.
+- Environnement externe : définir `CLAMAV_HOST`, `CLAMAV_PORT` et `CLAMAV_TIMEOUT_SECONDS` dans `.env`.
+- Avant production : valider la disponibilité réelle du daemon, la mise à jour des signatures, le test EICAR en environnement contrôlé, la capacité mémoire/CPU et les alertes opérationnelles. Le CI courant ne prouve pas qu'un daemon ClamAV a été démarré ni qu'un fichier a été scanné par un moteur réel.
