@@ -82,7 +82,7 @@ async def test_refresh_rejects_untrusted_origin_before_database_access(monkeypat
     with pytest.raises(HTTPException) as exc:
         await refresh_tokens(
             request=request, response=Response(), db=db,
-            payload=None, refresh_cookie="cookie-token",
+            refresh_cookie="cookie-token",
         )
     assert exc.value.status_code == 403
     db.execute.assert_not_awaited()
