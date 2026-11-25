@@ -2,6 +2,8 @@
 import { defineStore } from 'pinia';
 import apiClient, { setAccessToken } from '@/services/api';
 
+let restorePromise = null;
+
 export const useAuthStore = defineStore('auth', {
   state: () => ({
     accessToken: null,
@@ -90,30 +92,40 @@ export const useAuthStore = defineStore('auth', {
 
     async restoreSession() {
       if (this.accessToken) return true;
-      this.isLoading = true;
+      if (restorePromise) return restorePromise;
+
+      restorePromise = (async () => {
+        this.isLoading = true;
+        try {
+          const { data } = await apiClient.post('/auth/refresh', {}, { withCredentials: true });
+          this.accessToken = data.access_token;
+          setAccessToken(this.accessToken);
+          this.user = data.user;
+          this.role = data.user.role;
+          localStorage.removeItem('pgcc_access_token');
+          localStorage.removeItem('pgcc_refresh_token');
+          localStorage.setItem('pgcc_user_role', this.role);
+          await this.fetchPermissions();
+          return true;
+        } catch {
+          this.accessToken = null;
+          setAccessToken(null);
+          localStorage.removeItem('pgcc_access_token');
+          localStorage.removeItem('pgcc_refresh_token');
+          localStorage.removeItem('pgcc_user_role');
+          localStorage.removeItem('pgcc_permissions');
+          this.role = null;
+          this.permissions = {};
+          return false;
+        } finally {
+          this.isLoading = false;
+        }
+      })();
+
       try {
-        const { data } = await apiClient.post('/auth/refresh', {}, { withCredentials: true });
-        this.accessToken = data.access_token;
-        setAccessToken(this.accessToken);
-        this.user = data.user;
-        this.role = data.user.role;
-        localStorage.removeItem('pgcc_access_token');
-        localStorage.removeItem('pgcc_refresh_token');
-        localStorage.setItem('pgcc_user_role', this.role);
-        await this.fetchPermissions();
-        return true;
-      } catch {
-        this.accessToken = null;
-        setAccessToken(null);
-        localStorage.removeItem('pgcc_access_token');
-        localStorage.removeItem('pgcc_refresh_token');
-        localStorage.removeItem('pgcc_user_role');
-        localStorage.removeItem('pgcc_permissions');
-        this.role = null;
-        this.permissions = {};
-        return false;
+        return await restorePromise;
       } finally {
-        this.isLoading = false;
+        restorePromise = null;
       }
     },
 
