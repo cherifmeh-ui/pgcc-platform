@@ -837,3 +837,12 @@ Repository/static hardening is substantially progressed, but the remaining gates
 - Docker Compose: configuration, backend image build, full stack startup, API health, frontend proxy and cleanup passed.
 - Non-blocking observations: Node `url.parse()` deprecation comes from the Actions toolchain; Vite reports one JS chunk above 500 kB. Neither failed the build.
 - Remaining production gates are operational: run the MFA legacy migration on the target DB, back up/assign ownership for the Fernet key ring, confirm production same-site cookie topology, implement administrative session revocation/rate limiting, and rehearse legacy DB upgrade/restore.
+
+## Access-token revocation enforcement — 2026-11-25
+
+- Confirmed a gap in `get_current_user()`: the User model and JWT issuance already maintained `auth_version`, and migration `0025_user_auth_version` existed, but authenticated requests checked only the role claim and did not compare the token version to the current database value.
+- Enforced strict integer `auth_version` equality on every access-token authentication. Missing, boolean, malformed or stale claims are rejected with HTTP 401, forcing re-authentication after security-sensitive account changes.
+- Added RBAC dependency tests for missing/malformed/stale versions and matching versions. Existing fixtures were updated to provide the version claim.
+- Commits: `2a5f014` (enforcement), `796b3da` and `e8c0bb1` (tests/fixture correction).
+- No CI run has yet been returned for this latest HEAD. The change and tests are committed but not yet runtime-validated.
+- This closes immediate access-token invalidation at the authentication dependency layer. It does not replace the remaining work on administrative account-management endpoints, distributed rate limiting, or operational session/key management.
