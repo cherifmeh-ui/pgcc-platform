@@ -100,10 +100,31 @@ async def test_startup_gate_rejects_remaining_plaintext_mfa_secrets():
 
 @pytest.mark.asyncio
 async def test_startup_gate_accepts_fully_encrypted_mfa_secrets():
-    result = MagicMock()
-    result.scalar_one.return_value = 0
+    count_result = MagicMock()
+    count_result.scalar_one.return_value = 0
+    secrets_result = MagicMock()
+    secrets_result.scalars.return_value.all.return_value = []
     db = AsyncMock()
-    db.execute.return_value = result
+    db.execute.side_effect = [count_result, secrets_result]
 
     await assert_no_plaintext_mfa_secrets(db)
-    db.execute.assert_awaited_once()
+    assert db.execute.await_count == 2
+    db.commit.assert_awaited_once()
+
+
+@pytest.mark.asyncio
+async def test_startup_gate_rejects_ciphertext_that_cannot_be_decrypted(monkeypatch):
+    key = Fernet.generate_key().decode()
+    monkeypatch.setattr(settings, "MFA_ENCRYPTION_KEYS", key)
+    count_result = MagicMock()
+    count_result.scalar_one.return_value = 0
+    secrets_result = MagicMock()
+    secrets_result.scalars.return_value.all.return_value = [
+        SimpleNamespace(mfa_secret=MFA_SECRET_PREFIX + Fernet.generate_key().decode())
+    ]
+    db = AsyncMock()
+    db.execute.side_effect = [count_result, secrets_result]
+
+    with pytest.raises(MFASecretDecryptionError):
+        await assert_no_plaintext_mfa_secrets(db)
+    db.commit.assert_not_awaited()
