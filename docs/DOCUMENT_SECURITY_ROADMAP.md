@@ -45,3 +45,35 @@ Tests requis : viewer ne récupère jamais un chunk issu d'un document `RESTRICT
 ## Portes de sortie
 
 Avant une mise en production, chaque risque ci-dessus doit être corrigé ou faire l'objet d'une acceptation formelle du propriétaire du système. Les points bloquants sont : antivirus/quarantaine ou acceptation documentée, isolation du parsing, politique de conservation, ACL RAG avant toute récupération, et revue de sécurité humaine.
+
+
+## Addendum — état consolidé au 25 novembre 2026
+
+Cette section prévaut sur les constats historiques ci-dessus lorsqu'ils sont contradictoires.
+
+### Contrôles désormais présents et validés
+
+- ClamAV est intégré au dépôt et au chemin d'upload avant toute extraction, écriture métier ou indexation RAG. L'indisponibilité du moteur bloque le dépôt (fail-closed) ; un verdict infecté est refusé.
+- Le profil Docker Compose `antivirus` démarre un daemon ClamAV sur le réseau privé, sans port publié sur l'hôte.
+- Le workflow CI démarre le vrai daemon, attend l'état healthy, accepte un contenu propre et confirme la détection du fichier de test EICAR.
+- Les documents ont un SHA-256 persistant, un propriétaire et un département. La politique d'accès est appliquée aux opérations de liste, aperçu, téléchargement et contexte IA ; des tests PostgreSQL couvrent les accès autorisés et les refus inter-départements.
+- La récupération de contexte IA réapplique la classification et l'ACL canonique avant insertion dans le prompt. Ne pas ajouter de nouvelle route de recherche vectorielle sans filtrage ACL dans la requête SQL avant le classement/top-k.
+- Les mutations documentaires et événements d'audit sont intégrés à la même transaction dans les parcours déjà migrés ; la couverture transactionnelle doit être vérifiée pour chaque nouveau parcours.
+
+### Durcissement du parseur en cours
+
+- Le parseur reste exécuté dans le processus backend à ce stade ; il n'est donc pas encore considéré comme isolé.
+- L'extraction PDF échoue désormais en cas d'erreur d'extraction d'une page au lieu d'indexer silencieusement un document partiel.
+- Les limites d'extraction sont appliquées pendant l'accumulation du texte, et non uniquement après construction d'une grande chaîne.
+- Les archives DOCX sont contrôlées avant parsing : nombre d'entrées, taille décompressée, ratio de compression, présence du document XML, doublons et entrées chiffrées.
+- Les nouveaux tests unitaires de ces contrôles doivent réussir dans le workflow du HEAD courant avant validation.
+
+### Conditions restantes avant clôture Phase 0
+
+1. Déployer un service de parsing isolé : non-root, image minimale, réseau sans sortie Internet, aucun accès PostgreSQL/ClamAV/stockage, filesystem en lecture seule, limites CPU/mémoire/PID/temps et taille d'entrée bornée. Le backend doit valider la réponse du service et échouer fermé.
+2. Ajouter des tests d'intégration Compose couvrant PDF/DOCX valide, fichier malformé, dépassement de délai, limite de mémoire et arrêt du service.
+3. Répéter la restauration et mesurer les objectifs RPO/RTO dans l'environnement cible avec les responsables opérationnels ; les tests CI ne valent pas recette de reprise de production.
+4. Configurer et vérifier en production TLS/reverse proxy, gestion des secrets, journalisation centralisée, supervision ClamAV et mise à jour des signatures.
+5. Achever la revue des permissions et des frontières transactionnelles d'audit, puis faire accepter formellement les risques résiduels.
+
+La Phase 0 demeure ouverte jusqu'à la validation des tests, de l'isolation et des contrôles opérationnels, puis la revue humaine finale.
