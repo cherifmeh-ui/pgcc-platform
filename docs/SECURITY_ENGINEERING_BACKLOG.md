@@ -204,3 +204,11 @@ Status: active engineering review. This is a static review backlog, not a securi
 - [ ] Move access token to memory where practical and add refresh-cookie session bootstrap after reload.
 - [ ] Add browser/API integration tests for cookie flags, refresh rotation, logout clearing, CSRF rejection and CORS behavior.
 - Current evidence: frontend/src/stores/auth.js and frontend/src/services/api.js persist both access and refresh tokens in localStorage. This is an open XSS exposure, not a completed control.
+
+## Phase 0 warning cleanup and frontend auth issue — 2026-11-25
+
+- [ ] Re-run CI after the latest warning cleanup commits (0b5b80e, 533834a, 0aaca47).
+- [ ] Resolve/accept remaining Pydantic v2 deprecation warnings; GitHub Actions Node deprecation is runner/toolchain-level.
+- [ ] Resolve or verify removal of SQLAlchemy document_chunks stale-row warning after bulk child deletion.
+- [ ] Resolve or verify removal of AsyncMock coroutine warning after synchronous add mock correction.
+- [ ] Complete issue #4: move refresh token to HttpOnly cookie with CSRF/origin and CORS protections; remove localStorage refresh token.
