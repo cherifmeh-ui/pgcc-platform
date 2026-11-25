@@ -68,3 +68,9 @@ Authentication/session security remains open until the HTTP-level PostgreSQL rot
 - Fernet-encrypted MFA secret persistence, legacy conversion, key rotation, key-ring validation and startup integrity gate have automated unit/PostgreSQL coverage.
 - Document classification enforcement has unit and PostgreSQL coverage for viewer listing, direct preview and download denial.
 - Operational production steps remain: set/backup managed Fernet key ring, migrate existing plaintext secrets, review key rotation ownership and verify deployment same-site cookie behavior.
+
+## Latest CI evidence — 2026-11-25
+
+- Workflow 45574715908 passed 4/4 jobs: backend 342 passed/15 skipped; PostgreSQL 15 passed; frontend npm audit zero/build passed; Docker Compose full stack/proxy smoke passed.
+- Cookie-only refresh transport, Fernet MFA secret encryption and document classification ACL all passed automated tests.
+- Remaining operational controls: production key custody/migration, admin account lifecycle session revocation, distributed rate limiting, and production database backup/restore/legacy-upgrade rehearsal.
