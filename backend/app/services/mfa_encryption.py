@@ -7,6 +7,9 @@ and lazily rotate older ciphertext during a key rotation.
 from __future__ import annotations
 
 from cryptography.fernet import Fernet, InvalidToken
+from sqlalchemy import func, select
+
+from app.models.user import User
 
 from app.core.config import settings
 
@@ -64,3 +67,19 @@ def get_mfa_secret(user) -> str | None:
         return plaintext
 
     raise MFASecretDecryptionError("Stored MFA secret cannot be decrypted with the configured key ring.")
+
+
+async def assert_no_plaintext_mfa_secrets(db) -> None:
+    """Block non-development startup until legacy MFA secrets are encrypted."""
+    result = await db.execute(
+        select(func.count(User.id)).where(
+            User.mfa_secret.is_not(None),
+            ~User.mfa_secret.like(f"{MFA_SECRET_PREFIX}%"),
+        )
+    )
+    plaintext_count = result.scalar_one()
+    if plaintext_count:
+        raise RuntimeError(
+            f"{plaintext_count} plaintext MFA secret(s) remain. "
+            "Run scripts/encrypt_mfa_secrets.py before starting this environment."
+        )
