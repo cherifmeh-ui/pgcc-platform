@@ -81,4 +81,4 @@ pgcc-platform/
 - Le daemon n'expose pas de port sur l'hôte, conserve ses signatures dans le volume `clamav_db` et dispose d'un healthcheck `clamdscan --ping=3`.
 - Le backend attend le healthcheck lorsque le profil est activé. Sans service opérationnel, l'upload échoue volontairement en mode fail-closed.
 - Environnement externe : définir `CLAMAV_HOST`, `CLAMAV_PORT` et `CLAMAV_TIMEOUT_SECONDS` dans `.env`.
-- Avant production : valider la disponibilité réelle du daemon, la mise à jour des signatures, le test EICAR en environnement contrôlé, la capacité mémoire/CPU et les alertes opérationnelles. Le CI courant ne prouve pas qu'un daemon ClamAV a été démarré ni qu'un fichier a été scanné par un moteur réel.
+- Le CI démarre désormais le daemon ClamAV, attend sa base de signatures, accepte un fichier propre et confirme la détection EICAR. Avant production : configurer les alertes, les mises à jour de signatures, la capacité mémoire/CPU et la supervision du daemon dans l'environnement cible.
