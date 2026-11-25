@@ -196,3 +196,11 @@ Status: active engineering review. This is a static review backlog, not a securi
 - [ ] Encrypt MFA secrets with a managed key, add key rotation and MFA reset/recovery workflow.
 - [ ] Add distributed rate limiting and complete frontend token-storage/CSRF review.
 - [ ] Run the new auth tests in CI; latest branch head currently has no associated PR workflow result returned.
+
+## Frontend authentication storage review (2026-11-25)
+
+- [ ] Remove refresh token from localStorage and API response; issue/rotate/revoke via HttpOnly, Secure, SameSite cookie.
+- [ ] Add CSRF/origin validation for cookie-authenticated refresh/logout and configure credentialed CORS for explicit origins.
+- [ ] Move access token to memory where practical and add refresh-cookie session bootstrap after reload.
+- [ ] Add browser/API integration tests for cookie flags, refresh rotation, logout clearing, CSRF rejection and CORS behavior.
+- Current evidence: frontend/src/stores/auth.js and frontend/src/services/api.js persist both access and refresh tokens in localStorage. This is an open XSS exposure, not a completed control.
