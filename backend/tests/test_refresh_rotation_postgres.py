@@ -189,6 +189,7 @@ async def test_refresh_endpoint_rotation_and_replay_are_audited_atomically(monke
         assert len(successes) == 1
         assert "HttpOnly" in successes[0][1].headers.get("set-cookie", "")
         assert "SameSite=strict" in successes[0][1].headers.get("set-cookie", "")
+        assert not hasattr(successes[0][0], "refresh_token")
         failures = [item for item in results if isinstance(item, BaseException)]
         assert len(failures) == 1
         assert isinstance(failures[0], HTTPException)
