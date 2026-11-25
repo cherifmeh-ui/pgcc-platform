@@ -1056,3 +1056,18 @@ Repository/static hardening is substantially progressed, but the remaining gates
 ## Nouveau test de concurrence cartographique — 2026-11-25
 
 Un test PostgreSQL avec deux sessions concurrentes couvre maintenant la création d'une relation fournisseur-actif et le retrait du même actif. Il vérifie que l'une des opérations est refusée et que l'état final ne combine jamais un actif retiré avec une relation fournisseur encore active. Validation CI en attente sur le HEAD actuel.
+
+
+## Point de contrôle — RBAC et cohérence fournisseur/actif — 2026-11-25
+
+- HEAD validé : `68503a37c56b206b77d47f0ccaf1f737cbe16158`.
+- Workflow GitHub Actions `45627131863` : **4 jobs sur 4 réussis** (backend, PostgreSQL, frontend, Docker Compose).
+- Backend : **406 tests réussis, 37 ignorés**.
+- PostgreSQL : **37 tests d'intégration réussis** ; migration Alembic jusqu'à `0027_document_file_sha256`, `alembic check` sans dérive, upgrade/downgrade historique et sauvegarde/restauration CI réussis.
+- Frontend : build réussi ; `npm audit` rapporte **0 vulnérabilité**.
+- Docker Compose : configuration, construction, démarrage complet, health API et proxy frontend réussis.
+- Le test de concurrence fournisseur-actif/retrait est inclus dans les tests PostgreSQL réussis.
+- La revue statique a examiné 94 déclarations `require_permission` sur 15 fichiers d'endpoints : aucune combinaison module/action absente de la matrice RBAC. Les contrôles directs `role_has_permission` recensés sont également déclarés dans la matrice.
+- Le test de cohérence de la matrice RBAC a été corrigé : sa regex détecte désormais les déclarations réelles et le test échoue explicitement si aucune déclaration n'est découverte. Les tests backend valident cette correction.
+- **Phase 0 reste ouverte.** Les preuves CI ne couvrent pas encore l'antivirus/quarantaine, la sandbox d'extraction, les ACL RAG au niveau département/propriétaire, les tests opérationnels de sauvegarde chiffrée et RPO/RTO, ni la revue humaine et la configuration de production.
+- La prochaine tranche doit traiter les risques documentaires résiduels et la revue finale des permissions objet par objet. Les contrôles de production doivent être validés par les responsables avant toute clôture.
