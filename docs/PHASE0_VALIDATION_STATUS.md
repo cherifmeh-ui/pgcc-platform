@@ -1019,3 +1019,13 @@ Repository/static hardening is substantially progressed, but the remaining gates
 - Les relations et autorisations clôturées restent conservées pour l'historique ; aucune révocation automatique n'est effectuée.
 - Tests ajoutés : cas unitaire de blocage, cas sans autorisation ouverte, et test PostgreSQL avec une autorisation approuvée réelle.
 - La validation CI de cette correction est en attente sur le HEAD courant. Ne pas considérer ce contrôle comme validé tant que le job PostgreSQL n'est pas vert.
+
+
+## Résultat CI — garde de retrait en présence d'accès fournisseur (2026-11-25)
+
+- HEAD testé : `e9eb8299ee6d85b578615b786688ced84d776ac7`.
+- Workflow GitHub Actions `45608879854` : **4 jobs sur 4 réussis**.
+- Backend : **389 tests réussis, 35 ignorés**.
+- PostgreSQL : **35 tests d'intégration réussis**, dont le nouveau test vérifiant qu'une autorisation fournisseur approuvée empêche le retrait de l'actif et laisse son état inchangé.
+- Frontend et Docker Compose smoke : réussis.
+- La restauration PostgreSQL automatisée a réussi ; durée mesurée dans ce run : 0 seconde. Ce test ne remplace pas une répétition de restauration opérationnelle sur sauvegarde réelle avec contrôle RPO/RTO.
