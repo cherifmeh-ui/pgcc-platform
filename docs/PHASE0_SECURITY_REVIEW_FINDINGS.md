@@ -202,3 +202,10 @@ Do not close Phase 0 until evidence is attached for:
 - Non-development configuration requires a valid `MFA_ENCRYPTION_KEYS` key ring. Startup checks all non-null secrets: plaintext or undecryptable ciphertext prevents startup; previous-key ciphertext is rotated to the active key.
 - Added unit tests for encryption, legacy migration, rotation, invalid ciphertext, config and startup gate; added PostgreSQL persistence/startup verification test. Workflow 45574715908 is running; no result claimed yet.
 - Production rollout requires running the dry-run and migration script, safeguarding the key, and reviewing key custody/recovery.
+
+## Latest security validation — workflow 45574537534
+
+- Document classification ACL and Fernet MFA encryption passed all automated tests.
+- Backend 341 passed / 14 skipped; PostgreSQL integration 14 passed; frontend build and npm audit zero findings passed; Docker Compose full stack smoke passed.
+- Viewer access is restricted to PSSI/procedures/regulations; contracts, audit reports and unknown legacy types are hidden from viewer. MFA secrets are encrypted at rest, with a non-development startup gate for plaintext or undecryptable secrets.
+- Production deployment still requires key generation/backup, dry-run and execution of the legacy secret migration script against the actual target database.
