@@ -17,8 +17,8 @@ async def test_scanner_requires_configuration(monkeypatch):
 async def test_scanner_accepts_clean_verdict(monkeypatch):
     class Reader:
         async def readuntil(self, separator):
-            assert separator == b"\\0"
-            return b"stream: OK\\0"
+            assert separator == b"\0"
+            return b"stream: OK\0"
 
     class Writer:
         def __init__(self):
@@ -41,7 +41,7 @@ async def test_scanner_accepts_clean_verdict(monkeypatch):
         AsyncMock(return_value=(Reader(), writer)),
     )
     await antivirus.scan_document_bytes(b"clean payload")
-    assert b"zINSTREAM\\0" in writer.data
+    assert b"zINSTREAM\0" in writer.data
     assert writer.closed
 
 
@@ -49,7 +49,7 @@ async def test_scanner_accepts_clean_verdict(monkeypatch):
 async def test_scanner_rejects_malware_verdict(monkeypatch):
     class Reader:
         async def readuntil(self, separator):
-            return b"stream: Eicar-Test-Signature FOUND\\0"
+            return b"stream: Eicar-Test-Signature FOUND\0"
 
     class Writer:
         def write(self, data): pass
