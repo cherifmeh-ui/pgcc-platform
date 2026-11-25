@@ -72,8 +72,9 @@ async def test_upload_rejects_pdf_extension_with_non_pdf_signature():
 
 
 @pytest.mark.asyncio
-async def test_upload_rejects_docx_with_zip_magic_but_invalid_archive():
+async def test_upload_rejects_docx_with_zip_magic_but_invalid_archive(monkeypatch):
     db = AsyncMock()
+    monkeypatch.setattr("app.api.v1.endpoints.documents.scan_document_bytes", AsyncMock())
     with pytest.raises(HTTPException) as error:
         await upload_document(
             request=MagicMock(),
@@ -105,4 +106,58 @@ async def test_upload_rejects_empty_file():
             current_user=MagicMock(email="upload-test@example.invalid"),
         )
     assert error.value.status_code == 400
+    db.execute.assert_not_awaited()
+
+
+@pytest.mark.asyncio
+async def test_upload_fails_closed_when_antivirus_is_unavailable(monkeypatch):
+    from app.services.antivirus import AntivirusUnavailable
+
+    db = AsyncMock()
+    monkeypatch.setattr(
+        "app.api.v1.endpoints.documents.scan_document_bytes",
+        AsyncMock(side_effect=AntivirusUnavailable("scanner offline")),
+    )
+    with pytest.raises(HTTPException) as error:
+        await upload_document(
+            request=MagicMock(),
+            file=_upload("valid.pdf", b"%PDF-valid"),
+            title="Document de test",
+            doc_type="PSSI",
+            version=None,
+            author=None,
+            db=db,
+            current_user=MagicMock(email="upload-test@example.invalid"),
+        )
+    assert error.value.status_code == 503
+    db.execute.assert_not_awaited()
+
+
+@pytest.mark.asyncio
+async def test_upload_rejects_malware_before_extraction_or_database(monkeypatch):
+    from app.services.antivirus import MalwareDetected
+
+    db = AsyncMock()
+    extractor = MagicMock()
+    monkeypatch.setattr(
+        "app.api.v1.endpoints.documents.scan_document_bytes",
+        AsyncMock(side_effect=MalwareDetected("Eicar")),
+    )
+    monkeypatch.setattr(
+        "app.api.v1.endpoints.documents.DocumentExtractor.extract_text",
+        extractor,
+    )
+    with pytest.raises(HTTPException) as error:
+        await upload_document(
+            request=MagicMock(),
+            file=_upload("infected.pdf", b"%PDF-malware"),
+            title="Document de test",
+            doc_type="PSSI",
+            version=None,
+            author=None,
+            db=db,
+            current_user=MagicMock(email="upload-test@example.invalid"),
+        )
+    assert error.value.status_code == 422
+    extractor.assert_not_called()
     db.execute.assert_not_awaited()
