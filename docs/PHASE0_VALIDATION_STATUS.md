@@ -1051,3 +1051,8 @@ Repository/static hardening is substantially progressed, but the remaining gates
 - Docker Compose : smoke test réussi.
 - La restauration PostgreSQL CI a pris 0 seconde mesurée (granularité de la commande). Cela ne vaut pas une répétition sur sauvegarde réelle avec objectifs RPO/RTO.
 - Limite : les contrôles antivirus/quarantaine et sandbox de parsing restent absents ; ils ne sont pas compensés par les tests de validation de format.
+
+
+## Nouveau test de concurrence cartographique — 2026-11-25
+
+Un test PostgreSQL avec deux sessions concurrentes couvre maintenant la création d'une relation fournisseur-actif et le retrait du même actif. Il vérifie que l'une des opérations est refusée et que l'état final ne combine jamais un actif retiré avec une relation fournisseur encore active. Validation CI en attente sur le HEAD actuel.
