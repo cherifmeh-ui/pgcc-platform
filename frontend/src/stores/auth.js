@@ -1,11 +1,10 @@
 // frontend/src/stores/auth.js
 import { defineStore } from 'pinia';
-import apiClient from '@/services/api'; // ← Vérifie bien ce chemin (avec / après @)
+import apiClient, { setAccessToken } from '@/services/api';
 
 export const useAuthStore = defineStore('auth', {
   state: () => ({
-    accessToken: localStorage.getItem('pgcc_access_token') || null,
-    refreshToken: localStorage.getItem('pgcc_refresh_token') || null,
+    accessToken: null,
     user: null,
     role: localStorage.getItem('pgcc_user_role') || null,
     permissions: JSON.parse(localStorage.getItem('pgcc_permissions') || '{}'),
@@ -79,13 +78,37 @@ export const useAuthStore = defineStore('auth', {
 
     setSession(sessionData) {
       this.accessToken = sessionData.access_token;
-      this.refreshToken = sessionData.refresh_token;
+      setAccessToken(this.accessToken);
       this.user = sessionData.user;
       this.role = sessionData.user.role;
 
-      localStorage.setItem('pgcc_access_token', this.accessToken);
-      localStorage.setItem('pgcc_refresh_token', this.refreshToken);
+      // Remove legacy browser-readable bearer credentials during migration.
+      localStorage.removeItem('pgcc_access_token');
+      localStorage.removeItem('pgcc_refresh_token');
       localStorage.setItem('pgcc_user_role', this.role);
+    },
+
+    async restoreSession() {
+      if (this.accessToken) return true;
+      this.isLoading = true;
+      try {
+        const { data } = await apiClient.post('/auth/refresh', {}, { withCredentials: true });
+        this.accessToken = data.access_token;
+        setAccessToken(this.accessToken);
+        this.user = data.user;
+        this.role = data.user.role;
+        localStorage.removeItem('pgcc_access_token');
+        localStorage.removeItem('pgcc_refresh_token');
+        localStorage.setItem('pgcc_user_role', this.role);
+        await this.fetchPermissions();
+        return true;
+      } catch {
+        this.accessToken = null;
+        setAccessToken(null);
+        return false;
+      } finally {
+        this.isLoading = false;
+      }
     },
 
     async fetchPermissions() {
@@ -100,14 +123,11 @@ export const useAuthStore = defineStore('auth', {
     },
 
     async logout() {
-      const refreshToken = this.refreshToken || localStorage.getItem('pgcc_refresh_token');
-      if (refreshToken) {
-        try {
-          await apiClient.post('/auth/logout', { refresh_token: refreshToken });
-        } catch (err) {
-          // Local logout must succeed even if server revocation is unavailable.
-          console.warn('Révocation serveur de la session impossible:', err);
-        }
+      try {
+        await apiClient.post('/auth/logout', {}, { withCredentials: true });
+      } catch (err) {
+        // Local logout must succeed even if server revocation is unavailable.
+        console.warn('Révocation serveur de la session impossible:', err);
       }
       [
         'pgcc_access_token',
@@ -115,8 +135,8 @@ export const useAuthStore = defineStore('auth', {
         'pgcc_user_role',
         'pgcc_permissions',
       ].forEach((key) => localStorage.removeItem(key));
+      setAccessToken(null);
       delete apiClient.defaults.headers.common['Authorization'];
-      // Reset after storage cleanup so state() cannot reload stale credentials.
       this.$reset();
       window.location.href = '/login';
     },
