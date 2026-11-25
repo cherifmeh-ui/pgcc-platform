@@ -507,7 +507,12 @@ async def change_password(
         )
 
         access_token = create_access_token(subject=user.email, role=user.role)
-        refresh_token = create_refresh_token(subject=user.email)
+        refresh_token = create_refresh_token(
+            subject=user.email,
+            role=user.role,
+            mfa_enabled=user.mfa_enabled,
+            mfa_confirmed_at=_mfa_confirmed_at_epoch(user),
+        )
         await _persist_refresh_session(db, user, refresh_token)
         await enqueue_audit_event(
             db, user_email=user.email, action="PASSWORD_CHANGED",
@@ -657,7 +662,12 @@ async def refresh_tokens(
         raise HTTPException(status_code=401, detail="Réutilisation d'un refresh token détectée. Sessions révoquées.")
 
     access_token = create_access_token(subject=user.email, role=user.role)
-    refresh_token = create_refresh_token(subject=user.email)
+    refresh_token = create_refresh_token(
+        subject=user.email,
+        role=user.role,
+        mfa_enabled=user.mfa_enabled,
+        mfa_confirmed_at=_mfa_confirmed_at_epoch(user),
+    )
     try:
         new_hash = await _persist_refresh_session(db, user, refresh_token)
         session.revoked_at = now
