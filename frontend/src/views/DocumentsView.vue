@@ -34,6 +34,7 @@
         <thead>
           <tr>
             <th>Type</th>
+            <th>Classification</th>
             <th>Titre</th>
             <th>Fichier Original</th>
             <th>Version</th>
@@ -47,6 +48,7 @@
         <tbody>
           <tr v-for="doc in filteredDocuments" :key="doc.id" class="table-row-hover">
             <td><span class="type-badge" :class="'badge-' + normalizeType(doc.doc_type)">{{ doc.doc_type }}</span></td>
+            <td><span class="classification-badge" :class="'classification-' + String(doc.classification || 'RESTRICTED').toLowerCase()">{{ doc.classification || 'RESTRICTED' }}</span></td>
             <td class="title-cell"><strong>{{ doc.title }}</strong></td>
             <td><code>{{ doc.filename }}</code></td>
             <td>{{ doc.version || '—' }}</td>
@@ -66,7 +68,7 @@
               <button v-if="canDelete" @click="deleteDoc(doc.id)" class="action-btn del" title="Supprimer">🗑️</button>
             </td>
           </tr>
-        <tr v-if="filteredDocuments.length === 0"><td colspan="9" class="no-results">Aucun document ne correspond aux filtres.</td></tr>
+        <tr v-if="filteredDocuments.length === 0"><td colspan="10" class="no-results">Aucun document ne correspond aux filtres.</td></tr>
         </tbody>
       </table>
     </div>
@@ -447,6 +449,11 @@ h1 { color: #0f172a; font-size: 1.8rem; margin-bottom: 0.25rem; }
 .docs-table.modern th, .docs-table.modern td { padding: 1rem 1.5rem; text-align: left; border-bottom: 1px solid #f1f5f9; vertical-align: middle; }
 .docs-table.modern th { background: #f8fafc; font-weight: 600; color: #475569; font-size: 0.85rem; text-transform: uppercase; letter-spacing: 0.5px; position: sticky; top: 0; z-index: 10; }
 .table-row-hover:hover { background: #f8fafc; transition: background 0.2s; }
+
+
+.classification-badge { display: inline-block; padding: 0.25rem 0.55rem; border-radius: 10px; font-size: 0.7rem; font-weight: 700; letter-spacing: 0.02em; }
+.classification-internal { background: #dcfce7; color: #166534; }
+.classification-restricted { background: #fee2e2; color: #991b1b; }
 
 .type-badge { display: inline-block; padding: 0.25rem 0.6rem; border-radius: 12px; font-size: 0.75rem; font-weight: 700; text-transform: capitalize; }
 .badge-pssi { background: #dbeafe; color: #1d4ed8; } /* Bleu */
