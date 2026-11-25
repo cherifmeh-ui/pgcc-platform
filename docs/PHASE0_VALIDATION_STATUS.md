@@ -960,32 +960,16 @@ Repository/static hardening is substantially progressed, but the remaining gates
 - L'exécution de `alembic check` a permis d'identifier deux modèles non importés (`action_verification`, `iso_control_evidence`) ; leur enregistrement est corrigé. La migration initiale est maintenant limitée à ses dix tables historiques, afin que les migrations ultérieures créent les leurs.
 - Ces résultats valident le schéma et la procédure de récupération **dans l'environnement éphémère CI uniquement**. Une restauration réelle de sauvegarde chiffrée de préproduction/production, avec RPO/RTO approuvés, reste à réaliser.
 
-
 ## Point de contrôle — 2026-11-25 (tests de concurrence et révocation administrative)
 
 - Le run GitHub Actions `45586284593` est entièrement **vert** sur le HEAD `91ec0cc14c4dbefb50ac65df8400063bd1681ecd`.
-- Backend : **376 réussites, 26 tests ignorés**.
-- PostgreSQL : **26 tests d'intégration réussis**.
-- Frontend : build réussi ; Docker Compose : build, démarrage, vérification santé/proxy et arrêt réussis.
-- `alembic upgrade head` et `alembic check` réussissent ; aucun écart de schéma SQLAlchemy/PostgreSQL détecté.
-- Le parcours d'une base historique depuis `0024_audit_outbox`, le downgrade `0026 -> 0025`, puis la remise à niveau `head` réussissent.
-- Le test de sauvegarde/restauration PostgreSQL 16 restaure le dump dans une base neuve et vérifie la révision Alembic et la donnée témoin. Résultat mesuré en CI éphémère : 0 seconde arrondie.
-- Les tests d'administration couvrent désormais la concurrence entre rétrogradations, l'unicité de l'événement d'audit, le refus d'un acteur rétrogradé et l'invalidation d'un ancien access token ainsi que la révocation de sa refresh session.
-- Le test de concurrence a aussi été corrigé pour importer explicitement `asyncio` et nettoyer les événements d'audit des deux comptes de test.
-- **Limite de preuve :** ces résultats sont ceux de l'environnement CI éphémère. Ils ne remplacent pas une répétition de restauration d'une sauvegarde réelle chiffrée, ni une validation RPO/RTO avec les responsables d'exploitation.
-- **Phase 0 reste ouverte :** migration des refresh tokens du `localStorage` vers des cookies `HttpOnly`, validation complète des contrôles d'accès Documents/RAG et des droits par objet, revue de configuration proxy/secrets en production, observabilité des seuils anti-bruteforce et revue de sécurité humaine restent à traiter.
-
-
-## Point de contrôle — 2026-11-25 (cycle de vie administrateur et récupération validés)
-
-- Le run GitHub Actions `45586284593` est entièrement **vert sur le HEAD exact de la PR** `91ec0cc14c4dbefb50ac65df8400063bd1681ecd`.
-- Backend : **376 réussites, 26 ignorés**, aucune erreur.
-- PostgreSQL : **26 réussites**, incluant les tests de concurrence de rétrogradation de deux administrateurs, l'invalidation d'un ancien access token après révocation administrative, la révocation du refresh session, le rollback d'audit et le reset MFA.
-- Frontend : build réussi.
-- Docker Compose : build, démarrage, health API, proxy frontend et arrêt propre réussis.
-- `alembic check` : `No new upgrade operations detected`.
-- Upgrade depuis `0024_audit_outbox`, downgrade `0026 -> 0025`, puis upgrade `head` réussis.
-- Dump PostgreSQL 16 restauré dans une base neuve ; version Alembic et ligne témoin vérifiées. Durée CI mesurée : 0 seconde à la précision entière.
-- La concurrence des rétrogradations confirme qu'une seule identité administrateur active avec MFA demeure ; les mutations sans changement effectif ne génèrent pas d'événement d'audit superflu.
-- La PR #1 reste ouverte, Draft, non fusionnée vers `main`.
-- Les preuves CI ne remplacent pas la répétition de restauration d'une sauvegarde chiffrée de préproduction/production, la validation RPO/RTO, l'ajustement opérationnel des seuils de rate limiting et la revue de sécurité humaine. **Phase 0 reste ouverte.**
+- Backend : **376 réussites, 26 tests ignorés** ; PostgreSQL : **26 tests d'intégration réussis**.
+- Frontend : build réussi ; Docker Compose : build, démarrage, health API, proxy frontend et arrêt propre réussis.
+- `alembic upgrade head` et `alembic check` réussissent sans dérive de schéma. Le parcours historique `0024_audit_outbox -> head`, le downgrade `0026 -> 0025`, puis la remise à niveau `head` réussissent.
+- Le dump PostgreSQL 16 a été restauré dans une base neuve et la révision Alembic ainsi qu'une donnée témoin ont été vérifiées. Durée mesurée en CI éphémère : 0 seconde arrondie.
+- Les tests d'administration couvrent les rétrogradations concurrentes, la conservation d'un administrateur MFA actif, le refus d'un acteur rétrogradé, l'unicité de l'audit, le rollback en cas d'échec d'audit et la révocation des refresh sessions et anciens access tokens.
+- **Cookies refresh : implémentation déjà présente et validée dans un run antérieur** : refresh token HttpOnly, SameSite=Strict, Secure hors développement, contrôle Origin, rotation serveur et access token conservé en mémoire côté frontend. Les refresh tokens ne sont plus stockés dans localStorage. Reste la vérification de la topologie same-site, du proxy et du comportement navigateur dans l'environnement cible.
+- Revue complémentaire : la suppression du cookie utilisait une règle Secure plus restrictive que sa création en environnement `staging` ou `test`. Correction appliquée dans `backend/app/api/v1/endpoints/auth.py` et test multi-environnements ajouté dans `backend/tests/test_auth_refresh_cookie.py`. **Ces deux derniers changements attendent leur propre CI**.
+- Les résultats PostgreSQL et la restauration sont ceux de l'environnement CI éphémère. Une restauration réelle d'une sauvegarde chiffrée de préproduction/production et la validation RPO/RTO restent nécessaires.
+- **Phase 0 reste ouverte** : validation des ACL Documents/RAG et des autorisations par objet, revue proxy/secrets et same-site en production, observabilité des seuils anti-bruteforce, restauration réelle, tests d'invalidation complémentaires et revue de sécurité humaine.
+- La PR #1 demeure ouverte, en brouillon et non fusionnée vers `main`.
