@@ -856,3 +856,10 @@ Repository/static hardening is substantially progressed, but the remaining gates
 - These changes have not yet been run in CI; the latest workflow and PostgreSQL integration evidence remains the earlier green workflow `45574715908`, which predates this auth-version enforcement/fix series.
 
 - Tracking issue created: [#5 — administrative account lifecycle, distributed rate limiting and database recovery rehearsal](https://github.com/cherifmeh-ui/pgcc-platform/issues/5). It captures remaining controls that cannot be honestly marked complete from the current API surface or CI evidence.
+
+## Refresh-token auth-version enforcement — 2026-11-25
+
+- Extended the refresh-token account-state snapshot check to require a strict integer `auth_version` claim matching the current `users.auth_version`. Missing, boolean, malformed or stale claims follow the existing policy-change path: all active refresh sessions are revoked, an audit-outbox event is enqueued in the same transaction, the cookie is cleared and the request is rejected with HTTP 401.
+- Extended the PostgreSQL refresh policy-change integration cases with an explicit auth-version mismatch scenario. Updated the refresh-token factory in the endpoint integration test to accept and persist the `auth_version` claim.
+- Commits: `d64535b` (endpoint enforcement), `ac83e33` and `47574c9` (PostgreSQL test coverage and fixture correction).
+- Runtime validation remains pending: the latest commit has not yet produced a CI workflow result. The PostgreSQL test requires `PGCC_INTEGRATION_DATABASE_URL` and was not run manually in this session.
