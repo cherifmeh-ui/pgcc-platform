@@ -959,3 +959,18 @@ Repository/static hardening is substantially progressed, but the remaining gates
 - Le job PostgreSQL a aussi exécuté les 24 tests d'intégration, dont les tests concurrents du limiteur et les scénarios transactionnels d'administration.
 - L'exécution de `alembic check` a permis d'identifier deux modèles non importés (`action_verification`, `iso_control_evidence`) ; leur enregistrement est corrigé. La migration initiale est maintenant limitée à ses dix tables historiques, afin que les migrations ultérieures créent les leurs.
 - Ces résultats valident le schéma et la procédure de récupération **dans l'environnement éphémère CI uniquement**. Une restauration réelle de sauvegarde chiffrée de préproduction/production, avec RPO/RTO approuvés, reste à réaliser.
+
+
+## Point de contrôle — 2026-11-25 (tests de concurrence et révocation administrative)
+
+- Le run GitHub Actions `45586284593` est entièrement **vert** sur le HEAD `91ec0cc14c4dbefb50ac65df8400063bd1681ecd`.
+- Backend : **376 réussites, 26 tests ignorés**.
+- PostgreSQL : **26 tests d'intégration réussis**.
+- Frontend : build réussi ; Docker Compose : build, démarrage, vérification santé/proxy et arrêt réussis.
+- `alembic upgrade head` et `alembic check` réussissent ; aucun écart de schéma SQLAlchemy/PostgreSQL détecté.
+- Le parcours d'une base historique depuis `0024_audit_outbox`, le downgrade `0026 -> 0025`, puis la remise à niveau `head` réussissent.
+- Le test de sauvegarde/restauration PostgreSQL 16 restaure le dump dans une base neuve et vérifie la révision Alembic et la donnée témoin. Résultat mesuré en CI éphémère : 0 seconde arrondie.
+- Les tests d'administration couvrent désormais la concurrence entre rétrogradations, l'unicité de l'événement d'audit, le refus d'un acteur rétrogradé et l'invalidation d'un ancien access token ainsi que la révocation de sa refresh session.
+- Le test de concurrence a aussi été corrigé pour importer explicitement `asyncio` et nettoyer les événements d'audit des deux comptes de test.
+- **Limite de preuve :** ces résultats sont ceux de l'environnement CI éphémère. Ils ne remplacent pas une répétition de restauration d'une sauvegarde réelle chiffrée, ni une validation RPO/RTO avec les responsables d'exploitation.
+- **Phase 0 reste ouverte :** migration des refresh tokens du `localStorage` vers des cookies `HttpOnly`, validation complète des contrôles d'accès Documents/RAG et des droits par objet, revue de configuration proxy/secrets en production, observabilité des seuils anti-bruteforce et revue de sécurité humaine restent à traiter.
