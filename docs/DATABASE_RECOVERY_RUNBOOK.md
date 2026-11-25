@@ -8,6 +8,10 @@ Statut : procédure de validation CI et aide opératoire ; ne remplace pas le pl
 2. Vérifier le downgrade/upgrade de la migration de limitation d'authentification, qui ne contient que des compteurs temporaires.
 3. Vérifier qu'un dump PostgreSQL complet peut être restauré dans une base neuve et que le numéro Alembic ainsi qu'une donnée témoin sont conservés.
 
+## Contrôle de la migration initiale
+
+La migration `0001_initial` utilise encore SQLAlchemy metadata pour créer les tables historiques, mais sa liste de tables est maintenant explicitement figée. Elle ne doit pas créer à l'avance les tables ajoutées par les révisions ultérieures (ISO evidence, vérifications d'actions, inventaire, fournisseurs, sessions, outbox ou limitation d'authentification). Les nouveaux modèles restent importés par `migrations/env.py` pour permettre à Alembic de comparer l'ensemble du schéma.
+
 ## Validation automatisée GitHub Actions
 
 Le job PostgreSQL doit :
