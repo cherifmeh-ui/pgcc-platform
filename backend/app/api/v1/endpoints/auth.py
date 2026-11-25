@@ -639,19 +639,19 @@ async def logout(
     payload: RefreshRequest | None = None,
     refresh_cookie: str | None = Cookie(default=None, alias=REFRESH_COOKIE_NAME),
 ):
-    """Revoke the presented refresh session and audit the state change atomically."""
+    """Revoke the presented refresh session, audit it, and clear its cookie."""
     refresh_token = refresh_cookie or (payload.refresh_token if payload else None)
     if refresh_cookie:
         _require_trusted_cookie_origin(request)
     if not refresh_token:
         _clear_refresh_cookie(response)
-        _clear_refresh_cookie(response)
-    return None
+        return None
     try:
         data = decode_token(refresh_token, expected_type="refresh")
     except Exception:
         _clear_refresh_cookie(response)
         return None
+
     token_hash = _refresh_jti_hash(data)
     result = await db.execute(
         select(RefreshTokenSession)
@@ -677,4 +677,5 @@ async def logout(
     except Exception:
         await db.rollback()
         raise
+    _clear_refresh_cookie(response)
     return None
