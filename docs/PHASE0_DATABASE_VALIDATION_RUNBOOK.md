@@ -108,3 +108,11 @@ Le baseline `0001_initial` appelle `Base.metadata.create_all()` à partir d'un e
 - Frontend development container uses `npm ci` against the committed lockfile.
 - GitHub Actions now has a Compose smoke job to validate configuration, build backend image, start PostgreSQL/backend/frontend, verify API health and assert the Vite `/api` proxy reaches the backend.
 - The smoke job's actual result is pending; no stack startup success is claimed yet.
+
+## Latest clean validation — workflow 45572713404 — 2026-11-25
+
+- Backend: 303 passed, 13 skipped.
+- PostgreSQL 16 clean database: migrations 0001 through 0024_audit_outbox applied; PostgreSQL integration suite 13 passed.
+- Frontend: committed package lock installed with npm ci; npm audit reported 0 vulnerabilities; Vite 6.4.6 build passed.
+- Docker Compose: full development stack startup, API health and frontend proxy smoke all passed.
+- This validates a clean database upgrade to head, but does not replace legacy-upgrade, downgrade, schema-drift, backup/restore or production data migration rehearsal.
