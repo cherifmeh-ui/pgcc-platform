@@ -216,3 +216,14 @@ Do not close Phase 0 until evidence is attached for:
 - MFA ciphertext-at-rest, legacy conversion, key rotation, managed key validation, non-development startup gate and PostgreSQL persistence are validated in CI.
 - Document INTERNAL/RESTRICTED viewer ACL is validated by unit and PostgreSQL tests.
 - Production deployment remains conditional on key generation/backup, legacy MFA migration script execution, same-site cookie topology review and human security approval.
+
+## Revue complémentaire — intégrité des fichiers et pipeline documentaire — 2026-11-25
+
+- Revue statique de `documents.py`, `document.py`, `document_extractor.py` et `rag_service.py` sur le HEAD de la PR `a117d14`.
+- Le fichier original est stocké en binaire dans `documents.file_data`, mais le modèle ne comporte actuellement ni empreinte cryptographique persistée ni mécanisme de vérification d'intégrité au téléchargement. L'ajout d'un SHA-256 doit être accompagné d'une migration Alembic, d'une stratégie pour les documents historiques et de tests PostgreSQL ; aucune modification de schéma n'est faite sans validation du dernier numéro de révision.
+- L'extraction PDF/DOCX applique des limites de taille, de pages, d'entrées ZIP et de texte, mais elle s'exécute dans le processus API. Ces limites ne constituent pas une sandbox : un service isolé avec limites CPU/mémoire, système de fichiers temporaire non privilégié et délais stricts reste requis.
+- Le DOCX est contrôlé comme archive ZIP et la présence de `word/document.xml` est vérifiée ; cela ne remplace ni une analyse antivirus ni une désinfection CDR.
+- Le service RAG génère les embeddings avant de remplacer les chunks, puis commit les chunks, le drapeau `is_indexed` et l'événement d'audit ensemble. Cette atomicité est utile, mais ne fournit pas à elle seule un cloisonnement d'accès lors d'une future recherche sémantique.
+- Le déclenchement d'indexation est protégé par la permission RBAC `documents:update`. Toute évolution de la matrice de rôles doit préserver une restriction aux opérateurs explicitement autorisés ; la recherche RAG devra filtrer les documents selon l'utilisateur et leur classification avant même de sélectionner les chunks.
+- Validation CI observée sur le HEAD PR `a117d14`, workflow `45613134288` : jobs backend, PostgreSQL, frontend et Compose terminés avec succès. Cette preuve couvre les tests automatisés du workflow, pas une sandbox antivirus ni une restauration de production.
+- Décision : ne pas déclarer l'intégrité SHA-256, l'antivirus, la sandbox ou les ACL RAG comme implémentés. Les conserver comme portes de sortie Phase 0.
