@@ -78,7 +78,12 @@ async def _seed(sessions):
 
 async def _cleanup(sessions, actor_id, target_id):
     async with sessions() as db:
-        await db.execute(\n            delete(AuditOutbox).where(\n                AuditOutbox.payload[\"resource_id\"].astext == str(target_id)\n            )\n        )\n        await db.execute(delete(User).where(User.id.in_([actor_id, target_id])))
+        await db.execute(
+            delete(AuditOutbox).where(
+                AuditOutbox.payload["resource_id"].astext == str(target_id)
+            )
+        )
+        await db.execute(delete(User).where(User.id.in_([actor_id, target_id])))
         await db.commit()
 
 
