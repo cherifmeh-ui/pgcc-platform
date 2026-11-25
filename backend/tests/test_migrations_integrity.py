@@ -401,3 +401,8 @@ def test_auth_rate_limit_bucket_migration_and_model_are_aligned():
     assert "blocked_until" in source and "blocked_until" in model
     assert "ck_auth_rate_limit_buckets_attempts_nonnegative" in source
     assert "ix_auth_rate_limit_buckets_updated_at" in source
+
+
+def test_auth_rate_limit_model_is_registered_for_alembic_autogeneration():
+    env_source = (MIGRATIONS_DIR.parent / "env.py").read_text(encoding="utf-8")
+    assert "auth_rate_limit_bucket" in env_source
