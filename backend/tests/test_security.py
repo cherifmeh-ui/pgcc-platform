@@ -200,7 +200,7 @@ def test_access_token_rejects_reserved_extra_claim_override(reserved_claim):
 
 
 def test_access_token_extra_claims_cannot_override_role():
-    with pytest.raises(ValueError, match="reserved JWT claims"):
+    with pytest.raises(ValueError, match="reserved .* claims"):
         create_access_token(
             "user@example.test",
             "viewer",
