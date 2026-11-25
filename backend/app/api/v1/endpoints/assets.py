@@ -670,16 +670,27 @@ async def update_asset(
     values = data.model_dump(exclude_unset=True)
     if "application_id" in values:
         await _ensure_application_exists(values.get("application_id"), db)
+
+    was_retired = _asset_is_retired(asset.lifecycle_status, asset.retired_at)
+    reactivated = False
     if "lifecycle_status" in values:
-        values["retired_at"] = _lifecycle_retirement_marker(
-            values["lifecycle_status"], asset.retired_at
-        )
+        new_status = values["lifecycle_status"]
+        new_retired_at = _lifecycle_retirement_marker(new_status, asset.retired_at)
+        reactivated = was_retired and not _asset_is_retired(new_status, new_retired_at)
+        values["retired_at"] = new_retired_at
+
     for key, value in values.items():
         setattr(asset, key, value)
+    audit_action = "REACTIVATE" if reactivated else "UPDATE"
+    audit_details = (
+        f"Asset reactivated: {asset.reference} (new status: {asset.lifecycle_status})"
+        if reactivated else f"Asset updated: {asset.reference}"
+    )
     try:
+        await db.flush()
         await enqueue_audit_event(
-            db, user_email=current_user.email, action="UPDATE", resource="assets",
-            resource_id=str(asset.id), details=f"Asset updated: {asset.reference}",
+            db, user_email=current_user.email, action=audit_action, resource="assets",
+            resource_id=str(asset.id), details=audit_details,
             event_type="ASSET", request=request,
         )
         await db.commit()
