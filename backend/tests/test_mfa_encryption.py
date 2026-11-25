@@ -62,6 +62,7 @@ def test_non_development_settings_require_a_managed_mfa_key_ring():
         "ENVIRONMENT": "production",
         "DEBUG": False,
         "CORS_ORIGINS": "https://pgcc.example",
+        "AUTH_RATE_LIMIT_HMAC_KEY": "R" * 48,
     }
     with pytest.raises(ValidationError, match="MFA_ENCRYPTION_KEYS"):
         Settings(**common)
