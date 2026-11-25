@@ -212,3 +212,13 @@ Status: active engineering review. This is a static review backlog, not a securi
 - [ ] Resolve or verify removal of SQLAlchemy document_chunks stale-row warning after bulk child deletion.
 - [ ] Resolve or verify removal of AsyncMock coroutine warning after synchronous add mock correction.
 - [ ] Complete issue #4: move refresh token to HttpOnly cookie with CSRF/origin and CORS protections; remove localStorage refresh token.
+
+## Auth cookie and Compose implementation — 2026-11-25
+
+- [x] Backend refresh cookie issuance, rotation, logout clearing and origin allowlist checks implemented.
+- [x] Refresh token removed from JSON response model and frontend localStorage handling.
+- [x] Frontend memory-only access token and cookie-backed session restore with single-flight bootstrap.
+- [x] Tests added for cookie flags, origin rejection, cookie logout, empty body, response model and PostgreSQL cookie rotation/replay.
+- [ ] Fresh CI validation of cookie transport, frontend build and Compose smoke job.
+- [ ] Remove legacy JSON refresh-token fallback after client migration is verified.
+- [ ] Human review of same-site cookie deployment and CSRF model.
