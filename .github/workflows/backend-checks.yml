@@ -162,7 +162,11 @@ jobs:
       - name: Validate Compose configuration
         run: docker compose config --quiet
       - name: Verify deployment environment override
-        run: ENVIRONMENT=production docker compose config --format json | jq -e '.services.backend.environment.ENVIRONMENT == "production"'
+        shell: bash
+        run: |
+          sed 's/^ENVIRONMENT=.*/ENVIRONMENT=production/' .env.example > /tmp/pgcc-production.env
+          docker compose --env-file /tmp/pgcc-production.env config --format json > /tmp/pgcc-production-compose.json
+          test "$(jq -r '.services.backend.environment.ENVIRONMENT' /tmp/pgcc-production-compose.json)" = "production"
       - name: Build backend image
         run: docker compose build backend
       - name: Start complete development stack
