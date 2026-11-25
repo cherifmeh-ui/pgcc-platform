@@ -4,7 +4,7 @@ from fastapi.responses import Response
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy import select, func, delete
 from sqlalchemy.exc import IntegrityError
-from pydantic import BaseModel
+from pydantic import BaseModel, ConfigDict
 from typing import List, Optional
 import uuid
 import re
@@ -39,8 +39,7 @@ class DocumentResponse(BaseModel):
     is_indexed: bool
     created_at: str  # ISO String explicite
     
-    class Config:
-        from_attributes = True
+    model_config = ConfigDict(from_attributes=True)
 
 
 @router.post("/upload", response_model=DocumentResponse, status_code=201)
