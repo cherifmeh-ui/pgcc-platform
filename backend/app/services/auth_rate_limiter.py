@@ -4,6 +4,7 @@ from __future__ import annotations
 import asyncio
 import hashlib
 import hmac
+import ipaddress
 import logging
 import math
 from datetime import datetime, timedelta, timezone
@@ -50,6 +51,38 @@ BUCKET_RETENTION = timedelta(hours=48)
 
 def utcnow() -> datetime:
     return datetime.now(timezone.utc)
+
+
+def get_source_ip(request: Request) -> str:
+    """Use forwarded addresses only when the immediate peer is explicitly trusted."""
+    peer = request.client.host if request.client else "unknown"
+    try:
+        peer_ip = ipaddress.ip_address(peer)
+    except ValueError:
+        return peer
+
+    trusted_networks = [
+        ipaddress.ip_network(value, strict=False)
+        for value in settings.auth_trusted_proxy_ips
+    ]
+    if not any(peer_ip in network for network in trusted_networks):
+        return str(peer_ip)
+
+    forwarded = request.headers.get("x-forwarded-for")
+    if not forwarded:
+        return str(peer_ip)
+    try:
+        chain = [ipaddress.ip_address(item.strip()) for item in forwarded.split(",")]
+    except ValueError:
+        # Malformed proxy metadata is ignored; the trusted peer remains the
+        # only address we can safely assert.
+        return str(peer_ip)
+
+    # Walk from the network edge inward and select the first untrusted hop.
+    for address in reversed([*chain, peer_ip]):
+        if not any(address in network for network in trusted_networks):
+            return str(address)
+    return str(chain[0]) if chain else str(peer_ip)
 
 
 def rate_limit_bucket_key(scope: str, identity: str) -> str:
@@ -137,7 +170,7 @@ async def enforce_auth_rate_limit(
 
     buckets: list[tuple[str, str, tuple[int, int, int]]] = []
     if include_ip:
-        client_ip = request.client.host if request.client else "unknown"
+        client_ip = get_source_ip(request)
         buckets.append(("ip", client_ip, policy["ip"]))
     if subject is not None:
         buckets.append(("account", subject, policy["account"]))
