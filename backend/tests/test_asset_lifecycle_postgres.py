@@ -1,6 +1,7 @@
 """PostgreSQL transaction tests for asset retirement and audit consistency."""
 from __future__ import annotations
 
+import asyncio
 from datetime import datetime, timedelta, timezone
 import os
 from unittest.mock import AsyncMock, MagicMock
@@ -17,6 +18,7 @@ from app.models.asset import Asset
 from app.models.audit_outbox import AuditOutbox
 from app.models.supplier import Supplier, SupplierAccessRequest, SupplierAssetLink
 from app.models.user import User
+from app.api.v1.endpoints.suppliers import SupplierAssetLinkCreate, link_supplier_asset
 
 DATABASE_URL = os.getenv("PGCC_INTEGRATION_DATABASE_URL")
 pytestmark = pytest.mark.skipif(
@@ -413,6 +415,101 @@ async def test_asset_retirement_is_blocked_by_active_supplier_asset_link():
     finally:
         async with sessions() as cleanup:
             await cleanup.execute(delete(SupplierAssetLink).where(SupplierAssetLink.id == link_id))
+            await cleanup.execute(delete(Asset).where(Asset.id == asset_id))
+            await cleanup.execute(delete(Supplier).where(Supplier.id == supplier_id))
+            await cleanup.execute(delete(User).where(User.id == user_id))
+            await cleanup.commit()
+        await engine.dispose()
+
+
+@pytest.mark.asyncio
+async def test_supplier_link_creation_and_asset_retirement_are_serialized():
+    engine = create_async_engine(DATABASE_URL, pool_size=5, max_overflow=0)
+    sessions = async_sessionmaker(engine, expire_on_commit=False)
+    user_id = uuid4()
+    asset_id = uuid4()
+    supplier_id = uuid4()
+    user = User(
+        id=user_id,
+        email=f"phase0-link-race-{user_id.hex}@example.invalid",
+        full_name="Phase 0 relationship race",
+        role="admin",
+        password_hash="not-used",
+        must_change_password=False,
+        is_active=True,
+        mfa_enabled=True,
+    )
+    supplier = Supplier(
+        id=supplier_id,
+        code=f"PH0-RACE-{user_id.hex[:10]}",
+        legal_name="Phase 0 relationship race supplier",
+        status="Approuvé",
+        criticality="Moyenne",
+        dependency_level="Moyenne",
+    )
+    asset = Asset(
+        id=asset_id,
+        reference=f"PH0-RACE-ASSET-{user_id.hex[:8]}",
+        name="Phase 0 relationship race asset",
+        asset_type="hardware",
+        lifecycle_status="Actif",
+        retired_at=None,
+    )
+    try:
+        async with sessions() as setup:
+            setup.add(user)
+            await setup.flush()
+            setup.add_all([supplier, asset])
+            await setup.commit()
+
+        async def create_link():
+            async with sessions() as db:
+                try:
+                    await link_supplier_asset(
+                        supplier_id=supplier_id,
+                        data=SupplierAssetLinkCreate(
+                            asset_id=asset_id,
+                            relationship_type="Maintient",
+                            access_level="Standard",
+                        ),
+                        request=_request(),
+                        db=db,
+                        current_user=MagicMock(id=user_id, email=user.email),
+                    )
+                    return 201
+                except HTTPException as exc:
+                    return exc.status_code
+
+        async def retire():
+            async with sessions() as db:
+                try:
+                    await retire_asset(
+                        asset_id=asset_id,
+                        request=_request(),
+                        db=db,
+                        current_user=MagicMock(email=user.email),
+                    )
+                    return 204
+                except HTTPException as exc:
+                    return exc.status_code
+
+        outcomes = await asyncio.gather(create_link(), retire())
+        assert outcomes in ([201, 409], [422, 204])
+
+        async with sessions() as verify:
+            persisted_asset = await verify.get(Asset, asset_id)
+            active_link = (
+                await verify.execute(
+                    select(SupplierAssetLink.id).where(
+                        SupplierAssetLink.asset_id == asset_id,
+                        SupplierAssetLink.status == "Actif",
+                    )
+                )
+            ).scalar_one_or_none()
+            assert (persisted_asset.lifecycle_status == "Retiré") == (active_link is None)
+    finally:
+        async with sessions() as cleanup:
+            await cleanup.execute(delete(SupplierAssetLink).where(SupplierAssetLink.asset_id == asset_id))
             await cleanup.execute(delete(Asset).where(Asset.id == asset_id))
             await cleanup.execute(delete(Supplier).where(Supplier.id == supplier_id))
             await cleanup.execute(delete(User).where(User.id == user_id))
