@@ -144,7 +144,7 @@ def require_permission(module: str, action: str = "read"):
     async def dependency(
         current_user: User = Depends(get_current_user),
     ) -> User:
-        user_role = (current_user.role or "").lower()
+        user_role = (current_user.role or "").strip().lower()
         if not role_has_permission(user_role, module, action):
             raise HTTPException(
                 status_code=status.HTTP_403_FORBIDDEN,
