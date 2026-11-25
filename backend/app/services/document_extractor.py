@@ -48,7 +48,7 @@ def _bounded_text(parts, value: str, current_length: int):
 def _finish_extraction(parts, truncated: bool) -> str:
     extracted = "\n\n".join(parts)
     if truncated:
-        extracted += "\\n\\n[NOTE : Texte tronqué à la limite de sécurité.]"
+        extracted += "\n\n[NOTE : Texte tronqué à la limite de sécurité.]"
     return extracted
 
 
