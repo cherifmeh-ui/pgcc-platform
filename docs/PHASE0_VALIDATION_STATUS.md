@@ -884,3 +884,14 @@ Repository/static hardening is substantially progressed, but the remaining gates
 - Le contrôle CI du HEAD `3466e35` n'est pas encore disponible dans les résultats consultés. La correction est donc **en attente de validation CI** ; les résultats du run précédent ne sont pas transposés au nouveau HEAD.
 - La validation PostgreSQL du schéma et des migrations, les tests de concurrence de rotation des refresh tokens et la clôture globale de Phase 0 restent requis.
 - La gestion administrative du cycle de vie des comptes demeure une spécification ; aucune API correspondante n'est déclarée implémentée.
+
+
+## Point de contrôle — 2026-11-25 (gestion administrative initiale des comptes)
+
+- Le dernier contrôle CI complet précédemment observé sur le HEAD `bbfbb44` est entièrement vert : backend, intégration PostgreSQL, frontend et smoke test Docker Compose.
+- Une première tranche de gestion administrative des comptes est maintenant ajoutée sur la branche : permission RBAC `users:manage` (admin uniquement), routeur `/admin/users`, liste/détail, modification de profil/role/activation, réinitialisation MFA et révocation des sessions.
+- Les opérations sensibles écrivent l'événement dans l'audit outbox au sein de la transaction métier et révoquent les refresh sessions concernées. Le reset MFA supprime secret et hashes des codes de secours ; les réponses n'exposent pas ces valeurs.
+- Les opérations qui pourraient retirer le dernier administrateur actif avec MFA verrouillent les comptes concernés et refusent cette transition.
+- Tests unitaires ajoutés pour la matrice RBAC, les rôles acceptés, le rejet des champs sensibles/inconnus et la minimisation des réponses.
+- HEAD contenant cette implémentation : CI non encore observée au moment de cette mise à jour. Les tests PostgreSQL de concurrence, rollback d'audit et invalidation réelle des access/refresh tokens restent à ajouter/exécuter. Cette tranche n'est donc pas encore déclarée validée.
+- Le provisionnement/création des comptes n'est pas implémenté ; il reste séparé pour éviter de définir un flux d'identité/invitation sans décision métier.
