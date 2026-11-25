@@ -846,3 +846,11 @@ Repository/static hardening is substantially progressed, but the remaining gates
 - Commits: `2a5f014` (enforcement), `796b3da` and `e8c0bb1` (tests/fixture correction).
 - No CI run has yet been returned for this latest HEAD. The change and tests are committed but not yet runtime-validated.
 - This closes immediate access-token invalidation at the authentication dependency layer. It does not replace the remaining work on administrative account-management endpoints, distributed rate limiting, or operational session/key management.
+
+## JWT issuance ordering after auth-version enforcement — 2026-11-25
+
+- A follow-up review found that the SQLAlchemy `User.before_update` listener increments `auth_version` during flush. MFA enrollment completion and forced password change previously minted replacement JWTs before that flush, which could make the newly issued tokens immediately stale once the transaction committed.
+- Added an explicit flush before minting access/refresh tokens after MFA state changes and after forced password change. The version claim now reflects the persisted security state.
+- Added focused tests that simulate the version bump during flush and assert the replacement access token receives the incremented version for both MFA enrollment and password change.
+- Commits: `635fde4`, `8cca49c` (ordering correction), `e6a8ab3`, `0e556da` (tests).
+- These changes have not yet been run in CI; the latest workflow and PostgreSQL integration evidence remains the earlier green workflow `45574715908`, which predates this auth-version enforcement/fix series.
