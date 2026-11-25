@@ -813,3 +813,8 @@ Repository/static hardening is substantially progressed, but the remaining gates
 - New MFA secrets are stored as Fernet ciphertext; TOTP verification decrypts in memory. Legacy plaintext is migrated lazily on verification.
 - Production/staging require a valid `MFA_ENCRYPTION_KEYS` key ring. Startup blocks if plaintext secrets remain. An operator script supports dry-run migration and key rotation.
 - Runbook: `docs/MFA_SECRET_ENCRYPTION_RUNBOOK.md`. Unit tests added; CI pending.
+
+## MFA secret encryption code and test coverage — 2026-11-25
+
+- Added Fernet encryption at rest for TOTP secrets, managed key-ring configuration, legacy plaintext migration script, key rotation and non-development startup integrity gate.
+- Added unit and PostgreSQL tests. Latest CI workflow 45574715908 is pending.
