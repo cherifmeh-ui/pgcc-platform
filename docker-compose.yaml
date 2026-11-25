@@ -29,6 +29,27 @@ services:
       - pgcc_network
 
   # ===================================================================
+  # ANTIVIRUS CLAMAV (activation explicite : docker compose --profile antivirus up)
+  # Le daemon n'expose aucun port sur l'hôte ; il reste sur le réseau privé Compose.
+  # ===================================================================
+  clamav:
+    image: clamav/clamav:stable
+    container_name: pgcc_clamav
+    restart: unless-stopped
+    profiles:
+      - antivirus
+    volumes:
+      - clamav_db:/var/lib/clamav
+    networks:
+      - pgcc_network
+    healthcheck:
+      test: ["CMD", "clamdscan", "--ping=3"]
+      interval: 30s
+      timeout: 10s
+      retries: 5
+      start_period: 180s
+
+  # ===================================================================
   # BACKEND FASTAPI (Python Async + SQLAlchemy + Ollama Client)
   # ===================================================================
   backend:
@@ -43,8 +64,9 @@ services:
       DATABASE_URL: postgresql+asyncpg://${POSTGRES_USER}:${POSTGRES_PASSWORD}@postgres:5432/${POSTGRES_DB}
       # Configuration IA Locale (Ollama tourne sur ta machine Windows hôte)
       OLLAMA_BASE_URL: http://host.docker.internal:11434
-      # Uploads fail closed when no external ClamAV daemon is configured.
-      CLAMAV_HOST: ${CLAMAV_HOST:-}
+      # Défaut vers le service du profil antivirus ; surcharge possible par daemon externe.
+      # Sans daemon disponible, les uploads restent refusés (fail closed).
+      CLAMAV_HOST: ${CLAMAV_HOST:-clamav}
       CLAMAV_PORT: ${CLAMAV_PORT:-3310}
       CLAMAV_TIMEOUT_SECONDS: ${CLAMAV_TIMEOUT_SECONDS:-30}
       AI_ENABLED: ${AI_ENABLED:-false}
@@ -91,6 +113,8 @@ services:
 # ===================================================================
 volumes:
   pgdata:
+    driver: local
+  clamav_db:
     driver: local
 
 # ===================================================================
