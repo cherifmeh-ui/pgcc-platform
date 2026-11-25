@@ -48,7 +48,14 @@ jobs:
 
       - name: Install frontend dependencies
         working-directory: frontend
-        run: npm ci
+        run: npm install --package-lock-only --ignore-scripts && npm ci
+
+      - name: Publish regenerated frontend lockfile
+        uses: actions/upload-artifact@v4
+        with:
+          name: frontend-package-lock
+          path: frontend/package-lock.json
+          if-no-files-found: error
 
       - name: Report frontend dependency advisories
         working-directory: frontend
