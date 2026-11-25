@@ -863,3 +863,12 @@ Repository/static hardening is substantially progressed, but the remaining gates
 - Extended the PostgreSQL refresh policy-change integration cases with an explicit auth-version mismatch scenario. Updated the refresh-token factory in the endpoint integration test to accept and persist the `auth_version` claim.
 - Commits: `d64535b` (endpoint enforcement), `ac83e33` and `47574c9` (PostgreSQL test coverage and fixture correction).
 - Runtime validation remains pending: the latest commit has not yet produced a CI workflow result. The PostgreSQL test requires `PGCC_INTEGRATION_DATABASE_URL` and was not run manually in this session.
+
+## Backend CI failure triage and fixture corrections — 2026-11-25
+
+- Inspected the complete backend job log for workflow run `45577665026`. Python compilation passed. PostgreSQL integration, frontend build and Docker Compose smoke jobs passed. Backend unit tests reported 347 passed, 18 skipped and 3 failures.
+- Failure 1: `test_get_current_user_accepts_normalized_matching_role` used a user mock without `auth_version`; corrected the fixture to model the persisted account version.
+- Failures 2–3: two JWT reserved-claim tests expected the old exception text. The implementation now rejects both JWT protocol claims and account-state claims; relaxed the assertion to match the shared reserved-claim wording without weakening the expected `ValueError`.
+- Also corrected the refresh audit-rollback PostgreSQL fixture to include `auth_version` in its legacy refresh payload, so it tests rollback semantics with the current token contract.
+- Commits: `b724837`, `1bafc11`, `32c803f`.
+- These corrections have been committed to `chore/phase0-stabilization`; a new CI run is required to establish whether the backend suite is green. No Phase 0 closure claim is made.
