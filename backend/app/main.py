@@ -30,6 +30,8 @@ async def lifespan(app: FastAPI):
         print("PGCC | production schema must be managed through Alembic migrations")
         async with AsyncSessionLocal() as db:
             await assert_no_plaintext_mfa_secrets(db)
+            # Fail startup if the distributed auth limiter migration is missing.
+            await db.execute(text("SELECT bucket_key FROM auth_rate_limit_buckets LIMIT 0"))
     audit_worker = asyncio.create_task(audit_outbox_worker())
     rate_limit_cleanup_worker = asyncio.create_task(auth_rate_limit_cleanup_worker())
     try:
