@@ -1010,3 +1010,12 @@ Repository/static hardening is substantially progressed, but the remaining gates
 - Le job PostgreSQL CI a été corrigé pour inclure explicitement `backend/tests/test_asset_lifecycle_postgres.py` ; les deux tests PostgreSQL de retrait sont inclus dans les 32 réussites.
 - Ces résultats renforcent le cycle de vie des actifs ; la revue métier des règles de réactivation, des relations historiques conservées après retrait et des droits de suppression logique reste à confirmer.
 - **Phase 0 reste ouverte** : sauvegarde réelle/RPO-RTO, revue humaine, ACL documentaires plus fines, antivirus/isolation du parsing, configuration de production et revue complète du diff restent requis.
+
+
+## Contrôle complémentaire — retrait d'actif et accès fournisseur (2026-11-25)
+
+- Le retrait d'un actif est désormais refusé avec HTTP 409 lorsqu'une demande ou autorisation fournisseur liée à cet actif est encore ouverte (`Demandé`, `Approuvé`, `Suspendu`).
+- La vérification est exécutée après verrouillage de la ligne actif (`SELECT ... FOR UPDATE`). Les créations de demandes d'accès verrouillent également l'actif avant insertion : cela sérialise les deux opérations et évite qu'une demande soit créée après un retrait concurrent.
+- Les relations et autorisations clôturées restent conservées pour l'historique ; aucune révocation automatique n'est effectuée.
+- Tests ajoutés : cas unitaire de blocage, cas sans autorisation ouverte, et test PostgreSQL avec une autorisation approuvée réelle.
+- La validation CI de cette correction est en attente sur le HEAD courant. Ne pas considérer ce contrôle comme validé tant que le job PostgreSQL n'est pas vert.
