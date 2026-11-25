@@ -733,6 +733,23 @@ async def retire_asset(
             ),
         )
 
+    active_supplier_link_result = await db.execute(
+        select(SupplierAssetLink.id)
+        .where(
+            SupplierAssetLink.asset_id == asset.id,
+            SupplierAssetLink.status == "Actif",
+        )
+        .limit(1)
+    )
+    if active_supplier_link_result.scalar_one_or_none() is not None:
+        raise HTTPException(
+            status_code=409,
+            detail=(
+                "Retrait impossible : une relation fournisseur-actif est encore active. "
+                "Terminez cette relation avant de retirer l'actif."
+            ),
+        )
+
     if asset.lifecycle_status not in {"Retiré", "Décommissionné"} or asset.retired_at is None:
         if asset.retired_at is None:
             asset.retired_at = datetime.now(timezone.utc)
