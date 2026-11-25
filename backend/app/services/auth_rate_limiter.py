@@ -9,7 +9,7 @@ import math
 from datetime import datetime, timedelta, timezone
 
 from fastapi import HTTPException, Request
-from sqlalchemy import case, delete
+from sqlalchemy import and_, case, delete, or_
 from sqlalchemy.dialects.postgresql import insert
 from sqlalchemy.ext.asyncio import AsyncSession
 
@@ -72,8 +72,11 @@ async def _increment_bucket(
     now: datetime,
 ) -> datetime | None:
     bucket = AuthRateLimitBucket
-    window_expired = bucket.window_started_at <= now - timedelta(seconds=window_seconds)
-    blocked_now = bucket.blocked_until.is_not(None) & (bucket.blocked_until > now)
+    blocked_now = and_(bucket.blocked_until.is_not(None), bucket.blocked_until > now)
+    window_expired = or_(
+        bucket.window_started_at <= now - timedelta(seconds=window_seconds),
+        and_(bucket.blocked_until.is_not(None), bucket.blocked_until <= now),
+    )
     next_attempts = case(
         (blocked_now, bucket.attempts),
         (window_expired, 1),
