@@ -31,7 +31,6 @@ class AdminUserResponse(BaseModel):
     mfa_enabled: bool
     must_change_password: bool
     auth_version: int
-    failed_login_attempts: int
     locked_until: datetime | None
     last_login_at: datetime | None
     created_at: datetime
