@@ -240,7 +240,7 @@ async def test_refresh_rolls_back_rotation_if_audit_enqueue_fails(monkeypatch):
         "old-refresh": {
             "sub": email, "jti": old_jti, "iat": int(now.timestamp()),
             "exp": int((now + timedelta(days=1)).timestamp()), "type": "refresh",
-            "role": "viewer", "mfa_enabled": False, "mfa_confirmed_at": None,
+            "role": "viewer", "auth_version": 0, "mfa_enabled": False, "mfa_confirmed_at": None,
         },
         "new-refresh": {
             "sub": email, "jti": uuid.uuid4().hex,
