@@ -119,14 +119,19 @@ async def test_password_change_audit_is_enqueued_before_commit(monkeypatch):
     monkeypatch.setattr(auth_endpoint, "_persist_refresh_session", persist)
     monkeypatch.setattr(auth_endpoint, "enqueue_audit_event", audit)
 
+    http_response = Response()
     response = await auth_endpoint.change_password(
         ChangePasswordRequest(
             change_password_token="change-token", new_password="StrongPassword!123",
             confirm_password="StrongPassword!123",
-        ), request=MagicMock(), response=Response(), db=db,
+        ), request=MagicMock(), response=http_response, db=db,
     )
 
     assert response.access_token == "access"
+    assert not hasattr(response, "refresh_token")
+    cookie = http_response.headers.get("set-cookie", "")
+    assert "HttpOnly" in cookie and "SameSite=strict" in cookie
+    assert "pgcc_refresh=refresh" in cookie
     assert user.password_hash == "new-hash"
     assert user.must_change_password is False
     assert order.index("audit") < order.index("commit")
