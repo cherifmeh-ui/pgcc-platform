@@ -165,19 +165,30 @@ async def test_refresh_endpoint_rotation_and_replay_are_audited_atomically(monke
 
     request = Request({
         "type": "http", "method": "POST", "path": "/auth/refresh",
-        "headers": [], "client": ("127.0.0.1", 1234),
+        "headers": [
+            (b"cookie", b"pgcc_refresh=old-refresh"),
+            (b"origin", b"http://localhost:5173"),
+        ],
+        "client": ("127.0.0.1", 1234),
         "server": ("test", 80), "scheme": "http", "query_string": b"",
     })
 
     async def rotate():
         async with sessions() as db:
-            return await auth_endpoint.refresh_tokens(
-                payload=RefreshRequest(refresh_token="old-refresh"), request=request, response=Response(), db=db
+            response = Response()
+            result = await auth_endpoint.refresh_tokens(
+                request=request, response=response, db=db,
+                payload=None, refresh_cookie="old-refresh",
             )
+            return result, response
 
     try:
         results = await asyncio.gather(rotate(), rotate(), return_exceptions=True)
         assert sum(not isinstance(item, BaseException) for item in results) == 1
+        successes = [item for item in results if not isinstance(item, BaseException)]
+        assert len(successes) == 1
+        assert "HttpOnly" in successes[0][1].headers.get("set-cookie", "")
+        assert "SameSite=strict" in successes[0][1].headers.get("set-cookie", "")
         failures = [item for item in results if isinstance(item, BaseException)]
         assert len(failures) == 1
         assert isinstance(failures[0], HTTPException)
