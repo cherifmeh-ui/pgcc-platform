@@ -914,3 +914,11 @@ Repository/static hardening is substantially progressed, but the remaining gates
 - Le fixture a été corrigé pour valider d'abord les lignes `users`, puis insérer la session dépendante. Le nettoyage supprime aussi les événements d'outbox de test.
 - Une couverture supplémentaire du reset MFA a été ajoutée : même si MFA est déjà désactivé mais qu'il reste des données MFA résiduelles, le reset incrémente explicitement `auth_version`, révoque les refresh sessions et audite l'opération.
 - Ces corrections sont présentes dans le HEAD `1ee0b4e`. Le nouveau résultat CI est attendu ; aucun résultat du run précédent n'est extrapolé à ce HEAD.
+
+
+## Point de contrôle — 2026-11-25 (tests de concurrence d'autorisation administrative)
+
+- Le run `45580566644` a validé le backend et le frontend ; le job PostgreSQL a exécuté les migrations puis **20 tests ont réussi et 1 test a échoué** sur un déballage de fixture obsolète après simplification du helper `_seed`.
+- Le déballage a été corrigé. Un quatrième test PostgreSQL vérifie désormais qu'un administrateur chargé avant une rétrogradation concurrente ne peut pas réutiliser son objet ORM obsolète pour modifier un autre compte.
+- La suite PostgreSQL couvre aussi le reset MFA d'un compte déjà sans MFA mais conservant des données MFA résiduelles : l'opération doit toujours incrémenter `auth_version`, révoquer les refresh sessions et produire l'événement d'audit.
+- Dernier HEAD de code : `0aa5042`. Validation CI de ce HEAD en attente ; les résultats du run précédent ne sont pas considérés comme validation des corrections.
