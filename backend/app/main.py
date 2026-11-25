@@ -14,6 +14,7 @@ from app.api.v1.endpoints.auth import router as auth_router
 from app.services.security_logger import audit_outbox_worker
 from app.services.auth_rate_limiter import auth_rate_limit_cleanup_worker
 from app.services.mfa_encryption import assert_no_plaintext_mfa_secrets
+from app.services.auth_rate_limiter import auth_rate_limit_cleanup_worker
 
 
 @asynccontextmanager
