@@ -985,3 +985,16 @@ Repository/static hardening is substantially progressed, but the remaining gates
 - Quatre scénarios PostgreSQL vérifient maintenant l'invalidation d'un ancien access token et la révocation de la refresh session après changement de rôle, désactivation, reset MFA et révocation administrative des sessions.
 - Le contrôle de schéma `alembic check`, l'upgrade/downgrade historique et la restauration CI PostgreSQL restent verts ; 30 tests d'intégration ont passé.
 - **Limite :** la restauration reste une preuve CI sur base éphémère. La sauvegarde chiffrée réelle, le RPO/RTO et la revue de sécurité humaine en production ne sont pas validés.
+
+
+## Point de contrôle — 2026-11-25 (revue documentaire et preuves consolidées)
+
+- Le run GitHub Actions `45587323159` est entièrement **vert** sur le HEAD `60bdf15e3e6b1fb49261f6d524860fa5e0fc60b4`.
+- Backend : **380 réussites, 30 tests ignorés** ; PostgreSQL : **30 tests d'intégration réussis** ; frontend et Compose smoke réussis.
+- Le contrôle `alembic check` ne détecte aucune dérive ; upgrade/downgrade historique, restauration PostgreSQL CI et vérification de la donnée témoin réussissent.
+- La feuille de route documentaire a été corrigée : l'index unique de nom de fichier existe ; la classification INTERNAL/RESTRICTED et les contrôles viewer liste/aperçu/téléchargement sont implémentés et testés.
+- Limite RAG vérifiée dans le code : indexation présente, mais aucune méthode/route de récupération de chunks n'est actuellement implémentée. Le filtrage ACL à la récupération est donc une exigence préalable à toute future route RAG, pas un contrôle déjà validé.
+- La politique documentaire actuelle est basée sur le rôle et le type ; les ACL par département, propriétaire ou besoin d'en connaître ne sont pas implémentées.
+- La revue des documents et l'issue #3 consignent les risques résiduels : absence d'antivirus/quarantaine, absence de sandbox de parsing, indexation synchrone et absence de workflow de validation des preuves.
+- Les issues #2, #3 et #5 ont reçu un état d'avancement détaillé. Les critères de revue humaine, de sauvegarde réelle/RPO-RTO et de configuration de production restent ouverts.
+- La PR #1 reste ouverte, en brouillon, non fusionnée vers `main`. **Phase 0 reste ouverte.**
