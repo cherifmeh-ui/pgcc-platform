@@ -1039,3 +1039,15 @@ Repository/static hardening is substantially progressed, but the remaining gates
 - Un nouveau fichier `backend/tests/test_document_upload_validation.py` couvre le dépassement des 10 Mio, le fichier vide, l'extension interdite, la fausse signature PDF et le faux DOCX commençant par `PK`. Ces tests sont inclus dans le job backend qui exécute `pytest -q backend/tests`.
 - Limites non levées : aucun antivirus/quarantaine ni sandbox d'analyse de fichiers n'est intégré ; les ACL restent basées sur le rôle et le type documentaire, sans séparation par département/propriétaire ; l'indexation RAG est présente mais aucune récupération de chunks n'est implémentée. Toute future route de recherche RAG devra appliquer l'ACL dans la requête de récupération, pas après l'extraction des résultats.
 - Validation CI de ces nouveaux tests en attente sur le HEAD courant ; ne pas déclarer cette étape validée avant le résultat du workflow.
+
+
+## Validation CI — contrôles d'upload et archives DOCX (2026-11-25)
+
+- HEAD testé : `82c09f9399d95283a46cadfc49aaeaf3a98b174f`.
+- Workflow GitHub Actions `45612842207` : **4 jobs sur 4 réussis**.
+- Backend : **399 tests réussis, 35 ignorés**. Les nouveaux tests de validation upload et d'archives DOCX sont inclus dans ce total.
+- PostgreSQL : **35 tests d'intégration réussis**, dont les tests d'accès documentaire, d'indexation/suppression concurrentes et de restauration automatisée.
+- Frontend : build réussi ; `npm audit` : **0 vulnérabilité**.
+- Docker Compose : smoke test réussi.
+- La restauration PostgreSQL CI a pris 0 seconde mesurée (granularité de la commande). Cela ne vaut pas une répétition sur sauvegarde réelle avec objectifs RPO/RTO.
+- Limite : les contrôles antivirus/quarantaine et sandbox de parsing restent absents ; ils ne sont pas compensés par les tests de validation de format.
