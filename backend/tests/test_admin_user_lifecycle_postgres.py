@@ -6,7 +6,7 @@ from datetime import datetime, timedelta, timezone
 from uuid import uuid4
 
 import pytest
-from fastapi import Request
+from fastapi import HTTPException, Request
 from sqlalchemy import delete, select
 from sqlalchemy.ext.asyncio import async_sessionmaker, create_async_engine
 
@@ -196,6 +196,41 @@ async def test_mfa_reset_invalidates_access_and_refresh_sessions_even_when_alrea
             assert target.backup_codes_hashed is None
             assert token_session.revoked_at is not None
             assert len(events) == 1
+    finally:
+        await _cleanup(sessions, actor_id, target_id)
+        await engine.dispose()
+
+
+@pytest.mark.asyncio
+async def test_stale_admin_cannot_mutate_accounts_after_concurrent_role_change():
+    engine = create_async_engine(DATABASE_URL, pool_size=5, max_overflow=0)
+    sessions = async_sessionmaker(engine, expire_on_commit=False)
+    actor_id, target_id, session_id = await _seed(sessions)
+    try:
+        async with sessions() as stale_session:
+            stale_actor = await stale_session.get(User, actor_id)
+            assert stale_actor.role == "admin"
+            assert stale_actor.auth_version == 0
+
+            async with sessions() as concurrent:
+                changed_actor = await concurrent.get(User, actor_id)
+                changed_actor.role = "auditor"
+                await concurrent.commit()
+
+            with pytest.raises(HTTPException) as denied:
+                await update_user(
+                    user_id=target_id,
+                    payload=AdminUserUpdate(role="auditor"),
+                    request=_request(),
+                    db=stale_session,
+                    current_user=stale_actor,
+                )
+            assert denied.value.status_code == 403
+
+        async with sessions() as verify:
+            target = await verify.get(User, target_id)
+            assert target.role == "viewer"
+            assert target.auth_version == 0
     finally:
         await _cleanup(sessions, actor_id, target_id)
         await engine.dispose()
