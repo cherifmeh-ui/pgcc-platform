@@ -96,6 +96,11 @@ const router = createRouter({
 router.beforeEach(async (to, from, next) => {
   const authStore = useAuthStore();
 
+  // Restore a cookie-backed session after a page reload before evaluating guards.
+  if (!authStore.isAuthenticated && (to.meta.requiresAuth || to.meta.requiresGuest)) {
+    await authStore.restoreSession();
+  }
+
   // 1. Gestion Invités (Page Login)
   if (to.meta.requiresGuest && authStore.isAuthenticated) {
     return next('/dashboard');
