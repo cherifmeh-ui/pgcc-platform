@@ -2,7 +2,7 @@
 
 Date : 2026-11-25  
 Branche de référence : `chore/phase0-stabilization`  
-Statut : implémentation initiale des routes de liste, détail, modification, réinitialisation MFA et révocation des sessions ; validation CI et intégration PostgreSQL encore requises.
+Statut : première tranche implémentée et validée par CI/PostgreSQL sur le HEAD 91ec0cc ; les contrôles de production et la revue humaine restent ouverts.
 
 ## 1. Constat vérifié
 
@@ -23,7 +23,7 @@ Statut : implémentation initiale des routes de liste, détail, modification, r�
 - Les opérations de réduction du nombre d'administrateurs MFA actifs verrouillent les lignes concernées et refusent la perte du dernier administrateur MFA actif.\n- Les trois routes de mutation revalident également le rôle, l'activation, le MFA et la version de sécurité de l'acteur après acquisition des verrous, afin d'éviter qu'une requête autorisée avant une rétrogradation concurrente conserve ses privilèges (TOCTOU).
 - Les réponses n'exposent ni hash de mot de passe, ni secret MFA, ni hash de codes de secours. Les champs de sécurité internes ne sont pas modifiables via le schéma d'entrée.
 - Tests unitaires du contrat RBAC, des champs autorisés et de minimisation de réponse ajoutés dans `backend/tests/test_admin_user_lifecycle.py`.
-- **Non validé à ce stade :** exécution CI sur le HEAD contenant l'implémentation, tests PostgreSQL des courses concurrentes et du rollback d'audit, vérification effective de l'invalidation des access tokens et refresh tokens après chaque mutation.
+- **Validation CI observée :** run 45586284593 entièrement vert sur le HEAD 91ec0cc ; tests PostgreSQL couvrant rétrogradations concurrentes, refus d'un acteur obsolète, révocation de refresh sessions, rejet d'un ancien access token et rollback d'audit. Les combinaisons de mutations restantes et la revue humaine demeurent à vérifier.
 - La création/provisionnement de comptes reste volontairement hors périmètre de cette première tranche.
 
 ## 3. API cible proposée
@@ -66,4 +66,4 @@ La création initiale d'un compte reste un flux séparé à définir (invitation
 
 ## 6. Critères de clôture
 
-L'implémentation ne sera considérée validée qu'après tests backend, intégration PostgreSQL, revue RBAC, revue d'audit et CI complète verte sur le HEAD final de la branche. Ce document est une spécification, pas une preuve d'implémentation.
+La première tranche est implémentée et possède des preuves CI/PostgreSQL sur le HEAD indiqué. Ce document ne constitue pas une preuve de préparation à la production ; la revue humaine, les contrôles opérationnels et les tests complémentaires restent requis.
