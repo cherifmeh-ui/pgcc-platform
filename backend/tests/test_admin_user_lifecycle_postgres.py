@@ -60,6 +60,8 @@ async def _seed(sessions):
         password_hash="not-used",
         is_active=True,
         mfa_enabled=False,
+        mfa_secret="stale-encrypted-secret",
+        backup_codes_hashed=["stale-hash"],
         auth_version=0,
         must_change_password=False,
     )
@@ -156,3 +158,42 @@ async def test_admin_audit_failure_rolls_back_account_change_and_session_revocat
     finally:
         await _cleanup(sessions, actor_id, target_id)
         await engine.dispose()
+
+
+@pytest.mark.asyncio
+async def test_mfa_reset_invalidates_access_and_refresh_sessions_even_when_already_disabled():
+    engine = create_async_engine(DATABASE_URL, pool_size=5, max_overflow=0)
+    sessions = async_sessionmaker(engine, expire_on_commit=False)
+    actor_id, target_id, session_id = await _seed(sessions)
+    try:
+        async with sessions() as db:
+            actor = await db.get(User, actor_id)
+            result = await admin_users.reset_user_mfa(
+                user_id=target_id,
+                request=_request(),
+                db=db,
+                current_user=actor,
+            )
+            assert result.auth_version == 1
+            assert result.mfa_enabled is False
+
+        async with sessions() as verify:
+            target = await verify.get(User, target_id)
+            token_session = await verify.get(RefreshTokenSession, session_id)
+            events = (
+                await verify.execute(
+                    select(AuditOutbox).where(
+                        AuditOutbox.payload["resource_id"].astext == str(target_id),
+                        AuditOutbox.payload["action"].astext == "ADMIN_USER_MFA_RESET",
+                    )
+                )
+            ).scalars().all()
+            assert target.auth_version == 1
+            assert target.mfa_secret is None
+            assert target.backup_codes_hashed is None
+            assert token_session.revoked_at is not None
+            assert len(events) == 1
+    finally:
+        await _cleanup(sessions, actor_id, target_id)
+        await engine.dispose()
+
