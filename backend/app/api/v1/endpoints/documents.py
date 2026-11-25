@@ -222,10 +222,12 @@ async def list_documents(
                 func.lower(func.btrim(Document.department))
                 == user_department.strip().lower()
             )
-        query = query.where(
+        owner_access = Document.owner_id == current_user.id
+        internal_scope = and_(
             func.upper(func.btrim(Document.doc_type)).in_(tuple(INTERNAL_DOCUMENT_TYPES)),
             or_(*viewer_scope),
         )
+        query = query.where(or_(owner_access, internal_scope))
     result = await db.execute(query)
     docs = result.scalars().all()
     
