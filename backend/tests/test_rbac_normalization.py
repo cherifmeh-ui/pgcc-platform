@@ -30,7 +30,7 @@ async def test_get_current_user_enforces_mfa_for_case_variant_privileged_role(mo
 
     user = MagicMock(
         email="admin@example.test", role=" ADMIN ", is_active=True,
-        must_change_password=False, mfa_enabled=False,
+        must_change_password=False, mfa_enabled=False, auth_version=0,
     )
     result = MagicMock()
     result.scalar_one_or_none.return_value = user
@@ -38,7 +38,7 @@ async def test_get_current_user_enforces_mfa_for_case_variant_privileged_role(mo
     db.execute.return_value = result
     monkeypatch.setattr(
         deps, "decode_token",
-        lambda token, expected_type: {"sub": user.email, "role": "admin"},
+        lambda token, expected_type: {"sub": user.email, "role": "admin", "auth_version": 0},
     )
 
     with pytest.raises(HTTPException) as exc:
@@ -65,7 +65,7 @@ async def test_get_current_user_rejects_missing_or_mismatched_role_claim(monkeyp
     db.execute.return_value = result
     monkeypatch.setattr(
         deps, "decode_token",
-        lambda token, expected_type: {"sub": user.email, "role": token_role},
+        lambda token, expected_type: {"sub": user.email, "role": token_role, "auth_version": 0},
     )
 
     with pytest.raises(HTTPException) as exc:
@@ -90,7 +90,62 @@ async def test_get_current_user_accepts_normalized_matching_role(monkeypatch):
     db.execute.return_value = result
     monkeypatch.setattr(
         deps, "decode_token",
-        lambda token, expected_type: {"sub": user.email, "role": "viewer"},
+        lambda token, expected_type: {"sub": user.email, "role": "viewer", "auth_version": 0},
+    )
+
+    current = await deps.get_current_user(
+        credentials=HTTPAuthorizationCredentials(scheme="Bearer", credentials="token"),
+        db=db,
+    )
+    assert current is user
+
+
+@pytest.mark.asyncio
+@pytest.mark.parametrize("token_version", [None, True, -1, 1, "0"])
+async def test_get_current_user_rejects_stale_auth_version(monkeypatch, token_version):
+    from app.api import deps
+
+    user = MagicMock(
+        email="viewer@example.test", role="viewer", is_active=True,
+        must_change_password=False, mfa_enabled=False, auth_version=0,
+    )
+    result = MagicMock()
+    result.scalar_one_or_none.return_value = user
+    db = AsyncMock()
+    db.execute.return_value = result
+    monkeypatch.setattr(
+        deps, "decode_token",
+        lambda token, expected_type: {
+            "sub": user.email, "role": "viewer", "auth_version": token_version,
+        },
+    )
+
+    with pytest.raises(HTTPException) as exc:
+        await deps.get_current_user(
+            credentials=HTTPAuthorizationCredentials(scheme="Bearer", credentials="token"),
+            db=db,
+        )
+    assert exc.value.status_code == 401
+    assert "Session révoquée" in exc.value.detail
+
+
+@pytest.mark.asyncio
+async def test_get_current_user_accepts_matching_auth_version(monkeypatch):
+    from app.api import deps
+
+    user = MagicMock(
+        email="viewer@example.test", role="viewer", is_active=True,
+        must_change_password=False, mfa_enabled=False, auth_version=4,
+    )
+    result = MagicMock()
+    result.scalar_one_or_none.return_value = user
+    db = AsyncMock()
+    db.execute.return_value = result
+    monkeypatch.setattr(
+        deps, "decode_token",
+        lambda token, expected_type: {
+            "sub": user.email, "role": "viewer", "auth_version": 4,
+        },
     )
 
     current = await deps.get_current_user(
