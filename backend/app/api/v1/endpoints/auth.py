@@ -32,6 +32,7 @@ from app.models.user import User
 from app.models.refresh_token_session import RefreshTokenSession
 from app.services.security_logger import enqueue_audit_event, log_action
 from app.services.auth_session_policy import refresh_denial_reason
+from app.services.auth_rate_limiter import enforce_auth_rate_limit
 from app.services.mfa_encryption import encrypt_mfa_secret, get_mfa_secret, MFASecretDecryptionError
 
 router = APIRouter(prefix="/auth", tags=["Authentification"])
@@ -157,6 +158,7 @@ async def login(
     Retourne un pre_auth_token si le mot de passe est correct.
     """
     email = payload.email.lower()
+    await enforce_auth_rate_limit(db, request, "login", subject=email)
 
     result = await db.execute(select(User).where(User.email == email).with_for_update())
     user = result.scalar_one_or_none()
@@ -255,6 +257,7 @@ async def start_enrollment(
     Démarre l'enrôlement MFA pour un utilisateur pré-authentifié.
     Génère un secret, le sauvegarde sur l'user (sans activer MFA), et retourne l'URI QR.
     """
+    await enforce_auth_rate_limit(db, request, "mfa_enrollment")
     token = credentials.replace("Bearer ", "")
     try:
         data = decode_token(token, expected_type="pre_auth")
@@ -264,6 +267,9 @@ async def start_enrollment(
     email = data.get("sub")
     if not isinstance(email, str) or not email:
         raise HTTPException(status_code=401, detail="Jeton invalide.")
+    await enforce_auth_rate_limit(
+        db, request, "mfa_enrollment", subject=email, include_ip=False
+    )
     result = await db.execute(
         select(User).where(User.email == email).with_for_update()
     )
@@ -312,6 +318,7 @@ async def confirm_mfa(
     Valide le code TOTP contre le secret généré précédemment.
     Active définitivement le MFA, génère les codes de secours, et délivre les tokens finaux.
     """
+    await enforce_auth_rate_limit(db, request, "mfa_confirm")
     try:
         data = decode_token(payload.pre_auth_token, expected_type="pre_auth")
     except Exception:
@@ -323,6 +330,9 @@ async def confirm_mfa(
     email = data.get("sub")
     if not email:
         raise HTTPException(status_code=401, detail="Jeton invalide.")
+    await enforce_auth_rate_limit(
+        db, request, "mfa_confirm", subject=email, include_ip=False
+    )
 
     # Lock the user row during MFA verification so a recovery code cannot be
     # consumed concurrently by two requests (one-time-use guarantee).
@@ -472,6 +482,7 @@ async def change_password(
     Permet à un utilisateur contraint de changer son mot de passe.
     Utilise le change_password_token délivré après MFA si must_change_password était true.
     """
+    await enforce_auth_rate_limit(db, request, "password_change")
     if payload.new_password != payload.confirm_password:
         raise HTTPException(
             status_code=400,
@@ -484,6 +495,11 @@ async def change_password(
         raise HTTPException(status_code=401, detail="Token invalide ou expiré.")
 
     email = data.get("sub")
+    if not isinstance(email, str) or not email:
+        raise HTTPException(status_code=401, detail="Token invalide.")
+    await enforce_auth_rate_limit(
+        db, request, "password_change", subject=email, include_ip=False
+    )
     result = await db.execute(select(User).where(User.email == email).with_for_update())
     user = result.scalar_one_or_none()
 
@@ -554,6 +570,7 @@ async def refresh_tokens(
 ):
     """Rotate a persisted refresh session exactly once; reject replay."""
     _require_trusted_cookie_origin(request)
+    await enforce_auth_rate_limit(db, request, "refresh")
     refresh_token = refresh_cookie
     if not refresh_token:
         _clear_refresh_cookie(response)
@@ -568,6 +585,9 @@ async def refresh_tokens(
     if not email:
         _clear_refresh_cookie(response)
         raise HTTPException(status_code=401, detail="Token invalide.")
+    await enforce_auth_rate_limit(
+        db, request, "refresh", subject=email, include_ip=False
+    )
 
     result = await db.execute(select(User).where(User.email == email).with_for_update())
     user = result.scalar_one_or_none()
