@@ -77,12 +77,14 @@ def _create_token(
     return jwt.encode(payload, get_signing_key(), algorithm=settings.JWT_ALGORITHM)
 
 
-def create_access_token(subject, role: str, extra_claims=None) -> str:
-    if extra_claims and "role" in extra_claims:
-        raise ValueError("Extra claims cannot override reserved JWT claims.")
+def create_access_token(subject, role: str, auth_version: int = 0, extra_claims=None) -> str:
+    if extra_claims and {"role", "auth_version"}.intersection(extra_claims):
+        raise ValueError("Extra claims cannot override reserved account-state claims.")
+    if not isinstance(role, str) or not role.strip():
+        raise ValueError("A normalized role is required for access tokens.")
     return _create_token(
         subject, "access", settings.ACCESS_TOKEN_EXPIRE_MINUTES,
-        {"role": role, **(extra_claims or {})},
+        {"role": role.strip().lower(), "auth_version": int(auth_version), **(extra_claims or {})},
     )
 
 
