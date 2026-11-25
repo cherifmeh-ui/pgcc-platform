@@ -3,11 +3,13 @@ from types import SimpleNamespace
 import pytest
 from cryptography.fernet import Fernet
 from pydantic import ValidationError
+from unittest.mock import AsyncMock, MagicMock
 
 from app.core.config import Settings, settings
 from app.services.mfa_encryption import (
     MFA_SECRET_PREFIX,
     MFASecretDecryptionError,
+    assert_no_plaintext_mfa_secrets,
     encrypt_mfa_secret,
     get_mfa_secret,
 )
@@ -83,3 +85,25 @@ def test_development_key_derivation_is_deterministic_and_not_the_jwt_secret():
     assert first.mfa_encryption_keys == second.mfa_encryption_keys
     assert first.mfa_encryption_keys[0] != first.JWT_SECRET
     assert len(first.mfa_encryption_keys[0]) == 44
+
+
+@pytest.mark.asyncio
+async def test_startup_gate_rejects_remaining_plaintext_mfa_secrets():
+    result = MagicMock()
+    result.scalar_one.return_value = 2
+    db = AsyncMock()
+    db.execute.return_value = result
+
+    with pytest.raises(RuntimeError, match="2 plaintext MFA secret"):
+        await assert_no_plaintext_mfa_secrets(db)
+
+
+@pytest.mark.asyncio
+async def test_startup_gate_accepts_fully_encrypted_mfa_secrets():
+    result = MagicMock()
+    result.scalar_one.return_value = 0
+    db = AsyncMock()
+    db.execute.return_value = result
+
+    await assert_no_plaintext_mfa_secrets(db)
+    db.execute.assert_awaited_once()
