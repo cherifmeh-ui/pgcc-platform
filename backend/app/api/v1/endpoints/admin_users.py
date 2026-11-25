@@ -231,6 +231,17 @@ async def update_user(
         )
         target = await _lock_target_user(db, user_id, locked_admins)
 
+        effective_changes = {
+            key: value
+            for key, value in changes.items()
+            if getattr(target, key) != value
+        }
+        if not effective_changes:
+            await db.commit()
+            await db.refresh(target)
+            return AdminUserResponse.model_validate(target)
+        changes = effective_changes
+
         if target.id == current_user.id and (
             changes.get("is_active") is False
             or ("role" in changes and changes["role"] != "admin")
