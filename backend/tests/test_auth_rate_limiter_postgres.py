@@ -6,7 +6,7 @@ import os
 
 import pytest
 from fastapi import HTTPException, Request
-from sqlalchemy import delete, select
+from sqlalchemy import delete
 from sqlalchemy.ext.asyncio import async_sessionmaker, create_async_engine
 
 from app.models.auth_rate_limit_bucket import AuthRateLimitBucket
