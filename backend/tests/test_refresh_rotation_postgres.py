@@ -177,7 +177,7 @@ async def test_refresh_endpoint_rotation_and_replay_are_audited_atomically(monke
             response = Response()
             result = await auth_endpoint.refresh_tokens(
                 request=request, response=response, db=db,
-                payload=None, refresh_cookie="old-refresh",
+                refresh_cookie="old-refresh",
             )
             return result, response
 
@@ -268,14 +268,16 @@ async def test_refresh_rolls_back_rotation_if_audit_enqueue_fails(monkeypatch):
 
     request = Request({
         "type": "http", "method": "POST", "path": "/auth/refresh",
-        "headers": [], "client": ("127.0.0.1", 1234),
+        "headers": [(b"origin", b"http://localhost:5173")],
+        "client": ("127.0.0.1", 1234),
         "server": ("test", 80), "scheme": "http", "query_string": b"",
     })
     try:
         async with sessions() as db:
             with pytest.raises(RuntimeError, match="simulated refresh audit failure"):
                 await auth_endpoint.refresh_tokens(
-                    payload=RefreshRequest(refresh_token="old-refresh"), request=request, response=Response(), db=db
+                    request=request, response=Response(), db=db,
+                    refresh_cookie="old-refresh",
                 )
 
         async with sessions() as verify:
