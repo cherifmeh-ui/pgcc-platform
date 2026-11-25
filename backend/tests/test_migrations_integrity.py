@@ -415,3 +415,15 @@ def test_auth_rate_limit_model_is_registered_for_alembic_autogeneration():
     assert "auth_rate_limit_bucket" in env_source
     assert "action_verification" in env_source
     assert "iso_control_evidence" in env_source
+
+
+def test_document_sha256_migration_is_linked_and_backfills_existing_binaries():
+    migration = MIGRATIONS_DIR / "0027_document_file_sha256.py"
+    source = migration.read_text(encoding="utf-8")
+    assert 'revision = "0027_document_file_sha256"' in source
+    assert 'down_revision = "0026_auth_rate_limit_buckets"' in source
+    assert 'sa.Column(_COLUMN, sa.String(length=64), nullable=True)' in source
+    assert "hashlib.sha256(bytes(row.file_data)).hexdigest()" in source
+    assert "_BATCH_SIZE = 100" in source
+    assert "file_data.is_not(None)" in source
+    assert "op.drop_column(_TABLE, _COLUMN)" in source
