@@ -818,3 +818,12 @@ Repository/static hardening is substantially progressed, but the remaining gates
 
 - Added Fernet encryption at rest for TOTP secrets, managed key-ring configuration, legacy plaintext migration script, key rotation and non-development startup integrity gate.
 - Added unit and PostgreSQL tests. Latest CI workflow 45574715908 is pending.
+
+## CI validation — MFA encryption and document ACL — workflow 45574537534
+
+- All four jobs passed on the PR head containing document classification ACL and MFA encryption: backend, PostgreSQL integration, frontend and Compose smoke.
+- Backend: 341 passed, 14 skipped; no Python deprecation, SQLAlchemy or AsyncMock warnings in the test summary.
+- PostgreSQL: 14 passed, including document classification list/preview/download ACL and MFA ciphertext persistence/startup verification. Fresh PostgreSQL migrations through 0024_audit_outbox remain green.
+- Frontend: npm ci and npm audit zero-vulnerability gate passed; Vite production build passed.
+- Docker Compose: full stack and frontend-to-backend proxy smoke passed.
+- MFA code is validated, but before production deployment the operator must run the documented migration script against the target database, back up the Fernet key, and confirm the actual key custody/rotation procedure.
