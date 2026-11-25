@@ -83,3 +83,12 @@ async def assert_no_plaintext_mfa_secrets(db) -> None:
             f"{plaintext_count} plaintext MFA secret(s) remain. "
             "Run scripts/encrypt_mfa_secrets.py before starting this environment."
         )
+
+    encrypted_result = await db.execute(
+        select(User).where(User.mfa_secret.is_not(None))
+    )
+    for user in encrypted_result.scalars().all():
+        # Decryptability is verified before the service starts; values encrypted
+        # with a previous key are transparently rotated to the active key.
+        get_mfa_secret(user)
+    await db.commit()
