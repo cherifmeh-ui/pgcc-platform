@@ -29,3 +29,6 @@ Avant application en environnement existant, sauvegarder la base, vérifier le s
 
 
 - 0012 : crée le référentiel fournisseurs et contacts professionnels (TPRM), avec code fournisseur unique et archivage logique. Les contacts sont liés par FK restrictive; le module n'expose aucune suppression physique de fournisseur.
+
+
+- 0028 : ajoute les métadonnées de propriétaire et de département aux documents. Les documents nouvellement déposés enregistrent le propriétaire et le département de l'utilisateur ; la suppression physique d'un utilisateur propriétaire est bloquée tant que ses documents ne sont pas réaffectés. Les documents historiques restent sans propriétaire/département et conservent uniquement leur politique de classification existante. Le downgrade retire ces métadonnées ; il ne supprime pas les documents.
