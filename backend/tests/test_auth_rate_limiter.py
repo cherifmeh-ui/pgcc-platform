@@ -1,9 +1,10 @@
 """Unit tests for shared authentication rate-limit policy and keying."""
 import pytest
 from fastapi import HTTPException, Request
+from cryptography.fernet import Fernet
 from unittest.mock import AsyncMock
 
-from app.core.config import settings
+from app.core.config import Settings, settings
 from app.services.auth_rate_limiter import (
     AUTH_RATE_LIMIT_POLICIES,
     enforce_auth_rate_limit,
@@ -117,3 +118,18 @@ def test_malformed_forwarded_chain_falls_back_to_trusted_peer(monkeypatch):
         }
     )
     assert get_source_ip(request) == "10.0.0.2"
+
+
+def test_non_development_configuration_requires_dedicated_rate_limit_key():
+    base = {
+        "DATABASE_URL": "postgresql+asyncpg://pgcc:pgcc@localhost/pgcc",
+        "JWT_SECRET": "s" * 48,
+        "ENVIRONMENT": "staging",
+        "MFA_ENCRYPTION_KEYS": Fernet.generate_key().decode("ascii"),
+    }
+    with pytest.raises(ValueError, match="AUTH_RATE_LIMIT_HMAC_KEY"):
+        Settings(**base)
+
+    configured = Settings(**base, AUTH_RATE_LIMIT_HMAC_KEY="r" * 48)
+    assert configured.auth_rate_limit_hmac_key == "r" * 48
+
