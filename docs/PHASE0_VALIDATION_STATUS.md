@@ -757,3 +757,12 @@ Repository/static hardening is substantially progressed, but the remaining gates
 - Commit e914e90 adds tests for enrollment audit ordering and rollback. Commit 1f40707 adds tests for password-change audit ordering and rollback.
 - The latest head has not yet returned a PR workflow run; these tests are committed but not claimed as executed.
 - The account/role/MFA administration API is not present in the reviewed route tree, so proactive revocation on those administrative changes cannot yet be integrated into an existing handler. This is an explicit Phase 0 gap, not marked complete.
+
+## CI validation — workflow 45568463812 — 2026-11-25
+
+- All three jobs completed successfully on the PR merge ref: backend, PostgreSQL integration and frontend.
+- Backend unit tests: 297 passed, 13 skipped, 8 warnings.
+- PostgreSQL integration: 13 passed, 6 warnings. Fresh PostgreSQL 16 migration job and integration tests succeeded.
+- Frontend: npm ci and npm run build succeeded.
+- This run includes the latest auth transaction additions, password-change/MFA enrollment audit tests and the RBAC test-data correction.
+- Warnings remain for review; CI success is not equivalent to a production security sign-off.
