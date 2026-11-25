@@ -100,3 +100,11 @@ Le baseline `0001_initial` appelle `Base.metadata.create_all()` à partir d'un e
 - Workflow 45568463812: PostgreSQL integration job passed (13 passed, 6 warnings) after Alembic migration to head; backend job passed (297 passed, 13 skipped, 8 warnings); frontend build passed.
 - This run supersedes the prior RBAC test failure recorded for workflow 45491802074. The corrected test is now covered by a green backend job.
 - Legacy-upgrade, downgrade, schema-drift and backup/restore rehearsals remain open.
+
+## Compose smoke validation target — 2026-11-25
+
+- Compose now uses the same PostgreSQL pgvector major version as CI (`pgvector/pgvector:pg16`).
+- Vite proxy target is configurable; Docker Compose sets it to `http://backend:8000` so container-to-container requests do not resolve localhost to the frontend container.
+- Frontend development container uses `npm ci` against the committed lockfile.
+- GitHub Actions now has a Compose smoke job to validate configuration, build backend image, start PostgreSQL/backend/frontend, verify API health and assert the Vite `/api` proxy reaches the backend.
+- The smoke job's actual result is pending; no stack startup success is claimed yet.
