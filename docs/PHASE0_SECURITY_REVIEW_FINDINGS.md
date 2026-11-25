@@ -164,7 +164,7 @@ Do not close Phase 0 until evidence is attached for:
 - Added cookie unit tests and PostgreSQL cookie rotation/replay test. Fresh CI still pending.
 - Fixed Compose Vite proxy target to use the backend service hostname inside Docker; pinned pgvector major to pg16 and switched dev frontend install to npm ci.
 - Added Compose CI smoke job for config validation, backend image build, full development stack startup, API health and frontend proxy.
-- Remaining: verify new CI, production same-site topology, remove legacy JSON refresh-token fallback, review warnings.
+- Remaining: verify new CI, production same-site topology, review remaining Pydantic deprecation warnings.
 
 ## CI cookie test correction — 2026-11-25
 
