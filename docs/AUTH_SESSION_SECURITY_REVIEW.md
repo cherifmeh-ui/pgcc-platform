@@ -20,7 +20,7 @@ Status: active review; not a certification or production approval.
 1. **Session lifecycle completeness:** explicitly revoke sessions when an account is disabled, a user's role changes, MFA is reset, or an administrator performs a security reset. Current access-token checks block inactive accounts and role-mismatched access tokens; refresh eligibility also blocks inactive users, but the persisted rows are not proactively revoked by every administrative lifecycle operation.
 2. **Refresh auditability:** rotation, reuse detection, eligibility denial and logout now enqueue durable audit-outbox events in the same transaction as session changes. The new paths still require fresh CI execution and operational delivery monitoring.
 3. **HTTP-level concurrency:** PostgreSQL integration tests now call the actual /auth/refresh endpoint concurrently with the same token, assert exactly one success, verify replay revocation and test rollback when audit enqueue fails. Fresh CI execution on the latest branch head remains pending.
-4. **Rate limiting:** add distributed account/IP/device rate limiting for login, MFA, enrollment, refresh and password reset. Current database lockout counters are not a substitute for distributed rate limiting.
+4. **Rate limiting:** the first PostgreSQL-backed shared limiter is implemented for login, MFA confirmation/enrollment, password change and refresh. Workflow 45583136393 passed backend (375 passed/24 skipped), PostgreSQL (24 passed), frontend and Compose. Production threshold tuning, observability and trusted-proxy configuration review remain open.
 5. **MFA secret protection:** TOTP secrets are now Fernet-encrypted at rest, with a managed key ring, legacy migration script and non-development startup gate. Operational key custody/rotation and administrator-approved MFA reset/recovery remain deployment controls.
 6. **Enrollment lifecycle:** constrain pre-auth enrollment state, prevent repeated enrollment-secret replacement abuse, and bind enrollment to a short-lived authenticated flow.
 7. **Password lifecycle:** define password reuse/history, reset and administrator recovery policy. Login and MFA failures currently share failed_login_attempts; assess separate counters and lockout semantics.
@@ -73,7 +73,7 @@ Authentication/session security remains open until the HTTP-level PostgreSQL rot
 
 - Workflow 45574715908 passed 4/4 jobs: backend 342 passed/15 skipped; PostgreSQL 15 passed; frontend npm audit zero/build passed; Docker Compose full stack/proxy smoke passed.
 - Cookie-only refresh transport, Fernet MFA secret encryption and document classification ACL all passed automated tests.
-- Remaining operational controls: production key custody/migration, admin account lifecycle session revocation, distributed rate limiting, and production database backup/restore/legacy-upgrade rehearsal.
+- Remaining operational controls: production key custody/migration, review of administrative account lifecycle, production database backup/restore/legacy-upgrade rehearsal, and threshold/proxy observability for the distributed rate limiter.
 
 
 ## Distributed authentication rate limiting — 2026-11-25
