@@ -227,3 +227,16 @@ Status: active engineering review. This is a static review backlog, not a securi
 
 - [x] Replace FastAPI Cookie marker defaults with Annotated Cookie injection and actual None default (fixes direct endpoint tests while preserving request injection).
 - [ ] Fresh CI after cookie-only transport, Pydantic ConfigDict conversion and Compose smoke job; run 45569880462 predates these final corrections.
+
+## Security validation update — 2026-11-25
+
+- [x] Frontend refresh-token storage moved to HttpOnly cookie; access token remains in memory.
+- [x] Cookie flags and Origin validation covered by tests; PostgreSQL cookie rotation/replay and logout clearing covered.
+- [x] Vite upgraded to 6.4.6; esbuild 0.25.12 and follow-redirects 1.16.2 resolved the 3 previous npm audit findings; latest audit reports zero vulnerabilities.
+- [x] Committed package lock verified through npm ci; four CI jobs pass, including Compose smoke.
+- [ ] Complete human production topology review for SameSite=Strict cookies.
+- [ ] Implement session revocation integration for administrative account/role/MFA reset operations.
+- [ ] Encrypt MFA secrets and define key rotation/recovery.
+- [ ] Add distributed rate limiting for login/MFA/password recovery.
+- [ ] Complete document classification/ACL and RAG authorization review.
+- [ ] Run legacy migration, downgrade, schema-drift and backup/restore rehearsal.
