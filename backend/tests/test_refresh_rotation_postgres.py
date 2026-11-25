@@ -124,6 +124,7 @@ async def test_refresh_endpoint_rotation_and_replay_are_audited_atomically(monke
         "old-refresh": {
             "sub": email, "jti": old_jti, "iat": int(now.timestamp()),
             "exp": int((now + timedelta(days=1)).timestamp()), "type": "refresh",
+            "role": "viewer", "mfa_enabled": False, "mfa_confirmed_at": None,
         }
     }
     replacement_counter = 0
@@ -133,7 +134,7 @@ async def test_refresh_endpoint_rotation_and_replay_are_audited_atomically(monke
         assert payload["type"] == expected_type
         return payload
 
-    def create_refresh(subject):
+    def create_refresh(subject, role=None, mfa_enabled=None, mfa_confirmed_at=None):
         nonlocal replacement_counter
         replacement_counter += 1
         token = f"new-refresh-{replacement_counter}"
@@ -141,7 +142,8 @@ async def test_refresh_endpoint_rotation_and_replay_are_audited_atomically(monke
             "sub": subject, "jti": uuid.uuid4().hex,
             "iat": int(datetime.now(timezone.utc).timestamp()),
             "exp": int((datetime.now(timezone.utc) + timedelta(days=1)).timestamp()),
-            "type": "refresh",
+            "type": "refresh", "role": role,
+            "mfa_enabled": mfa_enabled, "mfa_confirmed_at": mfa_confirmed_at,
         }
         return token
 
@@ -238,16 +240,18 @@ async def test_refresh_rolls_back_rotation_if_audit_enqueue_fails(monkeypatch):
         "old-refresh": {
             "sub": email, "jti": old_jti, "iat": int(now.timestamp()),
             "exp": int((now + timedelta(days=1)).timestamp()), "type": "refresh",
+            "role": "viewer", "mfa_enabled": False, "mfa_confirmed_at": None,
         },
         "new-refresh": {
             "sub": email, "jti": uuid.uuid4().hex,
             "iat": int(now.timestamp()),
             "exp": int((now + timedelta(days=1)).timestamp()), "type": "refresh",
+            "role": "viewer", "mfa_enabled": False, "mfa_confirmed_at": None,
         },
     }
     monkeypatch.setattr(auth_endpoint, "decode_token", lambda token, expected_type="access": issued_tokens[token])
     monkeypatch.setattr(auth_endpoint, "create_access_token", lambda **kwargs: "new-access")
-    monkeypatch.setattr(auth_endpoint, "create_refresh_token", lambda subject: "new-refresh")
+    monkeypatch.setattr(auth_endpoint, "create_refresh_token", lambda subject, **kwargs: "new-refresh")
     monkeypatch.setattr(
         auth_endpoint, "enqueue_audit_event",
         AsyncMock(side_effect=RuntimeError("simulated refresh audit failure")),
