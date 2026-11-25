@@ -166,7 +166,171 @@ jobs:
         run: |
           sed 's/^ENVIRONMENT=.*/ENVIRONMENT=production/' .env.example > /tmp/pgcc-production.env
           docker compose --env-file /tmp/pgcc-production.env config > /tmp/pgcc-production-compose.yaml
-          grep -Eq '^[[:space:]]+ENVIRONMENT: production      - name: Build backend image
+          grep -Eq '^[[:space:]]+ENVIRONMENT: production      - name: Start complete development stack
+        run: docker compose up -d
+      - name: Verify API health and frontend proxy
+        shell: bash
+        run: |
+          for attempt in {1..60}; do
+            if curl --fail --silent http://localhost:8000/health | grep -q '"status":"healthy"'; then
+              break
+            fi
+            if [ "$attempt" -eq 60 ]; then
+              docker compose logs
+              exit 1
+            fi
+            sleep 2
+          done
+          for attempt in {1..60}; do
+            if curl --fail --silent http://localhost:5173/ >/dev/null; then
+              break
+            fi
+            if [ "$attempt" -eq 60 ]; then
+              docker compose logs
+              exit 1
+            fi
+            sleep 2
+          done
+          status=""
+          for attempt in {1..30}; do
+            status=$(curl --silent --output /dev/null --write-out "%{http_code}" http://localhost:5173/api/v1/me/profile || true)
+            if [ "$status" = "401" ]; then
+              break
+            fi
+            sleep 2
+          done
+          test "$status" = "401"
+      - name: Start ClamAV and wait for fresh signature database
+        shell: bash
+        run: |
+          docker compose --profile antivirus up -d clamav
+          for attempt in {1..300}; do
+            health=$(docker inspect --format='{{.State.Health.Status}}' pgcc_clamav 2>/dev/null || true)
+            if [ "$health" = "healthy" ]; then
+              exit 0
+            fi
+            if [ "$health" = "unhealthy" ]; then
+              docker compose logs clamav
+              exit 1
+            fi
+            sleep 5
+          done
+          docker compose logs clamav
+          echo "ClamAV n'est pas devenu opérationnel dans le délai imparti."
+          exit 1
+      - name: Verify real ClamAV clean and EICAR verdicts
+        shell: bash
+        run: |
+          docker compose exec -T backend python - <<'PY'
+          import asyncio
+          from app.services.antivirus import scan_document_bytes, MalwareDetected
+
+          async def main():
+              await scan_document_bytes(b"PGCC ClamAV clean integration fixture")
+              eicar = (
+                  b"X5O!P%@AP[4\\PZX54(P^)7CC)7}$"
+                  b"EICAR-STANDARD-ANTIVIRUS-TEST-FILE!$H+H*"
+              )
+              try:
+                  await scan_document_bytes(eicar)
+              except MalwareDetected:
+                  print("ClamAV : fichier propre accepté, signature EICAR détectée.")
+                  return
+              raise AssertionError("ClamAV n'a pas détecté le fichier de test EICAR.")
+
+          asyncio.run(main())
+          PY
+      - name: Show stack logs on failure
+        if: failure()
+        run: docker compose logs
+      - name: Stop stack
+        if: always()
+        run: docker compose down --volumes --remove-orphans
+ /tmp/pgcc-production-compose.yaml
+      - name: Build backend image
+        run: docker compose build backend
+      - name: Start complete development stack
+        run: docker compose up -d
+      - name: Verify API health and frontend proxy
+        shell: bash
+        run: |
+          for attempt in {1..60}; do
+            if curl --fail --silent http://localhost:8000/health | grep -q '"status":"healthy"'; then
+              break
+            fi
+            if [ "$attempt" -eq 60 ]; then
+              docker compose logs
+              exit 1
+            fi
+            sleep 2
+          done
+          for attempt in {1..60}; do
+            if curl --fail --silent http://localhost:5173/ >/dev/null; then
+              break
+            fi
+            if [ "$attempt" -eq 60 ]; then
+              docker compose logs
+              exit 1
+            fi
+            sleep 2
+          done
+          status=""
+          for attempt in {1..30}; do
+            status=$(curl --silent --output /dev/null --write-out "%{http_code}" http://localhost:5173/api/v1/me/profile || true)
+            if [ "$status" = "401" ]; then
+              break
+            fi
+            sleep 2
+          done
+          test "$status" = "401"
+      - name: Start ClamAV and wait for fresh signature database
+        shell: bash
+        run: |
+          docker compose --profile antivirus up -d clamav
+          for attempt in {1..300}; do
+            health=$(docker inspect --format='{{.State.Health.Status}}' pgcc_clamav 2>/dev/null || true)
+            if [ "$health" = "healthy" ]; then
+              exit 0
+            fi
+            if [ "$health" = "unhealthy" ]; then
+              docker compose logs clamav
+              exit 1
+            fi
+            sleep 5
+          done
+          docker compose logs clamav
+          echo "ClamAV n'est pas devenu opérationnel dans le délai imparti."
+          exit 1
+      - name: Verify real ClamAV clean and EICAR verdicts
+        shell: bash
+        run: |
+          docker compose exec -T backend python - <<'PY'
+          import asyncio
+          from app.services.antivirus import scan_document_bytes, MalwareDetected
+
+          async def main():
+              await scan_document_bytes(b"PGCC ClamAV clean integration fixture")
+              eicar = (
+                  b"X5O!P%@AP[4\\PZX54(P^)7CC)7}$"
+                  b"EICAR-STANDARD-ANTIVIRUS-TEST-FILE!$H+H*"
+              )
+              try:
+                  await scan_document_bytes(eicar)
+              except MalwareDetected:
+                  print("ClamAV : fichier propre accepté, signature EICAR détectée.")
+                  return
+              raise AssertionError("ClamAV n'a pas détecté le fichier de test EICAR.")
+
+          asyncio.run(main())
+          PY
+      - name: Show stack logs on failure
+        if: failure()
+        run: docker compose logs
+      - name: Stop stack
+        if: always()
+        run: docker compose down --volumes --remove-orphans
+ /tmp/pgcc-production-compose.yaml
+      - name: Build backend image
         run: docker compose build backend
       - name: Start complete development stack
         run: docker compose up -d
