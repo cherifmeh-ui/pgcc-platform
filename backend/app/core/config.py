@@ -92,6 +92,8 @@ class Settings(BaseSettings):
                 raise ValueError("CORS wildcard interdit en production.")
             if self.JWT_ALGORITHM == "HS256" and self.JWT_SECRET.startswith("CHANGE_ME"):
                 raise ValueError("JWT_SECRET placeholder interdit en production.")
+
+        if self.ENVIRONMENT.lower() != "development":
             if not self.mfa_encryption_keys:
                 raise ValueError("MFA_ENCRYPTION_KEYS est obligatoire hors développement.")
             try:
