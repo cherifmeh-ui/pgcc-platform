@@ -245,3 +245,11 @@ Do not close Phase 0 until evidence is attached for:
 - Le retrait d'un actif est désormais refusé (HTTP 409) tant qu'une relation fournisseur-actif est au statut `Actif`. Les relations doivent être terminées explicitement avant le retrait, afin de préserver la traçabilité de la dépendance fournisseur.
 - Un test PostgreSQL vérifie qu'un actif avec relation fournisseur active ne peut pas être retiré et que son état reste inchangé.
 - Le workflow `45625707397` sur le HEAD précédent `6f1c4bb` a terminé avec succès sur les quatre jobs (backend, PostgreSQL, frontend, Compose). Les modifications de cohérence ci-dessus ont été ajoutées après ce workflow et attendent leur propre validation CI.
+
+
+## Test de concurrence — création de relation fournisseur/actif et retrait — 2026-11-25
+
+- Le retrait d'un actif verrouille sa ligne avant de vérifier les relations fournisseur-actif actives.
+- La création d'une relation verrouille le fournisseur puis l'actif cible avant de vérifier son cycle de vie et d'insérer la relation.
+- Le test PostgreSQL concurrent exécute les deux opérations avec des sessions distinctes. Deux résultats seulement sont acceptés : (1) le lien est créé et le retrait est refusé ; ou (2) le retrait est validé et la création du lien est refusée. L'état final ne doit jamais contenir un actif retiré avec une relation fournisseur active.
+- Le contrôle attend une exécution CI PostgreSQL verte sur le HEAD courant.
