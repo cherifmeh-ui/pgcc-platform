@@ -1,0 +1,49 @@
+# Runbook de validation des migrations et de récupération PostgreSQL
+
+Statut : procédure de validation CI et aide opératoire ; ne remplace pas le plan de sauvegarde/continuité validé de la CTF.
+
+## Objectifs
+
+1. Vérifier le chemin de mise à niveau depuis la dernière révision historique supportée avant les nouvelles migrations Phase 0.
+2. Vérifier le downgrade/upgrade de la migration de limitation d'authentification, qui ne contient que des compteurs temporaires.
+3. Vérifier qu'un dump PostgreSQL complet peut être restauré dans une base neuve et que le numéro Alembic ainsi qu'une donnée témoin sont conservés.
+
+## Validation automatisée GitHub Actions
+
+Le job PostgreSQL doit :
+
+- appliquer `alembic upgrade head` sur une base vide ;
+- créer une base séparée et exécuter `alembic upgrade 0024_audit_outbox`, puis `alembic upgrade head` ;
+- vérifier `alembic downgrade 0025_user_auth_version`, puis `alembic upgrade head` ;
+- insérer une ligne témoin non sensible dans `auth_rate_limit_buckets` ;
+- créer un dump au format custom avec `pg_dump -Fc` ;
+- restaurer avec `pg_restore --exit-on-error --no-owner --no-privileges` dans une base neuve ;
+- vérifier la révision `0026_auth_rate_limit_buckets` et la présence de la ligne témoin.
+
+Le job journalise la durée de restauration. Cette validation prouve la procédure sur le PostgreSQL éphémère de CI ; elle ne prouve pas la restauration des sauvegardes de production, les permissions de stockage, le chiffrement, la rétention ni les RPO/RTO de l'entreprise.
+
+## Procédure opératoire de référence
+
+À exécuter uniquement sur un environnement de restauration isolé, jamais sur la base de production active :
+
+1. Obtenir une sauvegarde chiffrée récente et vérifier son empreinte SHA-256 ainsi que sa provenance.
+2. Créer une instance/base isolée avec une version PostgreSQL compatible et les extensions requises (dont pgvector).
+3. Restaurer le dump avec `pg_restore --exit-on-error`, sans réattribuer les rôles de production.
+4. Vérifier `alembic_version`, les contraintes/index essentiels, les tables critiques et un échantillon de données métier.
+5. Exécuter les tests de cohérence et un contrôle applicatif en lecture seule.
+6. Mesurer le temps total et consigner les écarts, erreurs et actions correctives.
+7. Ne jamais rediriger l'application de production vers la base restaurée sans autorisation formelle et plan de bascule/retour arrière.
+
+## Informations à compléter par l'exploitation
+
+- Responsable de la sauvegarde et de la restauration.
+- Emplacement, chiffrement, contrôle d'accès et rétention des sauvegardes.
+- Fréquence des sauvegardes complètes/incrémentales et archivage WAL.
+- RPO/RTO approuvés.
+- Version PostgreSQL cible et procédure de mise à niveau majeure.
+- Preuve de restauration périodique, horodatage, durée et validation métier.
+- Procédure de rotation des secrets et clés MFA/JWT après incident.
+
+## Critères de clôture
+
+La Phase 0 ne peut pas considérer la récupération comme validée sur la seule base du smoke test CI. Une répétition sur l'environnement de préproduction ou de restauration de la CTF, avec sauvegarde chiffrée, preuve de restauration et RPO/RTO mesurés, reste obligatoire.
