@@ -177,3 +177,13 @@ Do not close Phase 0 until evidence is attached for:
 - The previous Vite version fell in published vulnerable ranges; Vite 6.4.6 includes the fix for the critical dev-server RCE advisory. follow-redirects 1.16.2 is the patched version for the cross-realm sensitiveHeaders advisory.
 - The committed package-lock.json was regenerated from the pinned package manifest, and the workflow now validates it with npm ci plus a zero-vulnerability npm audit gate.
 - The 4-job workflow 45572713404 passed, including Docker Compose stack/proxy smoke.
+
+## Document classification / viewer ACL — 2026-11-25
+
+- Confirmed the document library previously exposed all records to every role with documents.read, including supplier contracts and audit reports; preview/download did not enforce per-document access.
+- Implemented fail-closed classification derived from existing doc_type values (no schema migration): PSSI, PROCEDURE and REGLEMENT_INTERIEUR are INTERNAL; CONTRAT, AUDIT_REPORT and unknown/legacy types are RESTRICTED.
+- Viewer may list, preview and download INTERNAL documents only. Admin, executive and auditor may read all classifications. Restricted direct-ID requests return 404 to avoid disclosing document existence.
+- Listing is filtered in SQL for viewer; classification is returned by API and shown in the UI.
+- Added unit tests for mapping, role matrix, list filtering, preview/download denials and positive internal preview; added PostgreSQL integration test for real list/preview/download behavior.
+- RAG index trigger remains admin-only and there is currently no user-facing semantic retrieval endpoint. Any future retrieval endpoint must apply the same document classification predicate before returning chunks.
+- Fresh CI is pending for these changes.
