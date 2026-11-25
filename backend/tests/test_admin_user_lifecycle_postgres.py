@@ -71,7 +71,10 @@ async def _seed(sessions):
         expires_at=datetime.now(timezone.utc) + timedelta(days=1),
     )
     async with sessions() as db:
-        db.add_all([actor, target, session])
+        # Persist parent user rows before the FK-dependent refresh session.
+        db.add_all([actor, target])
+        await db.commit()
+        db.add(session)
         await db.commit()
         await db.refresh(actor)
         await db.refresh(target)
