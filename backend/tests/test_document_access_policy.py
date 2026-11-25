@@ -126,3 +126,34 @@ async def test_viewer_can_preview_internal_policy_document():
     )
     assert response["classification"] == "INTERNAL"
     assert response["preview"] == "internal policy"
+
+
+def test_viewer_document_acl_respects_owner_and_department_scope():
+    user_id = uuid4()
+    viewer = MagicMock(role="viewer", id=user_id, department="Informatique")
+
+    owned_restricted = MagicMock(
+        doc_type="CONTRAT", owner_id=user_id, department="Finance"
+    )
+    same_department_internal = MagicMock(
+        doc_type="PROCEDURE", owner_id=uuid4(), department="informatique"
+    )
+    other_department_internal = MagicMock(
+        doc_type="PROCEDURE", owner_id=uuid4(), department="Finance"
+    )
+    same_department_restricted = MagicMock(
+        doc_type="CONTRAT", owner_id=uuid4(), department="Informatique"
+    )
+
+    assert can_read_document(viewer, owned_restricted) is True
+    assert can_read_document(viewer, same_department_internal) is True
+    assert can_read_document(viewer, other_department_internal) is False
+    assert can_read_document(viewer, same_department_restricted) is False
+
+
+def test_viewer_cannot_read_owner_scoped_internal_document_owned_by_another_user():
+    viewer = MagicMock(role="viewer", id=uuid4(), department=None)
+    document = MagicMock(
+        doc_type="PSSI", owner_id=uuid4(), department=None
+    )
+    assert can_read_document(viewer, document) is False
