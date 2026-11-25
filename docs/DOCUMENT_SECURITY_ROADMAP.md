@@ -10,6 +10,7 @@ Mise à jour : 25 novembre 2026
 - Texte extrait limité à 2 000 000 caractères ; erreurs du parseur renvoyées sans détails internes.
 - Classification dérivée de `doc_type` : `PSSI`, `PROCEDURE` et `REGLEMENT_INTERIEUR` sont `INTERNAL`; les autres types, inconnus ou absents sont `RESTRICTED`.
 - Les rôles admin, executive et auditor peuvent consulter les deux classifications ; viewer est limité aux documents `INTERNAL`.
+- Cette première politique est fondée sur le rôle et le type de document ; elle ne fournit pas encore de contrôle d'accès par département, propriétaire, dossier ou besoin d'en connaître.
 - Le filtrage est appliqué à la liste, à l'aperçu et au téléchargement direct. Un document restreint ou inconnu est masqué au viewer par une réponse 404.
 - La création et la suppression des documents ainsi que l'indexation RAG ajoutent leur événement d'audit dans la transaction métier.
 - L'identité du fichier est protégée par l'index PostgreSQL unique `uq_documents_filename_ci`, insensible à la casse et aux espaces périphériques.
