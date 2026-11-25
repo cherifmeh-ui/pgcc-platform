@@ -1071,3 +1071,17 @@ Un test PostgreSQL avec deux sessions concurrentes couvre maintenant la créatio
 - Le test de cohérence de la matrice RBAC a été corrigé : sa regex détecte désormais les déclarations réelles et le test échoue explicitement si aucune déclaration n'est découverte. Les tests backend valident cette correction.
 - **Phase 0 reste ouverte.** Les preuves CI ne couvrent pas encore l'antivirus/quarantaine, la sandbox d'extraction, les ACL RAG au niveau département/propriétaire, les tests opérationnels de sauvegarde chiffrée et RPO/RTO, ni la revue humaine et la configuration de production.
 - La prochaine tranche doit traiter les risques documentaires résiduels et la revue finale des permissions objet par objet. Les contrôles de production doivent être validés par les responsables avant toute clôture.
+
+
+## Validation documentaire et RAG — 2026-11-25
+
+- HEAD validé : `0345baf593728493bcbbf098bad39cc2c0d417a4`.
+- Workflow GitHub Actions `45629099249` : **4/4 jobs réussis** (backend, PostgreSQL, frontend, Docker Compose).
+- Backend : **416 tests réussis, 37 ignorés**.
+- PostgreSQL : **37 tests d'intégration réussis**, dont migrations, absence de dérive du schéma, chemin de migration historique, sauvegarde/restauration et cycle de vie documents/RAG.
+- Frontend : build réussi.
+- Docker Compose : build et démarrage de la stack, health API et proxy frontend réussis.
+- Upload documentaire : ClamAV INSTREAM est désormais un prérequis avant extraction ; verdict malware = HTTP 422 ; service absent/indisponible ou réponse invalide = HTTP 503 (fail closed). Les tests du protocole sont simulés ; aucun daemon ClamAV réel n'est provisionné dans le pipeline.
+- RAG : le endpoint de contexte IA réapplique désormais la classification documentaire canonique avant d'insérer les extraits dans le prompt. Les tests unitaires couvrent viewers, auditeurs et limite de sources.
+- Le fichier `.env.example` et Compose documentent `CLAMAV_HOST`, `CLAMAV_PORT` et `CLAMAV_TIMEOUT_SECONDS`. En staging/production, `CLAMAV_HOST` est obligatoire.
+- **Limites restantes avant clôture :** déployer et tester un daemon ClamAV réel ; isoler le parsing PDF/DOCX dans un environnement à privilèges réduits ; compléter les ACL documentaires par propriétaire/département et les tester sous PostgreSQL ; réaliser la revue de sécurité de production et l'acceptation formelle des risques résiduels.
