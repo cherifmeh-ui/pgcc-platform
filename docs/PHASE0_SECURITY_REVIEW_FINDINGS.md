@@ -262,3 +262,12 @@ Do not close Phase 0 until evidence is attached for:
 - La configuration ajoute `CLAMAV_HOST`, `CLAMAV_PORT` et `CLAMAV_TIMEOUT_SECONDS`. Hors développement, `CLAMAV_HOST` est obligatoire. Compose expose ces variables pour un service ClamAV externe ; aucun moteur antivirus factice n'est embarqué.
 - Tests ajoutés : protocole INSTREAM (verdict propre/détection/erreur), blocage de l'upload en cas d'indisponibilité, refus d'un fichier détecté avant extraction, adaptation des tests PostgreSQL.
 - Limite explicite : l'isolation du parseur PDF/DOCX dans un processus/conteneur à privilèges réduits et l'exploitation du service ClamAV en production restent à déployer et à vérifier. Les tests du protocole simulé ne prouvent pas l'intégration à un daemon réel.
+
+
+## Contrôle d'accès au contexte IA documentaire — 2026-11-25
+
+- Le endpoint `/ai-advanced/query-context` vérifiait la permission globale `documents:read`, mais sa requête documentaire ne réappliquait pas la politique de classification utilisée par les endpoints de consultation/téléchargement.
+- Le contexte envoyé au modèle applique maintenant la fonction canonique `can_read_document` avant toute construction du prompt. Les utilisateurs `viewer` ne reçoivent que les documents classés INTERNAL ; les rôles privilégiés conservent les accès prévus par la politique documentaire.
+- La requête récupère un ensemble candidat borné puis filtre les documents autorisés et limite les sources injectées dans le prompt à trois.
+- Tests unitaires ajoutés pour vérifier l'exclusion des contrats/rapports d'audit pour les viewers, l'accès auditeur et la limite de sources.
+- La portée de la politique reste basée sur les classifications et rôles existants. Les ACL fines par propriétaire/département nécessitent encore un modèle d'appartenance documentaire, une migration et des tests PostgreSQL dédiés.
