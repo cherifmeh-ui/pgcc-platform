@@ -240,3 +240,12 @@ Status: active engineering review. This is a static review backlog, not a securi
 - [ ] Add distributed rate limiting for login/MFA/password recovery.
 - [ ] Complete document classification/ACL and RAG authorization review.
 - [ ] Run legacy migration, downgrade, schema-drift and backup/restore rehearsal.
+
+## Document classification and ACL follow-up — 2026-11-25
+
+- [x] Define a conservative document policy using existing doc_type values: INTERNAL = PSSI, PROCEDURE, REGLEMENT_INTERIEUR; RESTRICTED = CONTRAT, AUDIT_REPORT and unknown legacy values.
+- [x] Filter viewer document listing at SQL level; enforce same access check on direct preview and download; return 404 for restricted resources.
+- [x] Expose classification in API response and UI.
+- [x] Add unit and PostgreSQL integration tests for list/preview/download ACL.
+- [ ] Validate ACL tests in fresh CI.
+- [ ] Any future RAG semantic retrieval endpoint must enforce document ACL before loading chunks; current index trigger remains admin-only and no user-facing retrieval endpoint exists.
