@@ -872,3 +872,15 @@ Repository/static hardening is substantially progressed, but the remaining gates
 - Also corrected the refresh audit-rollback PostgreSQL fixture to include `auth_version` in its legacy refresh payload, so it tests rollback semantics with the current token contract.
 - Commits: `b724837`, `1bafc11`, `32c803f`.
 - These corrections have been committed to `chore/phase0-stabilization`; a new CI run is required to establish whether the backend suite is green. No Phase 0 closure claim is made.
+
+
+## Point de contrôle — 2026-11-25 (correction du test JWT)
+
+- HEAD de la branche et de la PR #1 : `3466e35bf2c327c0f9665d10abcf03728da37837`.
+- PR #1 : ouverte, en brouillon, non fusionnée ; base `main`.
+- Analyse du run GitHub Actions `45578235822` : intégration PostgreSQL, frontend et smoke test Docker réussis ; backend en échec avec **349 réussites, 18 tests ignorés et 1 échec**.
+- L'unique échec backend provenait d'une assertion de test obsolète dans `backend/tests/test_security.py` : elle attendait le texte `reserved JWT claims`, alors que le code refuse désormais la surcharge des revendications de sécurité du compte avec le message `reserved account-state claims`.
+- Correction appliquée dans le commit `3466e35` : les deux assertions vérifient maintenant la formulation stable `reserved .* claims`.
+- Le contrôle CI du HEAD `3466e35` n'est pas encore disponible dans les résultats consultés. La correction est donc **en attente de validation CI** ; les résultats du run précédent ne sont pas transposés au nouveau HEAD.
+- La validation PostgreSQL du schéma et des migrations, les tests de concurrence de rotation des refresh tokens et la clôture globale de Phase 0 restent requis.
+- La gestion administrative du cycle de vie des comptes demeure une spécification ; aucune API correspondante n'est déclarée implémentée.
