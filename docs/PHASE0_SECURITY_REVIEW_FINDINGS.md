@@ -187,3 +187,11 @@ Do not close Phase 0 until evidence is attached for:
 - Added unit tests for mapping, role matrix, list filtering, preview/download denials and positive internal preview; added PostgreSQL integration test for real list/preview/download behavior.
 - RAG index trigger remains admin-only and there is currently no user-facing semantic retrieval endpoint. Any future retrieval endpoint must apply the same document classification predicate before returning chunks.
 - Fresh CI is pending for these changes.
+
+## MFA secret encryption at rest — 2026-11-25
+
+- New MFA enrollment secrets are encrypted with Fernet before persistence; TOTP verification decrypts only in memory. Legacy plaintext values are lazily encrypted on first MFA verification.
+- `MFA_ENCRYPTION_KEYS` supports a comma-separated key ring (first key active, later keys for decryption/rotation). It is required and validated in staging/production; development derives a deterministic development-only key from JWT_SECRET.
+- Non-development startup now refuses to serve if any non-null `users.mfa_secret` remains plaintext. Added `backend/scripts/encrypt_mfa_secrets.py` with dry-run and key-rotation behavior, plus `docs/MFA_SECRET_ENCRYPTION_RUNBOOK.md`.
+- Added tests for encrypted-at-rest storage, legacy conversion, key rotation, invalid ciphertext, production key configuration and startup gate. Fresh CI validation pending.
+- Dependency `cryptography==50.0.2` added (PyPI release 2026-09-30).
