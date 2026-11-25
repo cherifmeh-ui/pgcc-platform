@@ -39,7 +39,7 @@ async def query_with_context(
     docs_prompt = ""
     sources = []
     if req.include_docs:
-        if not role_has_permission((current_user.role or "").lower(), "documents", "read"):
+        if not role_has_permission((current_user.role or "").strip().lower(), "documents", "read"):
             raise HTTPException(status_code=403, detail="Accès aux documents non autorisé.")
 
         # Escape SQL LIKE metacharacters from the user-provided control reference.
