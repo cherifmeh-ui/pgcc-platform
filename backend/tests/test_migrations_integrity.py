@@ -386,3 +386,18 @@ def test_audit_outbox_migration_is_idempotent_and_links_immutable_logs():
     assert "ix_audit_outbox_pending" in outbox_model
     assert "event_id" in log_model
     assert "op.drop_table(" in source
+
+
+def test_auth_rate_limit_bucket_migration_and_model_are_aligned():
+    migration = MIGRATIONS_DIR / "0026_auth_rate_limit_buckets.py"
+    source = migration.read_text(encoding="utf-8")
+    model = (
+        MIGRATIONS_DIR.parent.parent / "app" / "models" / "auth_rate_limit_bucket.py"
+    ).read_text(encoding="utf-8")
+    assert 'revision = "0026_auth_rate_limit_buckets"' in source
+    assert 'down_revision = "0025_user_auth_version"' in source
+    assert '"auth_rate_limit_buckets"' in source
+    assert "bucket_key" in source and "bucket_key" in model
+    assert "blocked_until" in source and "blocked_until" in model
+    assert "ck_auth_rate_limit_buckets_attempts_nonnegative" in source
+    assert "ix_auth_rate_limit_buckets_updated_at" in source
