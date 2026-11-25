@@ -2,7 +2,7 @@
 from fastapi import APIRouter, Depends, HTTPException, UploadFile, File, Form, Request
 from fastapi.responses import Response
 from sqlalchemy.ext.asyncio import AsyncSession
-from sqlalchemy import select, func
+from sqlalchemy import select, func, delete
 from sqlalchemy.exc import IntegrityError
 from pydantic import BaseModel
 from typing import List, Optional
@@ -194,14 +194,12 @@ async def delete_document(
             status_code=409,
             detail="Ce document est utilisé comme preuve ISO. Retirez ses associations de preuve avant de le supprimer.",
         )
-    # Explicitly remove vector chunks before the source document. This avoids
-    # orphaned embeddings even if DB cascade behavior is not configured in a
-    # particular deployment or migration.
-    chunks_result = await db.execute(
-        select(DocumentChunk).where(DocumentChunk.document_id == doc.id)
+    # Delete child rows in SQL before the parent. Using ORM delete() for each
+    # chunk and then deleting the parent can race with the database ON DELETE
+    # CASCADE and produce stale-row-count warnings during concurrent cleanup.
+    await db.execute(
+        delete(DocumentChunk).where(DocumentChunk.document_id == doc.id)
     )
-    for chunk in chunks_result.scalars().all():
-        await db.delete(chunk)
     await db.delete(doc)
     try:
         await db.flush()
