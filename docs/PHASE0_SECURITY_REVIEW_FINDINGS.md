@@ -271,3 +271,14 @@ Do not close Phase 0 until evidence is attached for:
 - La requête récupère un ensemble candidat borné puis filtre les documents autorisés et limite les sources injectées dans le prompt à trois.
 - Tests unitaires ajoutés pour vérifier l'exclusion des contrats/rapports d'audit pour les viewers, l'accès auditeur et la limite de sources.
 - La portée de la politique reste basée sur les classifications et rôles existants. Les ACL fines par propriétaire/département nécessitent encore un modèle d'appartenance documentaire, une migration et des tests PostgreSQL dédiés.
+
+
+## ACL documentaire par propriétaire et département — 2026-11-25
+
+- Le modèle `documents` porte désormais `owner_id` (FK restrictive vers `users.id`) et `department` (instantané du département à l'upload), avec index dédiés.
+- La migration `0028_document_acl` ajoute ces colonnes de façon idempotente et conserve les lignes historiques sans propriétaire/département.
+- À l'upload, le propriétaire et le département sont enregistrés dans la même transaction que le document et son événement d'audit.
+- Politique de lecture : admin/executive/auditor conservent l'accès privilégié ; le propriétaire peut lire son document ; un viewer peut lire les documents INTERNAL de son département ; les documents INTERNAL historiques sans métadonnées restent lisibles selon la politique historique ; un viewer ne peut pas lire un document restreint appartenant à un autre utilisateur.
+- La liste, l'aperçu, le téléchargement et le contexte IA utilisent la même fonction de décision d'accès. Une FK RESTRICT empêche la suppression d'un utilisateur propriétaire sans réaffectation préalable.
+- Tests unitaires et PostgreSQL ajoutés pour les accès propriétaire, département, autre département et document restreint.
+- La migration et les tests doivent encore être validés sur le HEAD final par CI ; aucun résultat n'est présumé.
