@@ -62,6 +62,10 @@ def test_baseline_downgrade_is_explicitly_non_destructive() -> None:
     assert "NotImplementedError" in source
     assert "prevent accidental data loss" in source
     assert "CREATE EXTENSION IF NOT EXISTS vector" in source
+    assert "baseline_table_names" in source
+    assert '"action_verifications"' not in source
+    assert '"iso_control_evidence"' not in source
+    assert "tables=[Base.metadata.tables[name]" in source
 
 def test_asset_reference_migration_has_safe_duplicate_and_downgrade_guards() -> None:
     migration = MIGRATIONS_DIR / "0020_asset_reference_and_type_constraints.py"
