@@ -18,7 +18,7 @@ from app.services.mfa_encryption import assert_no_plaintext_mfa_secrets
 
 @asynccontextmanager
 async def lifespan(app: FastAPI):
-    from app.models import user, security_log, audit_outbox, risk, asset, supplier, refresh_token_session, auth_rate_limit_bucket  # noqa: F401
+    from app.models import user, security_log, audit_outbox, risk, asset, supplier, refresh_token_session, auth_rate_limit_bucket, action_verification, iso_control_evidence  # noqa: F401
 
     if settings.ENVIRONMENT.lower() == "development":
         async with engine.begin() as conn:
