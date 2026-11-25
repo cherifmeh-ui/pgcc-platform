@@ -18,6 +18,7 @@ from app.models.document import Document
 from app.models.document_chunk import DocumentChunk
 from app.models.iso_control_evidence import IsoControlEvidence
 from app.services.document_extractor import DocumentExtractor
+from app.services.antivirus import scan_document_bytes, AntivirusUnavailable, MalwareDetected
 from app.models.user import User
 from app.services.security_logger import enqueue_audit_event
 
@@ -105,6 +106,14 @@ async def upload_document(
         raise HTTPException(status_code=400, detail="Signature PDF invalide.")
     if extension == "docx" and not contents.startswith(b"PK"):
         raise HTTPException(status_code=400, detail="Signature DOCX invalide.")
+
+    # Mandatory antivirus gate: no parser, database write or RAG content before a clean verdict.
+    try:
+        await scan_document_bytes(contents)
+    except MalwareDetected as exc:
+        raise HTTPException(status_code=422, detail="Fichier malveillant détecté ; dépôt refusé.") from exc
+    except AntivirusUnavailable as exc:
+        raise HTTPException(status_code=503, detail="Analyse antivirus indisponible ; dépôt refusé par sécurité.") from exc
 
     try:
         extracted_text, detected_format = DocumentExtractor.extract_text(contents, safe_filename)
