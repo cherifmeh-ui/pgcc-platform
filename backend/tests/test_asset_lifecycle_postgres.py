@@ -1,12 +1,13 @@
 """PostgreSQL transaction tests for asset retirement and audit consistency."""
 from __future__ import annotations
 
-from datetime import datetime, timezone
+from datetime import datetime, timedelta, timezone
 import os
 from unittest.mock import AsyncMock, MagicMock
 from uuid import uuid4
 
 import pytest
+from fastapi import HTTPException
 from fastapi import Request
 from sqlalchemy import delete, select
 from sqlalchemy.ext.asyncio import async_sessionmaker, create_async_engine
@@ -14,6 +15,8 @@ from sqlalchemy.ext.asyncio import async_sessionmaker, create_async_engine
 from app.api.v1.endpoints.assets import retire_asset
 from app.models.asset import Asset
 from app.models.audit_outbox import AuditOutbox
+from app.models.supplier import Supplier, SupplierAccessRequest, SupplierAssetLink
+from app.models.user import User
 
 DATABASE_URL = os.getenv("PGCC_INTEGRATION_DATABASE_URL")
 pytestmark = pytest.mark.skipif(
@@ -238,5 +241,103 @@ async def test_asset_reactivation_rolls_back_when_audit_enqueue_fails(monkeypatc
             assert events == []
     finally:
         await _cleanup(sessions, asset_id)
+        await engine.dispose()
+
+@pytest.mark.asyncio
+async def test_asset_retirement_is_blocked_by_open_supplier_access_request():
+    engine = create_async_engine(DATABASE_URL, pool_size=3, max_overflow=0)
+    sessions = async_sessionmaker(engine, expire_on_commit=False)
+    user_id = uuid4()
+    asset_id = uuid4()
+    supplier_id = uuid4()
+    link_id = uuid4()
+    access_id = uuid4()
+    user = User(
+        id=user_id,
+        email=f"phase0-retire-access-{user_id.hex}@example.invalid",
+        full_name="Phase 0 access guard",
+        role="admin",
+        password_hash="not-used",
+        must_change_password=False,
+        is_active=True,
+        mfa_enabled=True,
+    )
+    supplier = Supplier(
+        id=supplier_id,
+        code=f"PH0-RET-{user_id.hex[:10]}",
+        legal_name="Phase 0 retirement guard supplier",
+        status="Approuvé",
+        criticality="Moyenne",
+        dependency_level="Moyenne",
+    )
+    asset = Asset(
+        id=asset_id,
+        reference=f"PH0-RET-ACCESS-{user_id.hex[:8]}",
+        name="Phase 0 asset with open supplier access",
+        asset_type="hardware",
+        lifecycle_status="Actif",
+        retired_at=None,
+    )
+    link = SupplierAssetLink(
+        id=link_id,
+        supplier_id=supplier_id,
+        asset_id=asset_id,
+        relationship_type="Maintient",
+        access_level="Standard",
+        data_access=False,
+        status="Actif",
+        created_by_id=user_id,
+    )
+    today = datetime.now(timezone.utc).date()
+    access = SupplierAccessRequest(
+        id=access_id,
+        supplier_id=supplier_id,
+        supplier_asset_link_id=link_id,
+        asset_id=asset_id,
+        access_level="Standard",
+        data_access=False,
+        justification="Maintenance autorisée",
+        scope="Intervention limitée",
+        start_date=today,
+        end_date=today + __import__("datetime").timedelta(days=30),
+        review_due_at=today + __import__("datetime").timedelta(days=15),
+        status="Approuvé",
+        requested_by_id=user_id,
+        decided_by_id=user_id,
+        decided_at=datetime.now(timezone.utc),
+    )
+    try:
+        async with sessions() as setup:
+            setup.add(user)
+            await setup.flush()
+            setup.add_all([supplier, asset])
+            await setup.flush()
+            setup.add(link)
+            await setup.flush()
+            setup.add(access)
+            await setup.commit()
+
+        async with sessions() as db:
+            with pytest.raises(HTTPException) as exc:
+                await retire_asset(
+                    asset_id=asset_id,
+                    request=_request(),
+                    db=db,
+                    current_user=MagicMock(email=user.email),
+                )
+            assert exc.value.status_code == 409
+
+        async with sessions() as verify:
+            persisted = await verify.get(Asset, asset_id)
+            assert persisted.lifecycle_status == "Actif"
+            assert persisted.retired_at is None
+    finally:
+        async with sessions() as cleanup:
+            await cleanup.execute(delete(SupplierAccessRequest).where(SupplierAccessRequest.id == access_id))
+            await cleanup.execute(delete(SupplierAssetLink).where(SupplierAssetLink.id == link_id))
+            await cleanup.execute(delete(Asset).where(Asset.id == asset_id))
+            await cleanup.execute(delete(Supplier).where(Supplier.id == supplier_id))
+            await cleanup.execute(delete(User).where(User.id == user_id))
+            await cleanup.commit()
         await engine.dispose()
 
