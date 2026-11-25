@@ -1,8 +1,11 @@
 # backend/app/core/config.py
+import base64
+import hashlib
 from functools import lru_cache
 from typing import List
 from urllib.parse import urlparse, urlunparse
 
+from cryptography.fernet import Fernet
 from pydantic import Field, model_validator
 from pydantic_settings import BaseSettings, SettingsConfigDict
 
@@ -36,6 +39,7 @@ class Settings(BaseSettings):
     # --- MFA ---
     MFA_ISSUER_NAME: str = "CTF PGCC"
     MFA_VALID_WINDOW: int = 1
+    MFA_ENCRYPTION_KEYS: str = ""
 
     # --- Brute-force protection ---
     LOGIN_MAX_ATTEMPTS: int = 5
@@ -55,6 +59,17 @@ class Settings(BaseSettings):
     @property
     def cors_origins_list(self) -> List[str]:
         return [o.strip() for o in self.CORS_ORIGINS.split(",") if o.strip()]
+
+    @property
+    def mfa_encryption_keys(self) -> List[str]:
+        configured = [key.strip() for key in self.MFA_ENCRYPTION_KEYS.split(",") if key.strip()]
+        if configured:
+            return configured
+        if self.ENVIRONMENT.lower() == "development" and self.JWT_SECRET:
+            # Deterministic development-only key. Production must use a managed secret.
+            digest = hashlib.sha256(("pgcc-dev-mfa:" + self.JWT_SECRET).encode("utf-8")).digest()
+            return [base64.urlsafe_b64encode(digest).decode("ascii")]
+        return []
 
     @model_validator(mode="after")
     def validate_security(self):
@@ -77,6 +92,13 @@ class Settings(BaseSettings):
                 raise ValueError("CORS wildcard interdit en production.")
             if self.JWT_ALGORITHM == "HS256" and self.JWT_SECRET.startswith("CHANGE_ME"):
                 raise ValueError("JWT_SECRET placeholder interdit en production.")
+            if not self.mfa_encryption_keys:
+                raise ValueError("MFA_ENCRYPTION_KEYS est obligatoire hors développement.")
+            try:
+                for key in self.mfa_encryption_keys:
+                    Fernet(key.encode("ascii"))
+            except Exception as exc:
+                raise ValueError("MFA_ENCRYPTION_KEYS doit contenir des clés Fernet valides.") from exc
 
         if self.JWT_ALGORITHM == "RS256":
             if not self.JWT_PRIVATE_KEY_PATH:
