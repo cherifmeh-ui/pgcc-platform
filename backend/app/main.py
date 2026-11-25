@@ -8,10 +8,11 @@ from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 
 from app.core.config import settings
-from app.core.database import Base, engine
+from app.core.database import AsyncSessionLocal, Base, engine
 from app.api.v1.router import api_router
 from app.api.v1.endpoints.auth import router as auth_router
 from app.services.security_logger import audit_outbox_worker
+from app.services.mfa_encryption import assert_no_plaintext_mfa_secrets
 
 
 @asynccontextmanager
@@ -25,6 +26,8 @@ async def lifespan(app: FastAPI):
         print("PGCC | development schema ensured via create_all")
     else:
         print("PGCC | production schema must be managed through Alembic migrations")
+        async with AsyncSessionLocal() as db:
+            await assert_no_plaintext_mfa_secrets(db)
     audit_worker = asyncio.create_task(audit_outbox_worker())
     try:
         yield
