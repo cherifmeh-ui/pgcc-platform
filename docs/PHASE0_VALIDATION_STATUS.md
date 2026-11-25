@@ -790,3 +790,13 @@ Repository/static hardening is substantially progressed, but the remaining gates
 - Workflow 45569880462 tested the initial cookie migration: frontend build passed; backend 303 passed, 13 skipped, one failed; PostgreSQL integration 12 passed, one failed. Both failures had the same cause: direct Python calls saw FastAPI's Cookie(...) marker object as the default instead of `None`, so body-fallback tests were incorrectly treated as cookie-authenticated and failed Origin validation.
 - Corrected endpoint signatures to use `Annotated[str | None, Cookie(...)] = None`, preserving FastAPI cookie injection while making direct-call defaults genuinely optional.
 - Added Compose smoke job, Vite proxy service DNS fix and pgvector pg16 pin. The workflow 45569880462 predates the final correction and Compose smoke job; a fresh run is required.
+
+## CI final validation — workflow 45572713404 — 2026-11-25
+
+- All four jobs passed on the PR merge commit for branch head b08c70f: backend, PostgreSQL integration, frontend and Docker Compose smoke.
+- Backend: 303 passed, 13 skipped; no Python/Pydantic/SQLAlchemy/AsyncMock warnings in the test summary.
+- PostgreSQL: 13 passed; clean PostgreSQL 16 migration reached 0024_audit_outbox. Expected error logs from duplicate-upload and append-only enforcement tests are assertions, not job failures.
+- Frontend: `npm ci` succeeded using committed lockfile; `npm audit` reported 0 vulnerabilities; Vite 6.4.6 production build succeeded.
+- Docker Compose: config validation, backend image build, PostgreSQL/backend/frontend startup, API health and frontend-to-backend proxy all passed; stack cleanup passed.
+- Remaining frontend warning: one production JS chunk is 534 kB (gzip 177 kB); this is a performance/code-splitting improvement, not a failed build.
+- Remaining Phase 0 gates: document classification/ACL design, administrative session revocation integration, MFA secret encryption/key management, distributed rate limiting, legacy migration/downgrade/backup-restore review, and human security review.
