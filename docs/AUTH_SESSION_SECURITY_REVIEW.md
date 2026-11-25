@@ -74,3 +74,14 @@ Authentication/session security remains open until the HTTP-level PostgreSQL rot
 - Workflow 45574715908 passed 4/4 jobs: backend 342 passed/15 skipped; PostgreSQL 15 passed; frontend npm audit zero/build passed; Docker Compose full stack/proxy smoke passed.
 - Cookie-only refresh transport, Fernet MFA secret encryption and document classification ACL all passed automated tests.
 - Remaining operational controls: production key custody/migration, admin account lifecycle session revocation, distributed rate limiting, and production database backup/restore/legacy-upgrade rehearsal.
+
+
+## Distributed authentication rate limiting — 2026-11-25
+
+- Added migration `0026_auth_rate_limit_buckets` and a shared PostgreSQL upsert-based limiter. The counters are atomic across backend replicas sharing the database.
+- Applied IP and account buckets to login, MFA confirmation/enrollment, forced password change and refresh. HTTP 429 responses include `Retry-After`; limiter persistence failure returns HTTP 503 (fail closed).
+- Persisted bucket identifiers are HMAC-SHA256 values; raw email addresses and source IPs are not stored. Non-development deployments must provide a dedicated `AUTH_RATE_LIMIT_HMAC_KEY` (minimum 32 characters), separate from JWT signing secrets.
+- Forwarded client IPs are trusted only when the immediate peer matches `AUTH_TRUSTED_PROXY_IPS`; the chain is traversed from the right and malformed/untrusted headers are ignored. No arbitrary `X-Forwarded-For` trust is enabled.
+- A background worker deletes inactive buckets after 48 hours. Production startup checks that migration 0026 is present.
+- Initial policy thresholds are documented in `docs/AUTH_RATE_LIMITING_DESIGN.md`; they require operational review and tuning before production.
+- **Validation pending:** backend unit tests, concurrent PostgreSQL multi-session tests, full CI, production proxy topology and key custody review.
