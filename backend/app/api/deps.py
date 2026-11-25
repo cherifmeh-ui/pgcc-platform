@@ -98,6 +98,22 @@ async def get_current_user(
             detail="Rôle modifié ou absent. Veuillez vous reconnecter.",
         )
 
+    # auth_version is incremented whenever a security-sensitive account field
+    # changes. Enforce it on every authenticated request so old access tokens
+    # are invalidated immediately, not merely when their short TTL expires.
+    token_auth_version = payload.get("auth_version")
+    current_auth_version = int(user.auth_version or 0)
+    if (
+        isinstance(token_auth_version, bool)
+        or not isinstance(token_auth_version, int)
+        or token_auth_version != current_auth_version
+    ):
+        raise HTTPException(
+            status_code=status.HTTP_401_UNAUTHORIZED,
+            detail="Session révoquée ou état de sécurité modifié. Veuillez vous reconnecter.",
+            headers={"WWW-Authenticate": "Bearer"},
+        )
+
     return user
 
 
