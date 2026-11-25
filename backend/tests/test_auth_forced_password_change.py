@@ -101,18 +101,20 @@ async def test_password_change_audit_is_enqueued_before_commit(monkeypatch):
     user = MagicMock(
         id=uuid4(), email="password-change@example.test", role="viewer",
         full_name="Password Change", is_active=True, must_change_password=True,
-        password_hash="old-hash", password_changed_at=None,
+        password_hash="old-hash", password_changed_at=None, auth_version=0,
     )
     result = MagicMock()
     result.scalar_one_or_none.return_value = user
     order = []
     db = AsyncMock()
     db.execute.side_effect = lambda *args, **kwargs: order.append("execute") or result
+    db.flush.side_effect = lambda: (order.append("flush"), setattr(user, "auth_version", user.auth_version + 1))
     db.commit.side_effect = lambda: order.append("commit")
     db.rollback.side_effect = lambda: order.append("rollback")
+    issued_versions = []
     monkeypatch.setattr(auth_endpoint, "decode_token", lambda token, expected_type: {"sub": user.email})
     monkeypatch.setattr(auth_endpoint, "hash_password", lambda password: "new-hash")
-    monkeypatch.setattr(auth_endpoint, "create_access_token", lambda **kwargs: "access")
+    monkeypatch.setattr(auth_endpoint, "create_access_token", lambda **kwargs: issued_versions.append(kwargs["auth_version"]) or "access")
     monkeypatch.setattr(auth_endpoint, "create_refresh_token", lambda **kwargs: "refresh")
     async def persist(*args, **kwargs):
         order.append("persist_refresh")
@@ -131,6 +133,8 @@ async def test_password_change_audit_is_enqueued_before_commit(monkeypatch):
     )
 
     assert response.access_token == "access"
+    assert issued_versions == [1]
+    assert order.index("flush") < order.index("persist_refresh")
     assert not hasattr(response, "refresh_token")
     cookie = http_response.headers.get("set-cookie", "")
     assert "HttpOnly" in cookie and "SameSite=strict" in cookie
