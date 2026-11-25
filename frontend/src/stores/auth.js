@@ -97,7 +97,7 @@ export const useAuthStore = defineStore('auth', {
       restorePromise = (async () => {
         this.isLoading = true;
         try {
-          const { data } = await apiClient.post('/auth/refresh', {}, { withCredentials: true });
+          const { data } = await apiClient.post('/auth/refresh', null, { withCredentials: true });
           this.accessToken = data.access_token;
           setAccessToken(this.accessToken);
           this.user = data.user;
@@ -142,7 +142,7 @@ export const useAuthStore = defineStore('auth', {
 
     async logout() {
       try {
-        await apiClient.post('/auth/logout', {}, { withCredentials: true });
+        await apiClient.post('/auth/logout', null, { withCredentials: true });
       } catch (err) {
         // Local logout must succeed even if server revocation is unavailable.
         console.warn('Révocation serveur de la session impossible:', err);
