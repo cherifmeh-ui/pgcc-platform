@@ -119,12 +119,12 @@ async def get_current_user(
 
 def require_role(*allowed_roles: str):
     """Dépendance simple basée sur le rôle."""
-    allowed_values = {role.lower() for role in allowed_roles}
+    allowed_values = {role.strip().lower() for role in allowed_roles if role and role.strip()}
 
     async def dependency(
         current_user: User = Depends(get_current_user),
     ) -> User:
-        user_role = (current_user.role or "").lower()
+        user_role = (current_user.role or "").strip().lower()
         if user_role not in allowed_values:
             raise HTTPException(
                 status_code=status.HTTP_403_FORBIDDEN,
