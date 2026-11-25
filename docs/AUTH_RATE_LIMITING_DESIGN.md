@@ -16,7 +16,7 @@ Les lignes sont partagées par toutes les répliques backend qui utilisent la m�
 - Les clés persistées sont des HMAC-SHA256 ; les adresses IP et emails bruts ne sont jamais stockés dans la table.
 - En développement, une clé déterministe est dérivée du secret JWT uniquement pour faciliter le démarrage local.
 - En staging/production, `AUTH_RATE_LIMIT_HMAC_KEY` est obligatoire, distincte du secret JWT et d'au moins 32 caractères.
-- L'adresse source provient de `request.client.host`. Aucun `X-Forwarded-For` n'est accepté sans politique explicite de proxy de confiance.
+- Sans proxy déclaré, l'adresse source provient exclusivement de `request.client.host` et tout `X-Forwarded-For` est ignoré.\n- `AUTH_TRUSTED_PROXY_IPS` accepte une liste explicite d'adresses/CIDR. Le header transféré n'est lu que si le pair TCP immédiat appartient à cette liste ; la chaîne est parcourue de droite à gauche pour retenir le premier saut non approuvé. Un header mal formé est ignoré au profit du pair immédiat.\n- En production derrière un reverse proxy, renseigner précisément ses IP/CIDR et configurer le proxy pour écraser ou compléter correctement la chaîne XFF. Ne jamais ajouter des plages publiques ou trop larges par facilité.
 - Les buckets inactifs depuis 48 heures sont supprimés par un worker périodique.
 
 ## Politique initiale
