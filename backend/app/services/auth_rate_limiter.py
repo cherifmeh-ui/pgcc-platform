@@ -161,6 +161,8 @@ async def enforce_auth_rate_limit(
             )
             if blocked_until is not None and blocked_until > now:
                 blocked_until_values.append(blocked_until)
+                if kind == "ip":
+                    break
         await db.commit()
     except Exception as exc:
         await db.rollback()
