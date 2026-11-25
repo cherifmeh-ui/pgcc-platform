@@ -157,3 +157,11 @@ Do not close Phase 0 until evidence is attached for:
 - Confirmed CI warning sources: unawaited AsyncMock for synchronous session.add in MFA test, SQLAlchemy stale child-row count during document/chunk delete cascade, pytest-asyncio unset fixture loop scope.
 - Corrected test mock semantics, changed document deletion to bulk-delete chunks before parent, and added pytest.ini with explicit asyncio fixture loop scope. These changes await CI verification.
 - Browser auth review confirmed access and refresh tokens are both stored in localStorage. Open critical remediation tracked in issue #4: HttpOnly refresh cookie, CSRF/Origin controls, explicit credentialed CORS and frontend bootstrap without localStorage refresh token.
+
+## Refresh cookie and Compose hardening — 2026-11-25
+
+- Implemented HttpOnly refresh cookie issuance/rotation/clearing and Origin allowlist validation. Removed refresh token from response model; frontend no longer persists access or refresh bearer credentials in localStorage.
+- Added cookie unit tests and PostgreSQL cookie rotation/replay test. Fresh CI still pending.
+- Fixed Compose Vite proxy target to use the backend service hostname inside Docker; pinned pgvector major to pg16 and switched dev frontend install to npm ci.
+- Added Compose CI smoke job for config validation, backend image build, full development stack startup, API health and frontend proxy.
+- Remaining: verify new CI, production same-site topology, remove legacy JSON refresh-token fallback, review warnings.
