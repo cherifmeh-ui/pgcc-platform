@@ -170,3 +170,10 @@ Do not close Phase 0 until evidence is attached for:
 
 - Run 45569880462: frontend passed; backend 303 passed/13 skipped with one failed direct-call test; PostgreSQL 12 passed/one failed direct-call test. Both failed because direct calls inherited Cookie(...) marker instead of None.
 - Fixed with Annotated Cookie injection and explicit None default in commit 12efce0. The next workflow must validate this correction and the new Compose smoke job.
+
+## Dependency security remediation — 2026-11-25
+
+- npm audit in workflow 45572713404 reported zero vulnerabilities after upgrading Vite 5.4.21 to 6.4.6, esbuild 0.21.5 to 0.25.12, and follow-redirects 1.16.1 to 1.16.2.
+- The previous Vite version fell in published vulnerable ranges; Vite 6.4.6 includes the fix for the critical dev-server RCE advisory. follow-redirects 1.16.2 is the patched version for the cross-realm sensitiveHeaders advisory.
+- The committed package-lock.json was regenerated from the pinned package manifest, and the workflow now validates it with npm ci plus a zero-vulnerability npm audit gate.
+- The 4-job workflow 45572713404 passed, including Docker Compose stack/proxy smoke.
