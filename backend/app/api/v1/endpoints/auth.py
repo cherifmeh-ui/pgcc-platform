@@ -577,12 +577,17 @@ async def refresh_tokens(
 
     expected_role = (user.role or "").strip().lower()
     expected_mfa_confirmed_at = _mfa_confirmed_at_epoch(user)
+    token_auth_version = data.get("auth_version")
+    current_auth_version = int(user.auth_version or 0)
     if (
         not isinstance(data.get("role"), str)
         or data["role"].strip().lower() != expected_role
         or not isinstance(data.get("mfa_enabled"), bool)
         or data["mfa_enabled"] is not bool(user.mfa_enabled)
         or data.get("mfa_confirmed_at") != expected_mfa_confirmed_at
+        or isinstance(token_auth_version, bool)
+        or not isinstance(token_auth_version, int)
+        or token_auth_version != current_auth_version
     ):
         now = _now()
         try:
@@ -594,7 +599,7 @@ async def refresh_tokens(
             await enqueue_audit_event(
                 db, user_email=user.email, action="REFRESH_SESSION_POLICY_CHANGED",
                 resource="auth", resource_id=str(user.id),
-                details="Refresh token role/MFA snapshot differs from current account security state.",
+                details="Refresh token role/MFA/auth-version snapshot differs from current account security state.",
                 event_type="AUTH", request=request,
             )
             await db.commit()
