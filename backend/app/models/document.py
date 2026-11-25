@@ -1,5 +1,5 @@
 # backend/app/models/document.py
-from sqlalchemy import Column, String, Integer, DateTime, LargeBinary, Text, Boolean, Index, func, text
+from sqlalchemy import Column, String, Integer, DateTime, LargeBinary, Text, Boolean, Index, ForeignKey, func, text
 from sqlalchemy.dialects.postgresql import UUID as PG_UUID
 from datetime import datetime
 from uuid import uuid4
@@ -21,9 +21,13 @@ class Document(Base):
     # Fichier original (Binaire) - Optionnel selon stratégie stockage
     file_data = Column(LargeBinary, nullable=True)
     file_sha256 = Column(String(64), nullable=True)
+    owner_id = Column(PG_UUID(as_uuid=True), ForeignKey("users.id", ondelete="RESTRICT"), nullable=True)
+    department = Column(String(255), nullable=True)
     filename = Column(String(200), nullable=True)
 
     __table_args__ = (
+        Index("ix_documents_owner_id", "owner_id"),
+        Index("ix_documents_department", "department"),
         Index(
             "uq_documents_filename_ci",
             func.lower(func.btrim(filename)),
