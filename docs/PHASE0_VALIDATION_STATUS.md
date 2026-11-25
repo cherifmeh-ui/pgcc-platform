@@ -779,9 +779,9 @@ Repository/static hardening is substantially progressed, but the remaining gates
 ## HttpOnly refresh-cookie migration and Compose smoke gate — 2026-11-25
 
 - Backend now issues the refresh token only as an HttpOnly cookie (Secure outside development, SameSite=Strict, host-only, path `/api/v1/auth`, bounded max-age). TokenPairResponse no longer serializes refresh_token.
-- Refresh and logout accept cookie-based transport, require a trusted Origin against the explicit CORS allowlist when the cookie is used, rotate/clear the cookie and preserve audit-outbox transaction semantics. Legacy JSON token input remains as a temporary compatibility path; the frontend no longer uses it.
+- Refresh and logout accept cookie-based transport, require a trusted Origin against the explicit CORS allowlist when the cookie is used, rotate/clear the cookie and preserve audit-outbox transaction semantics. Legacy JSON token input has been removed from both refresh and logout endpoints; cookie transport is now mandatory.
 - Frontend keeps the short-lived access token in memory, sends credentialed requests, restores session through cookie refresh after reload, and single-flights concurrent bootstrap calls to prevent refresh-token replay.
-- Added backend tests for cookie flags, empty request body, absence of refresh_token in response schema, untrusted Origin rejection, cookie logout clearing and PostgreSQL cookie rotation/replay.
+- Added backend tests for cookie flags, absence of refresh_token in response schema, untrusted Origin rejection, cookie logout clearing and PostgreSQL cookie rotation/replay.
 - Compose review found Vite proxy was targeting localhost inside the frontend container. It now targets backend service DNS via VITE_API_PROXY_TARGET; Compose pins pgvector to pg16 and uses npm ci. A clean Compose smoke job now validates config, builds backend, starts all services and verifies API health plus frontend-to-backend proxy.
 - CI for these latest cookie/Compose changes is pending; do not mark the issue closed until it passes and same-site production topology is confirmed.
 
