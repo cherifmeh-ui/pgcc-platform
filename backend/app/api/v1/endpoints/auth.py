@@ -65,10 +65,6 @@ class ChangePasswordRequest(BaseModel):
     confirm_password: str = Field(min_length=12, max_length=255)
 
 
-class RefreshRequest(BaseModel):
-    refresh_token: str | None = None
-
-
 class ChangePasswordRequiredResponse(BaseModel):
     change_password_required: bool = True
     change_password_token: str
@@ -520,13 +516,11 @@ async def refresh_tokens(
     request: Request,
     response: Response,
     db: AsyncSession = Depends(get_db),
-    payload: RefreshRequest | None = None,
     refresh_cookie: Annotated[str | None, Cookie(alias=REFRESH_COOKIE_NAME)] = None,
 ):
     """Rotate a persisted refresh session exactly once; reject replay."""
-    refresh_token = refresh_cookie or (payload.refresh_token if payload else None)
-    if refresh_cookie:
-        _require_trusted_cookie_origin(request)
+    _require_trusted_cookie_origin(request)
+    refresh_token = refresh_cookie
     if not refresh_token:
         _clear_refresh_cookie(response)
         raise HTTPException(status_code=401, detail="Refresh token absent.")
@@ -638,13 +632,11 @@ async def logout(
     request: Request,
     response: Response,
     db: AsyncSession = Depends(get_db),
-    payload: RefreshRequest | None = None,
-    refresh_cookie: str | None = Cookie(default=None, alias=REFRESH_COOKIE_NAME),
+    refresh_cookie: Annotated[str | None, Cookie(alias=REFRESH_COOKIE_NAME)] = None,
 ):
     """Revoke the presented refresh session, audit it, and clear its cookie."""
-    refresh_token = refresh_cookie or (payload.refresh_token if payload else None)
-    if refresh_cookie:
-        _require_trusted_cookie_origin(request)
+    _require_trusted_cookie_origin(request)
+    refresh_token = refresh_cookie
     if not refresh_token:
         _clear_refresh_cookie(response)
         return None
