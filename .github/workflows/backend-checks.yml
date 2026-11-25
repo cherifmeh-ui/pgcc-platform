@@ -94,3 +94,39 @@ jobs:
           PGCC_INTEGRATION_DATABASE_URL: postgresql+asyncpg://pgcc_test:pgcc_test@localhost:5432/pgcc_test
           JWT_SECRET: integration-test-secret-that-is-long-enough
         run: pytest -q backend/tests/test_refresh_rotation_postgres.py backend/tests/test_asset_relationships_postgres.py backend/tests/test_supplier_access_lifecycle_postgres.py backend/tests/test_document_rag_delete_postgres.py backend/tests/test_document_upload_concurrency_postgres.py backend/tests/test_security_log_append_only_postgres.py backend/tests/test_audit_outbox_postgres.py
+
+  compose-smoke:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+      - name: Prepare development environment
+        run: cp .env.example .env
+      - name: Validate Compose configuration
+        run: docker compose config --quiet
+      - name: Build backend image
+        run: docker compose build backend
+      - name: Start complete development stack
+        run: docker compose up -d
+      - name: Verify API health and frontend proxy
+        shell: bash
+        run: |
+          for attempt in {1..60}; do
+            if curl --fail --silent http://localhost:8000/health >/dev/null; then
+              break
+            fi
+            if [ "$attempt" -eq 60 ]; then
+              docker compose logs
+              exit 1
+            fi
+            sleep 2
+          done
+          curl --fail --silent http://localhost:5173/ >/dev/null
+          status=$(curl --silent --output /dev/null --write-out "%{http_code}" http://localhost:5173/api/v1/me/profile)
+          test "$status" = "401"
+      - name: Show stack logs on failure
+        if: failure()
+        run: docker compose logs
+      - name: Stop stack
+        if: always()
+        run: docker compose down --volumes --remove-orphans
