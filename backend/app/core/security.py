@@ -90,6 +90,7 @@ def create_refresh_token(
     subject,
     role: str,
     mfa_enabled: bool,
+    auth_version: int = 0,
     mfa_confirmed_at: int | None = None,
 ) -> str:
     # Snapshot security-sensitive account state so role/MFA changes invalidate
@@ -99,6 +100,7 @@ def create_refresh_token(
     claims = {
         "role": role.strip().lower(),
         "mfa_enabled": bool(mfa_enabled),
+        "auth_version": int(auth_version),
     }
     if mfa_confirmed_at is not None:
         claims["mfa_confirmed_at"] = int(mfa_confirmed_at)
