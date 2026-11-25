@@ -73,12 +73,12 @@ async def _seed(sessions):
         await db.commit()
         await db.refresh(actor)
         await db.refresh(target)
-    return actor_id, target_id, actor, session.id
+    return actor_id, target_id, session.id
 
 
 async def _cleanup(sessions, actor_id, target_id):
     async with sessions() as db:
-        await db.execute(delete(User).where(User.id.in_([actor_id, target_id])))
+        await db.execute(\n            delete(AuditOutbox).where(\n                AuditOutbox.payload[\"resource_id\"].astext == str(target_id)\n            )\n        )\n        await db.execute(delete(User).where(User.id.in_([actor_id, target_id])))
         await db.commit()
 
 
@@ -86,7 +86,7 @@ async def _cleanup(sessions, actor_id, target_id):
 async def test_admin_role_change_revokes_refresh_session_and_audits_atomically():
     engine = create_async_engine(DATABASE_URL, pool_size=5, max_overflow=0)
     sessions = async_sessionmaker(engine, expire_on_commit=False)
-    actor_id, target_id, actor, session_id = await _seed(sessions)
+    actor_id, target_id, session_id = await _seed(sessions)
     try:
         async with sessions() as db:
             actor_in_session = await db.get(User, actor_id)
