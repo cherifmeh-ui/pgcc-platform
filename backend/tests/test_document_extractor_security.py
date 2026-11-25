@@ -133,3 +133,53 @@ def test_docx_archive_rejects_suspicious_compression_ratio():
     with pytest.raises(ValueError, match="Ratio de compression"):
         document_extractor._validate_docx_archive(buffer.getvalue())
 
+
+
+def test_pdf_page_extraction_failure_rejects_partial_document(monkeypatch):
+    class BrokenPage:
+        def extract_text(self):
+            raise RuntimeError("private parser detail")
+
+    class FakeReader:
+        def __init__(self, _stream, strict=True):
+            self.is_encrypted = False
+            self.pages = [BrokenPage()]
+
+    monkeypatch.setattr(document_extractor, "PdfReader", FakeReader)
+    with pytest.raises(ValueError, match="Échec de l'extraction") as error:
+        DocumentExtractor.extract_text(b"%PDF-", "incomplete.pdf")
+    assert "private parser detail" not in str(error.value)
+
+
+def test_pdf_extraction_stops_after_character_budget(monkeypatch):
+    class FakePage:
+        def __init__(self, text):
+            self._text = text
+
+        def extract_text(self):
+            return self._text
+
+    class FakeReader:
+        def __init__(self, _stream, strict=True):
+            self.is_encrypted = False
+            self.pages = [FakePage("A" * 500), FakePage("B" * 500), FakePage("C" * 500)]
+
+    monkeypatch.setattr(document_extractor, "PdfReader", FakeReader)
+    monkeypatch.setattr(DocumentExtractor, "MAX_EXTRACTED_CHARS", 700)
+    extracted = document_extractor._extract_pdf_limited(b"%PDF-")
+    assert extracted.startswith("A" * 500)
+    assert "B" * 200 in extracted
+    assert "C" not in extracted
+    assert "tronqué à la limite de sécurité" in extracted
+
+
+def test_docx_archive_rejects_duplicate_entries():
+    import io
+    import zipfile
+
+    buffer = io.BytesIO()
+    with zipfile.ZipFile(buffer, "w") as archive:
+        archive.writestr("word/document.xml", "<document/>")
+        archive.writestr("word/document.xml", "<document>second</document>")
+    with pytest.raises(ValueError, match="entrées dupliquées"):
+        document_extractor._validate_docx_archive(buffer.getvalue())
