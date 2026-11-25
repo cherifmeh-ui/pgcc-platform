@@ -125,6 +125,7 @@ def test_non_development_configuration_requires_dedicated_rate_limit_key():
         "DATABASE_URL": "postgresql+asyncpg://pgcc:pgcc@localhost/pgcc",
         "JWT_SECRET": "s" * 48,
         "ENVIRONMENT": "staging",
+        "CLAMAV_HOST": "clamav.internal",
         "MFA_ENCRYPTION_KEYS": Fernet.generate_key().decode("ascii"),
     }
     with pytest.raises(ValueError, match="AUTH_RATE_LIMIT_HMAC_KEY"):
@@ -149,3 +150,16 @@ def test_all_trusted_forwarded_hops_fall_back_to_immediate_peer(monkeypatch):
         }
     )
     assert get_source_ip(request) == "10.0.0.2"
+
+
+def test_non_development_configuration_requires_antivirus_host():
+    from cryptography.fernet import Fernet
+
+    with pytest.raises(ValueError, match="CLAMAV_HOST"):
+        Settings(
+            DATABASE_URL="postgresql+asyncpg://pgcc:secret@localhost/pgcc",
+            JWT_SECRET="s" * 48,
+            ENVIRONMENT="staging",
+            MFA_ENCRYPTION_KEYS=Fernet.generate_key().decode("ascii"),
+            AUTH_RATE_LIMIT_HMAC_KEY="r" * 48,
+        )
