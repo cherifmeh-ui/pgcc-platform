@@ -969,7 +969,19 @@ Repository/static hardening is substantially progressed, but the remaining gates
 - Le dump PostgreSQL 16 a été restauré dans une base neuve et la révision Alembic ainsi qu'une donnée témoin ont été vérifiées. Durée mesurée en CI éphémère : 0 seconde arrondie.
 - Les tests d'administration couvrent les rétrogradations concurrentes, la conservation d'un administrateur MFA actif, le refus d'un acteur rétrogradé, l'unicité de l'audit, le rollback en cas d'échec d'audit et la révocation des refresh sessions et anciens access tokens.
 - **Cookies refresh : implémentation déjà présente et validée dans un run antérieur** : refresh token HttpOnly, SameSite=Strict, Secure hors développement, contrôle Origin, rotation serveur et access token conservé en mémoire côté frontend. Les refresh tokens ne sont plus stockés dans localStorage. Reste la vérification de la topologie same-site, du proxy et du comportement navigateur dans l'environnement cible.
-- Revue complémentaire : la suppression du cookie utilisait une règle Secure plus restrictive que sa création en environnement `staging` ou `test`. Correction appliquée dans `backend/app/api/v1/endpoints/auth.py` et test multi-environnements ajouté dans `backend/tests/test_auth_refresh_cookie.py`. **Ces deux derniers changements attendent leur propre CI**.
+- Revue complémentaire : la suppression du cookie utilisait une règle Secure plus restrictive que sa création en environnement `staging` ou `test`. Correction appliquée dans `backend/app/api/v1/endpoints/auth.py` et test multi-environnements ajouté dans `backend/tests/test_auth_refresh_cookie.py`. Le run `45586960836` valide ces changements.
 - Les résultats PostgreSQL et la restauration sont ceux de l'environnement CI éphémère. Une restauration réelle d'une sauvegarde chiffrée de préproduction/production et la validation RPO/RTO restent nécessaires.
 - **Phase 0 reste ouverte** : validation des ACL Documents/RAG et des autorisations par objet, revue proxy/secrets et same-site en production, observabilité des seuils anti-bruteforce, restauration réelle, tests d'invalidation complémentaires et revue de sécurité humaine.
 - La PR #1 demeure ouverte, en brouillon et non fusionnée vers `main`.
+
+
+ 
+## Point de contrôle — 2026-11-25 (cookies et invalidation complète des sessions administratives)
+
+- Le run GitHub Actions `45586960836` est entièrement **vert** sur le HEAD `7fc719eafc2706429ca963f7b756fab4339e4ccc`.
+- Backend : **380 réussites, 30 tests ignorés** ; PostgreSQL : **30 tests d'intégration réussis**.
+- Frontend : build réussi ; Docker Compose : validation de configuration, build backend, démarrage, endpoint health, proxy frontend et arrêt propre réussis.
+- Le test de cookie vérifie maintenant que les attributs `Secure` de création et de suppression sont identiques en développement, test, staging et production.
+- Quatre scénarios PostgreSQL vérifient maintenant l'invalidation d'un ancien access token et la révocation de la refresh session après changement de rôle, désactivation, reset MFA et révocation administrative des sessions.
+- Le contrôle de schéma `alembic check`, l'upgrade/downgrade historique et la restauration CI PostgreSQL restent verts ; 30 tests d'intégration ont passé.
+- **Limite :** la restauration reste une preuve CI sur base éphémère. La sauvegarde chiffrée réelle, le RPO/RTO et la revue de sécurité humaine en production ne sont pas validés.
