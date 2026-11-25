@@ -854,3 +854,5 @@ Repository/static hardening is substantially progressed, but the remaining gates
 - Added focused tests that simulate the version bump during flush and assert the replacement access token receives the incremented version for both MFA enrollment and password change.
 - Commits: `635fde4`, `8cca49c` (ordering correction), `e6a8ab3`, `0e556da` (tests).
 - These changes have not yet been run in CI; the latest workflow and PostgreSQL integration evidence remains the earlier green workflow `45574715908`, which predates this auth-version enforcement/fix series.
+
+- Tracking issue created: [#5 — administrative account lifecycle, distributed rate limiting and database recovery rehearsal](https://github.com/cherifmeh-ui/pgcc-platform/issues/5). It captures remaining controls that cannot be honestly marked complete from the current API surface or CI evidence.
