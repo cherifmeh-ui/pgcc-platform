@@ -784,3 +784,9 @@ Repository/static hardening is substantially progressed, but the remaining gates
 - Added backend tests for cookie flags, empty request body, absence of refresh_token in response schema, untrusted Origin rejection, cookie logout clearing and PostgreSQL cookie rotation/replay.
 - Compose review found Vite proxy was targeting localhost inside the frontend container. It now targets backend service DNS via VITE_API_PROXY_TARGET; Compose pins pgvector to pg16 and uses npm ci. A clean Compose smoke job now validates config, builds backend, starts all services and verifies API health plus frontend-to-backend proxy.
 - CI for these latest cookie/Compose changes is pending; do not mark the issue closed until it passes and same-site production topology is confirmed.
+
+## CI follow-up — cookie test harness correction — 2026-11-25
+
+- Workflow 45569880462 tested the initial cookie migration: frontend build passed; backend 303 passed, 13 skipped, one failed; PostgreSQL integration 12 passed, one failed. Both failures had the same cause: direct Python calls saw FastAPI's Cookie(...) marker object as the default instead of `None`, so body-fallback tests were incorrectly treated as cookie-authenticated and failed Origin validation.
+- Corrected endpoint signatures to use `Annotated[str | None, Cookie(...)] = None`, preserving FastAPI cookie injection while making direct-call defaults genuinely optional.
+- Added Compose smoke job, Vite proxy service DNS fix and pgvector pg16 pin. The workflow 45569880462 predates the final correction and Compose smoke job; a fresh run is required.
