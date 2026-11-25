@@ -3,6 +3,7 @@ from __future__ import annotations
 
 import os
 from uuid import uuid4
+import hashlib
 from unittest.mock import MagicMock
 
 import pytest
@@ -33,19 +34,19 @@ async def test_postgres_document_list_preview_and_download_enforce_classificatio
         Document(
             title=f"Internal policy {marker}", doc_type="PSSI",
             filename=f"phase0-{marker}-policy.pdf", content_text="employee policy",
-            file_data=b"%PDF-policy", file_size_kb=1, mime_type="application/pdf",
+            file_data=b"%PDF-policy", file_sha256=hashlib.sha256(b"%PDF-policy").hexdigest(), file_size_kb=1, mime_type="application/pdf",
             is_indexed=False,
         ),
         Document(
             title=f"Restricted contract {marker}", doc_type="CONTRAT",
             filename=f"phase0-{marker}-contract.pdf", content_text="supplier contract secret",
-            file_data=b"%PDF-contract", file_size_kb=1, mime_type="application/pdf",
+            file_data=b"%PDF-contract", file_sha256=hashlib.sha256(b"%PDF-contract").hexdigest(), file_size_kb=1, mime_type="application/pdf",
             is_indexed=False,
         ),
         Document(
             title=f"Unknown legacy {marker}", doc_type="LEGACY_UNKNOWN",
             filename=f"phase0-{marker}-unknown.pdf", content_text="legacy restricted content",
-            file_data=b"%PDF-unknown", file_size_kb=1, mime_type="application/pdf",
+            file_data=b"%PDF-unknown", file_sha256=hashlib.sha256(b"%PDF-unknown").hexdigest(), file_size_kb=1, mime_type="application/pdf",
             is_indexed=False,
         ),
     ]
