@@ -23,7 +23,30 @@ def upgrade() -> None:
     from app.models import action_item, application, document, document_chunk, entity_link, iso_control, iso_control_assessment, risk, security_log, user  # noqa: F401
 
     bind = op.get_bind()
-    Base.metadata.create_all(bind=bind)
+    # Keep this baseline's table set frozen. Alembic env.py imports the full
+    # current model registry for autogeneration; passing all metadata tables
+    # here would create future-revision tables before their own migrations.
+    baseline_table_names = {
+        "action_items",
+        "applications",
+        "documents",
+        "document_chunks",
+        "entity_links",
+        "iso_controls",
+        "iso_control_assessments",
+        "risks",
+        "security_logs",
+        "users",
+    }
+    missing_tables = baseline_table_names - set(Base.metadata.tables)
+    if missing_tables:
+        raise RuntimeError(
+            f"Initial baseline models are missing tables: {sorted(missing_tables)}"
+        )
+    Base.metadata.create_all(
+        bind=bind,
+        tables=[Base.metadata.tables[name] for name in sorted(baseline_table_names)],
+    )
 
 
 def downgrade() -> None:
