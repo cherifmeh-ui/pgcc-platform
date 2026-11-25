@@ -807,3 +807,9 @@ Repository/static hardening is substantially progressed, but the remaining gates
 - Unknown legacy document types default to RESTRICTED (fail closed). Privileged roles admin/executive/auditor retain access; viewer sees PSSI, PROCEDURE and REGLEMENT_INTERIEUR only.
 - API response and document library UI now display classification. Unit and PostgreSQL tests added; fresh CI pending.
 - RAG indexing remains admin-only; there is no semantic retrieval route today. Future RAG search must apply the same ACL before chunk retrieval.
+
+## MFA secret encryption implementation — 2026-11-25
+
+- New MFA secrets are stored as Fernet ciphertext; TOTP verification decrypts in memory. Legacy plaintext is migrated lazily on verification.
+- Production/staging require a valid `MFA_ENCRYPTION_KEYS` key ring. Startup blocks if plaintext secrets remain. An operator script supports dry-run migration and key rotation.
+- Runbook: `docs/MFA_SECRET_ENCRYPTION_RUNBOOK.md`. Unit tests added; CI pending.
