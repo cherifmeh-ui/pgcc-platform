@@ -199,31 +199,31 @@ Status: active engineering review. This is a static review backlog, not a securi
 
 ## Frontend authentication storage review (2026-11-25)
 
-- [ ] Remove refresh token from localStorage and API response; issue/rotate/revoke via HttpOnly, Secure, SameSite cookie.
+- [x] Remove refresh token from localStorage and API response; issue/rotate/revoke via HttpOnly, Secure, SameSite cookie.
 - [ ] Add CSRF/origin validation for cookie-authenticated refresh/logout and configure credentialed CORS for explicit origins.
-- [ ] Move access token to memory where practical and add refresh-cookie session bootstrap after reload.
+- [x] Move access token to memory and add refresh-cookie session bootstrap after reload.
 - [ ] Add browser/API integration tests for cookie flags, refresh rotation, logout clearing, CSRF rejection and CORS behavior.
-- Current evidence: frontend/src/stores/auth.js and frontend/src/services/api.js persist both access and refresh tokens in localStorage. This is an open XSS exposure, not a completed control.
+- Current evidence: frontend/src/stores/auth.js and frontend/src/services/api.js no longer read or write bearer tokens to localStorage; legacy keys are removed on session setup/restore/logout.
 
 ## Phase 0 warning cleanup and frontend auth issue — 2026-11-25
 
 - [ ] Re-run CI after the latest warning cleanup commits (0b5b80e, 533834a, 0aaca47).
-- [ ] Resolve/accept remaining Pydantic v2 deprecation warnings; GitHub Actions Node deprecation is runner/toolchain-level.
-- [ ] Resolve or verify removal of SQLAlchemy document_chunks stale-row warning after bulk child deletion.
-- [ ] Resolve or verify removal of AsyncMock coroutine warning after synchronous add mock correction.
-- [ ] Complete issue #4: move refresh token to HttpOnly cookie with CSRF/origin and CORS protections; remove localStorage refresh token.
+- [ ] Verify Pydantic v2 deprecation warning cleanup after ConfigDict migration; GitHub Actions Node deprecation is runner/toolchain-level.
+- [x] SQLAlchemy document_chunks stale-row warning absent from workflow 45569880462 after bulk child deletion.
+- [x] AsyncMock coroutine warning absent from workflow 45569880462 after synchronous add mock correction.
+- [ ] Complete issue #4 validation: fresh CI, browser flow review and production same-site deployment review.
 
 ## Auth cookie and Compose implementation — 2026-11-25
 
 - [x] Backend refresh cookie issuance, rotation, logout clearing and origin allowlist checks implemented.
 - [x] Refresh token removed from JSON response model and frontend localStorage handling.
 - [x] Frontend memory-only access token and cookie-backed session restore with single-flight bootstrap.
-- [x] Tests added for cookie flags, origin rejection, cookie logout, empty body, response model and PostgreSQL cookie rotation/replay.
+- [x] Tests added for cookie flags, origin rejection, cookie logout, response model and PostgreSQL cookie rotation/replay.
 - [ ] Fresh CI validation of cookie transport, frontend build and Compose smoke job.
-- [ ] Remove legacy JSON refresh-token fallback after client migration is verified.
+- [x] Remove legacy JSON refresh-token fallback; refresh/logout require the HttpOnly cookie.
 - [ ] Human review of same-site cookie deployment and CSRF model.
 
 ## Cookie transport CI follow-up — 2026-11-25
 
 - [x] Replace FastAPI Cookie marker defaults with Annotated Cookie injection and actual None default (fixes direct endpoint tests while preserving request injection).
-- [ ] Fresh CI after commit 12efce0 and Compose smoke job; run 45569880462 is not green and does not validate this correction.
+- [ ] Fresh CI after cookie-only transport, Pydantic ConfigDict conversion and Compose smoke job; run 45569880462 predates these final corrections.
