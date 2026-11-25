@@ -142,3 +142,12 @@ Do not close Phase 0 until evidence is attached for:
 - Access-token role claims are now required, must be non-empty strings, and must match the normalized database role. Missing, malformed or mismatched claims are rejected with 403.
 - Added unit tests for uppercase/whitespace privileged-role MFA enforcement, missing/malformed/mismatched claims and normalized matching roles.
 - Commits: 07c434f (implementation), 8149214 (tests). Fresh CI execution remains pending.
+
+
+## Authentication transaction follow-up — 2026-11-25
+
+- Password change now updates password state, revokes old refresh sessions, persists a replacement session and enqueues PASSWORD_CHANGED in one transaction with rollback on failure.
+- MFA enrollment start now locks the user row and enqueues MFA_ENROLLMENT_STARTED in the same transaction as writing the pending enrollment secret.
+- MFA completion events (initial enrollment/login and mandatory-password-change path) are now enqueued before commit with rollback on audit failure.
+- Added focused unit tests for password-change audit ordering/rollback and MFA enrollment audit ordering/rollback. Added separate MFA enrollment test module.
+- Remaining: administrator lifecycle paths for account/role/MFA reset and session revocation; encrypted MFA secret storage; rate limiting; CI execution on latest head.
