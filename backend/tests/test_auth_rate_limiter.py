@@ -7,6 +7,7 @@ from app.core.config import settings
 from app.services.auth_rate_limiter import (
     AUTH_RATE_LIMIT_POLICIES,
     enforce_auth_rate_limit,
+    get_source_ip,
     rate_limit_bucket_key,
 )
 
@@ -65,3 +66,54 @@ async def test_rate_limit_persistence_failure_fails_closed(monkeypatch):
     assert denied.value.status_code == 503
     db.rollback.assert_awaited_once()
     db.commit.assert_not_awaited()
+
+
+def test_untrusted_forwarded_header_is_ignored(monkeypatch):
+    monkeypatch.setattr(settings, "AUTH_TRUSTED_PROXY_IPS", "")
+    request = Request(
+        {
+            "type": "http",
+            "method": "POST",
+            "path": "/auth/login",
+            "headers": [(b"x-forwarded-for", b"198.51.100.99")],
+            "client": ("203.0.113.20", 1234),
+            "server": ("localhost", 80),
+            "scheme": "http",
+            "query_string": b"",
+        }
+    )
+    assert get_source_ip(request) == "203.0.113.20"
+
+
+def test_forwarded_chain_is_resolved_only_through_trusted_proxy(monkeypatch):
+    monkeypatch.setattr(settings, "AUTH_TRUSTED_PROXY_IPS", "10.0.0.0/24")
+    request = Request(
+        {
+            "type": "http",
+            "method": "POST",
+            "path": "/auth/login",
+            "headers": [(b"x-forwarded-for", b"198.51.100.7, 10.0.0.10")],
+            "client": ("10.0.0.2", 1234),
+            "server": ("localhost", 80),
+            "scheme": "http",
+            "query_string": b"",
+        }
+    )
+    assert get_source_ip(request) == "198.51.100.7"
+
+
+def test_malformed_forwarded_chain_falls_back_to_trusted_peer(monkeypatch):
+    monkeypatch.setattr(settings, "AUTH_TRUSTED_PROXY_IPS", "10.0.0.0/24")
+    request = Request(
+        {
+            "type": "http",
+            "method": "POST",
+            "path": "/auth/login",
+            "headers": [(b"x-forwarded-for", b"not-an-ip")],
+            "client": ("10.0.0.2", 1234),
+            "server": ("localhost", 80),
+            "scheme": "http",
+            "query_string": b"",
+        }
+    )
+    assert get_source_ip(request) == "10.0.0.2"
