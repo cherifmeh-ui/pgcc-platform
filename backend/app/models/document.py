@@ -21,7 +21,7 @@ class Document(Base):
     # Fichier original (Binaire) - Optionnel selon stratégie stockage
     file_data = Column(LargeBinary, nullable=True)
     file_sha256 = Column(String(64), nullable=True)
-    owner_id = Column(PG_UUID(as_uuid=True), ForeignKey("users.id", ondelete="RESTRICT"), nullable=True)
+    owner_id = Column(PG_UUID(as_uuid=True), ForeignKey("users.id", ondelete="RESTRICT", name="fk_documents_owner_id_users"), nullable=True)
     department = Column(String(255), nullable=True)
     filename = Column(String(200), nullable=True)
 
