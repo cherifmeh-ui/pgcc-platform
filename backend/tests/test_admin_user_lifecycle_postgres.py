@@ -134,7 +134,7 @@ async def test_admin_role_change_revokes_refresh_session_and_audits_atomically()
 async def test_admin_audit_failure_rolls_back_account_change_and_session_revocation(monkeypatch):
     engine = create_async_engine(DATABASE_URL, pool_size=5, max_overflow=0)
     sessions = async_sessionmaker(engine, expire_on_commit=False)
-    actor_id, target_id, actor, session_id = await _seed(sessions)
+    actor_id, target_id, session_id = await _seed(sessions)
 
     async def fail_audit(*args, **kwargs):
         raise RuntimeError("simulated audit outbox failure")
