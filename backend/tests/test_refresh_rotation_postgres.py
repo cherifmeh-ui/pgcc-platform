@@ -142,7 +142,7 @@ async def test_refresh_endpoint_rotation_and_replay_are_audited_atomically(monke
             "sub": subject, "jti": uuid.uuid4().hex,
             "iat": int(datetime.now(timezone.utc).timestamp()),
             "exp": int((datetime.now(timezone.utc) + timedelta(days=1)).timestamp()),
-            "type": "refresh", "role": role,
+            "type": "refresh", "role": role, "auth_version": auth_version,
             "mfa_enabled": mfa_enabled, "mfa_confirmed_at": mfa_confirmed_at,
         }
         return token
@@ -317,6 +317,8 @@ async def test_refresh_revokes_sessions_after_role_or_mfa_policy_change(
     token_role,
     token_mfa_enabled,
     token_confirmed_at,
+    stored_auth_version,
+    token_auth_version,
 ):
     engine = create_async_engine(DATABASE_URL, pool_size=3, max_overflow=0)
     sessions = async_sessionmaker(engine, expire_on_commit=False)
@@ -334,7 +336,7 @@ async def test_refresh_revokes_sessions_after_role_or_mfa_policy_change(
         "sub": email, "jti": jti, "iat": int(now.timestamp()),
         "exp": int((now + timedelta(days=1)).timestamp()), "type": "refresh",
         "role": token_role, "mfa_enabled": token_mfa_enabled,
-        "mfa_confirmed_at": token_confirmed,
+        "auth_version": token_auth_version, "mfa_confirmed_at": token_confirmed,
     }
     monkeypatch.setattr(
         auth_endpoint, "decode_token",
@@ -346,7 +348,7 @@ async def test_refresh_revokes_sessions_after_role_or_mfa_policy_change(
             id=user_id, email=email, full_name="Refresh policy change",
             role=stored_role, password_hash="not-used", must_change_password=False,
             is_active=True, mfa_enabled=stored_mfa_enabled,
-            mfa_confirmed_at=stored_confirmed_at,
+            mfa_confirmed_at=stored_confirmed_at, auth_version=stored_auth_version,
         ))
         await setup.commit()
         setup.add(RefreshTokenSession(
