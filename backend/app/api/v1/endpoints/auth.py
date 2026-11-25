@@ -4,7 +4,7 @@ import hashlib
 from typing import Optional
 
 import jwt
-from fastapi import APIRouter, Depends, HTTPException, Header, Request, status
+from fastapi import APIRouter, Cookie, Depends, HTTPException, Header, Request, Response, status
 #                                                    ^^^^^^^ AJOUTÉ
 from pydantic import BaseModel, EmailStr, Field
 from sqlalchemy import select, update
@@ -78,13 +78,45 @@ class ChangePasswordRequiredResponse(BaseModel):
 
 class TokenPairResponse(BaseModel):
     access_token: str
-    refresh_token: str
     token_type: str = "bearer"
     user: dict
 
 
 def _now():
     return datetime.now(timezone.utc)
+
+REFRESH_COOKIE_NAME = "pgcc_refresh"
+REFRESH_COOKIE_PATH = "/api/v1/auth"
+
+
+def _set_refresh_cookie(response: Response, token: str) -> None:
+    response.set_cookie(
+        key=REFRESH_COOKIE_NAME,
+        value=token,
+        max_age=settings.REFRESH_TOKEN_EXPIRE_DAYS * 24 * 60 * 60,
+        httponly=True,
+        secure=settings.ENVIRONMENT.lower() == "production",
+        samesite="strict",
+        path=REFRESH_COOKIE_PATH,
+    )
+
+
+def _clear_refresh_cookie(response: Response) -> None:
+    response.delete_cookie(
+        key=REFRESH_COOKIE_NAME,
+        path=REFRESH_COOKIE_PATH,
+        httponly=True,
+        secure=settings.ENVIRONMENT.lower() == "production",
+        samesite="strict",
+    )
+
+
+def _require_trusted_cookie_origin(request: Request) -> None:
+    origin = request.headers.get("origin")
+    allowed = {item.rstrip("/") for item in settings.cors_origins_list}
+    if not origin or origin.rstrip("/") not in allowed:
+        raise HTTPException(status_code=403, detail="Origine non autorisée pour une session cookie.")
+
 
 
 def _refresh_jti_hash(token_data: dict) -> str:
@@ -267,6 +299,7 @@ async def start_enrollment(
 async def confirm_mfa(
     payload: ConfirmMfaRequest,
     request: Request,
+    response: Response,
     db: AsyncSession = Depends(get_db),
 ):
     """
@@ -392,9 +425,9 @@ async def confirm_mfa(
         await db.rollback()
         raise
 
+    _set_refresh_cookie(response, refresh_token)
     return TokenPairResponse(
         access_token=access_token,
-        refresh_token=refresh_token,
         user={
             "email": user.email,
             "full_name": user.full_name,
@@ -410,6 +443,7 @@ async def confirm_mfa(
 async def change_password(
     payload: ChangePasswordRequest,
     request: Request,
+    response: Response,
     db: AsyncSession = Depends(get_db),
 ):
     """
@@ -468,9 +502,9 @@ async def change_password(
         await db.rollback()
         raise
 
+    _set_refresh_cookie(response, refresh_token)
     return TokenPairResponse(
         access_token=access_token,
-        refresh_token=refresh_token,
         user={
             "email": user.email,
             "full_name": user.full_name,
@@ -483,14 +517,23 @@ async def change_password(
 
 @router.post("/refresh", response_model=TokenPairResponse)
 async def refresh_tokens(
-    payload: RefreshRequest,
     request: Request,
+    response: Response,
     db: AsyncSession = Depends(get_db),
+    payload: RefreshRequest | None = None,
+    refresh_cookie: str | None = Cookie(default=None, alias=REFRESH_COOKIE_NAME),
 ):
     """Rotate a persisted refresh session exactly once; reject replay."""
+    refresh_token = refresh_cookie or (payload.refresh_token if payload else None)
+    if refresh_cookie:
+        _require_trusted_cookie_origin(request)
+    if not refresh_token:
+        _clear_refresh_cookie(response)
+        raise HTTPException(status_code=401, detail="Refresh token absent.")
     try:
-        data = decode_token(payload.refresh_token, expected_type="refresh")
+        data = decode_token(refresh_token, expected_type="refresh")
     except Exception:
+        _clear_refresh_cookie(response)
         raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="Refresh token invalide ou expiré.")
 
     email = data.get("sub")
@@ -529,6 +572,7 @@ async def refresh_tokens(
         except Exception:
             await db.rollback()
             raise
+        _clear_refresh_cookie(response)
         denial_status = status.HTTP_423_LOCKED if user.is_locked else status.HTTP_403_FORBIDDEN if not user.is_active or user.must_change_password else status.HTTP_401_UNAUTHORIZED
         raise HTTPException(status_code=denial_status, detail=denial_reason)
 
@@ -539,6 +583,7 @@ async def refresh_tokens(
     session = session_result.scalar_one_or_none()
     now = _now()
     if session is None or session.user_id != user.id or session.expires_at <= now:
+        _clear_refresh_cookie(response)
         raise HTTPException(status_code=401, detail="Session refresh invalide ou expirée.")
     if session.revoked_at is not None:
         # Reuse of a revoked token revokes the user's active refresh sessions.
@@ -558,6 +603,7 @@ async def refresh_tokens(
         except Exception:
             await db.rollback()
             raise
+        _clear_refresh_cookie(response)
         raise HTTPException(status_code=401, detail="Réutilisation d'un refresh token détectée. Sessions révoquées.")
 
     access_token = create_access_token(subject=user.email, role=user.role)
@@ -577,9 +623,9 @@ async def refresh_tokens(
         await db.rollback()
         raise
 
+    _set_refresh_cookie(response, refresh_token)
     return TokenPairResponse(
         access_token=access_token,
-        refresh_token=refresh_token,
         user={"email": user.email, "full_name": user.full_name, "role": user.role,
               "must_change_password": user.must_change_password, "mfa_enabled": user.mfa_enabled},
     )
@@ -587,14 +633,24 @@ async def refresh_tokens(
 
 @router.post("/logout", status_code=status.HTTP_204_NO_CONTENT)
 async def logout(
-    payload: RefreshRequest,
     request: Request,
+    response: Response,
     db: AsyncSession = Depends(get_db),
+    payload: RefreshRequest | None = None,
+    refresh_cookie: str | None = Cookie(default=None, alias=REFRESH_COOKIE_NAME),
 ):
     """Revoke the presented refresh session and audit the state change atomically."""
+    refresh_token = refresh_cookie or (payload.refresh_token if payload else None)
+    if refresh_cookie:
+        _require_trusted_cookie_origin(request)
+    if not refresh_token:
+        _clear_refresh_cookie(response)
+        _clear_refresh_cookie(response)
+    return None
     try:
-        data = decode_token(payload.refresh_token, expected_type="refresh")
+        data = decode_token(refresh_token, expected_type="refresh")
     except Exception:
+        _clear_refresh_cookie(response)
         return None
     token_hash = _refresh_jti_hash(data)
     result = await db.execute(
@@ -604,6 +660,7 @@ async def logout(
     )
     session = result.scalar_one_or_none()
     if session is None or session.revoked_at is not None:
+        _clear_refresh_cookie(response)
         return None
 
     user_result = await db.execute(select(User.email).where(User.id == session.user_id))
