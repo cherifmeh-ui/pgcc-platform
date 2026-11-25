@@ -783,7 +783,7 @@ async def get_asset_impact(
     supplier_links_by_asset: dict[UUID, list[dict]] = {}
     supplier_summary = {"total_suppliers": 0, "active_relationships": 0, "declared_privileged_relationships": 0, "declared_data_access_relationships": 0, "active_authorizations": 0, "authorized_privileged_access": 0, "authorized_data_access": 0}
     authorized_access_by_asset: dict[UUID, list[dict]] = {}
-    supplier_access_available = role_has_permission((current_user.role or "").lower(), "suppliers", "read_assets")
+    supplier_access_available = role_has_permission((current_user.role or "").strip().lower(), "suppliers", "read_assets")
     if supplier_access_available:
         relevant_asset_ids = [asset_id, *impacted_ids]
         supplier_result = await db.execute(
@@ -859,7 +859,7 @@ async def get_asset_impact(
     assets_by_id = {asset.id: asset for asset in asset_result.scalars().all()}
     risks_by_asset: dict[UUID, list[dict]] = {}
     risk_summary = {"total": 0, "unacceptable": 0, "critical": 0, "high": 0, "moderate": 0, "low": 0, "by_status": {}}
-    if role_has_permission((current_user.role or "").lower(), "risks", "read"):
+    if role_has_permission((current_user.role or "").strip().lower(), "risks", "read"):
         risk_result = await db.execute(
             select(AssetRiskLink.asset_id, Risk.id, Risk.ref, Risk.title, Risk.risk_level, Risk.status)
             .join(Risk, Risk.id == AssetRiskLink.risk_id)
@@ -1012,7 +1012,7 @@ async def list_asset_risk_links(
     db: AsyncSession = Depends(get_db),
     current_user: User = require_permission("assets", "read"),
 ):
-    if not role_has_permission((current_user.role or "").lower(), "risks", "read"):
+    if not role_has_permission((current_user.role or "").strip().lower(), "risks", "read"):
         raise HTTPException(status_code=403, detail="Accès refusé : permission risks:read requise.")
     asset_result = await db.execute(select(Asset.id).where(Asset.id == asset_id))
     if asset_result.scalar_one_or_none() is None:
@@ -1031,7 +1031,7 @@ async def link_asset_to_risk(
     db: AsyncSession = Depends(get_db),
     current_user: User = require_permission("assets", "update"),
 ):
-    if not role_has_permission((current_user.role or "").lower(), "risks", "update"):
+    if not role_has_permission((current_user.role or "").strip().lower(), "risks", "update"):
         raise HTTPException(status_code=403, detail="Accès refusé : permission risks:update requise.")
     asset_result = await db.execute(select(Asset).where(Asset.id == asset_id).with_for_update())
     asset = asset_result.scalar_one_or_none()
@@ -1072,7 +1072,7 @@ async def unlink_asset_from_risk(
     db: AsyncSession = Depends(get_db),
     current_user: User = require_permission("assets", "update"),
 ):
-    if not role_has_permission((current_user.role or "").lower(), "risks", "update"):
+    if not role_has_permission((current_user.role or "").strip().lower(), "risks", "update"):
         raise HTTPException(status_code=403, detail="Accès refusé : permission risks:update requise.")
     asset_result = await db.execute(select(Asset.id).where(Asset.id == asset_id))
     if asset_result.scalar_one_or_none() is None:
