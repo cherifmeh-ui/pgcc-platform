@@ -10,7 +10,7 @@ Set the backend environment variables, then from `backend/` run:
 alembic upgrade head
 ```
 
-The baseline imports all SQLAlchemy models and creates their metadata. This is a transitional baseline, not yet a fully hand-authored migration history.
+The baseline imports the current model registry for foreign-key metadata but creates only its explicit ten historical tables. Later tables are created by their own Alembic revisions. This remains a transitional, model-backed baseline rather than a fully hand-authored schema snapshot; the table set is frozen to prevent future models being created ahead of their migrations.
 
 ## Existing development database
 
@@ -30,16 +30,18 @@ The initial migration downgrade is intentionally disabled to avoid accidental de
 
 ## Phase 0 integrity checks
 
-A static graph test now checks that migration revision identifiers are unique, the history has exactly one root (`0001_initial`), parent revisions exist, and the current history remains linear. It also protects the intentionally non-destructive baseline downgrade.
+Static tests check that migration revision identifiers are unique, the history has exactly one root (`0001_initial`), parent revisions exist, and the current history remains linear. They also protect the intentionally non-destructive baseline downgrade and the frozen baseline table set.
 
-These checks **do not validate actual PostgreSQL schema creation or upgrade behavior**. Phase 0 still requires disposable PostgreSQL integration runs for:
+The PostgreSQL CI workflow now validates:
 - empty database `alembic upgrade head`;
-- inspection of the resulting schema against model metadata;
-- legacy database baseline/stamp procedure;
-- upgrade from a representative previous revision;
-- backup/restore and recovery rehearsal.
+- `alembic check` against complete SQLAlchemy metadata (`No new upgrade operations detected`);
+- upgrade from revision `0024_audit_outbox`;
+- downgrade `0026 -> 0025` followed by upgrade to `head`;
+- custom-format `pg_dump` and `pg_restore` into a fresh database, including Alembic version and fixture checks.
 
-The baseline uses `Base.metadata.create_all()` and is transitional. Before production, replace it with a reviewed, deterministic schema baseline or keep the transitional approach only with documented schema equivalence checks and controlled model imports.
+Run `45585181919` passed these checks on code HEAD `cf60e82`. This is CI evidence only; production backup/restore, encrypted backup custody, WAL retention, and approved RPO/RTO still require an operational rehearsal.
+
+The baseline still uses `Base.metadata.create_all()` for its frozen ten-table set. Before production, replace it with a reviewed deterministic schema snapshot or retain the transitional approach only with schema-equivalence checks and controlled imports.
 
 ## pgvector initialization
 
