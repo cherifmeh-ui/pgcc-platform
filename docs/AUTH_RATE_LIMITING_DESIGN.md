@@ -55,3 +55,13 @@ Le compteur est validé et commité avant la logique métier. Ainsi, une répons
 - Revue humaine des seuils, de l'observabilité et de la politique proxy avant production.
 
 Cette implémentation n'est pas considérée validée tant que les tests PostgreSQL et l'ensemble de la CI ne sont pas verts.
+
+
+## Résultat CI — 2026-11-25
+
+- Workflow `45583136393` : quatre jobs réussis sur le HEAD `1cad1e2`.
+- Backend : 375 tests réussis / 24 ignorés.
+- PostgreSQL : 24 tests réussis, dont les deux scénarios de concurrence du limiteur.
+- Frontend build et smoke test Docker Compose (health API + proxy frontend) réussis.
+- La migration `0026_auth_rate_limit_buckets` a été appliquée avec succès sur PostgreSQL.
+- Cette preuve valide l'implémentation sur le HEAD indiqué ; l'exploitation en production et le calibrage des seuils restent à valider.
