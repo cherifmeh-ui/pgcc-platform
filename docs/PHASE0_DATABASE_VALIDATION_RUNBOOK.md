@@ -116,3 +116,10 @@ Le baseline `0001_initial` appelle `Base.metadata.create_all()` à partir d'un e
 - Frontend: committed package lock installed with npm ci; npm audit reported 0 vulnerabilities; Vite 6.4.6 build passed.
 - Docker Compose: full development stack startup, API health and frontend proxy smoke all passed.
 - This validates a clean database upgrade to head, but does not replace legacy-upgrade, downgrade, schema-drift, backup/restore or production data migration rehearsal.
+
+## Latest PostgreSQL evidence — workflow 45574715908 — 2026-11-25
+
+- PostgreSQL integration suite: 15 passed.
+- Fresh PostgreSQL 16 database migrated from baseline through Alembic head 0024_audit_outbox.
+- Includes refresh-cookie rotation/replay, supplier lifecycle, asset relationship integrity, document/RAG delete/index race, document classification ACL, encrypted MFA secret persistence/startup validation, upload uniqueness, append-only security log and audit outbox.
+- Legacy production revision upgrade, downgrade, schema drift comparison and backup/restore remain untested against the target environment.
