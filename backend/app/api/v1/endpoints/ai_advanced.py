@@ -7,6 +7,7 @@ from sqlalchemy import select
 from app.api.deps import require_permission
 from app.core.database import get_db
 from app.models.document import Document
+from app.api.v1.endpoints.documents import can_read_document
 from app.models.user import User
 from app.utils.rbac import role_has_permission
 from app.services.ai_service import ai_service
@@ -14,6 +15,11 @@ from app.services.security_logger import log_action
 
 logger = logging.getLogger(__name__)
 router = APIRouter(prefix="/ai-advanced", tags=["IA Avancée"])
+
+
+def readable_context_documents(user: User, documents: list[Document]) -> list[Document]:
+    """Apply the canonical document ACL before document text enters an AI prompt."""
+    return [document for document in documents if can_read_document(user, document)][:3]
 
 
 class ContextQueryRequest(BaseModel):
@@ -45,9 +51,9 @@ async def query_with_context(
                 | (Document.content_text.ilike(f"%{escaped_ref}%", escape="\\"))
             )
             .order_by(Document.created_at.desc())
-            .limit(3)
+            .limit(30)
         )
-        docs = docs_query.scalars().all()
+        docs = readable_context_documents(current_user, docs_query.scalars().all())
         for document in docs:
             snippet = (document.content_text or "")[:1500]
             # Treat retrieved document content as untrusted data, never as instructions.
