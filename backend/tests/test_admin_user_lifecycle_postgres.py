@@ -235,3 +235,59 @@ async def test_stale_admin_cannot_mutate_accounts_after_concurrent_role_change()
         await _cleanup(sessions, actor_id, target_id)
         await engine.dispose()
 
+
+@pytest.mark.asyncio
+async def test_concurrent_admin_demotion_preserves_one_active_mfa_admin():
+    engine = create_async_engine(DATABASE_URL, pool_size=5, max_overflow=0)
+    sessions = async_sessionmaker(engine, expire_on_commit=False)
+    actor_a_id, actor_b_id, session_id = await _seed(sessions)
+    try:
+        async with sessions() as setup:
+            actor_b = await setup.get(User, actor_b_id)
+            actor_b.role = "admin"
+            actor_b.mfa_enabled = True
+            await setup.commit()
+
+        barrier = asyncio.Barrier(2)
+
+        async def demote(actor_id, target_id):
+            async with sessions() as db:
+                actor = await db.get(User, actor_id)
+                await barrier.wait()
+                try:
+                    result = await update_user(
+                        user_id=target_id,
+                        payload=AdminUserUpdate(role="auditor"),
+                        request=_request(),
+                        db=db,
+                        current_user=actor,
+                    )
+                    return ("success", result.id)
+                except HTTPException as exc:
+                    return (exc.status_code, None)
+
+        outcomes = await asyncio.gather(
+            demote(actor_a_id, actor_b_id),
+            demote(actor_b_id, actor_a_id),
+        )
+        assert sum(outcome[0] == "success" for outcome in outcomes) == 1
+        assert sum(outcome[0] == 403 for outcome in outcomes) == 1
+
+        async with sessions() as verify:
+            remaining_admins = (
+                await verify.execute(
+                    select(User).where(
+                        User.role == "admin",
+                        User.is_active.is_(True),
+                        User.mfa_enabled.is_(True),
+                    )
+                )
+            ).scalars().all()
+            assert len(remaining_admins) == 1
+            actor_a = await verify.get(User, actor_a_id)
+            actor_b = await verify.get(User, actor_b_id)
+            assert {actor_a.role, actor_b.role} == {"admin", "auditor"}
+    finally:
+        await _cleanup(sessions, actor_a_id, actor_b_id)
+        await engine.dispose()
+
