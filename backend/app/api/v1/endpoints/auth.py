@@ -330,20 +330,20 @@ async def confirm_mfa(
             status_code=400,
             detail="Aucune procédure d'enrôlement MFA active. Appelez /start-enrollment d'abord.",
         )
-    try:
-        mfa_secret = get_mfa_secret(user)
-    except MFASecretDecryptionError:
-        raise HTTPException(
-            status_code=503,
-            detail="Secret MFA indisponible. Contactez l'administrateur.",
-        )
-
     if not user.is_active:
         raise HTTPException(status_code=403, detail="Compte désactivé.")
     if user.is_locked:
         raise HTTPException(
             status_code=status.HTTP_423_LOCKED,
             detail="Compte temporairement verrouillé après plusieurs échecs MFA.",
+        )
+
+    try:
+        mfa_secret = get_mfa_secret(user)
+    except MFASecretDecryptionError:
+        raise HTTPException(
+            status_code=503,
+            detail="Secret MFA indisponible. Contactez l'administrateur.",
         )
 
     valid_totp = verify_mfa(mfa_secret, payload.mfa_code)
