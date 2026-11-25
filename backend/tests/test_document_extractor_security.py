@@ -78,3 +78,58 @@ def test_docx_extraction_includes_table_cells(monkeypatch):
     assert "Policy paragraph" in extracted
     assert "Control A | Implemented" in extracted
     assert "Policy paragraph\n\nControl A | Implemented" in extracted
+
+def test_docx_archive_rejects_non_zip_payload():
+    with pytest.raises(ValueError, match="Échec de l'extraction"):
+        DocumentExtractor.extract_text(b"PK-not-a-real-zip", "broken.docx")
+
+
+def test_docx_archive_requires_word_document_part():
+    import io
+    import zipfile
+
+    buffer = io.BytesIO()
+    with zipfile.ZipFile(buffer, "w") as archive:
+        archive.writestr("[Content_Types].xml", "<Types/>")
+    with pytest.raises(ValueError, match="Échec de l'extraction"):
+        DocumentExtractor.extract_text(buffer.getvalue(), "missing-document.docx")
+
+
+def test_docx_archive_rejects_excessive_entry_count(monkeypatch):
+    import io
+    import zipfile
+
+    buffer = io.BytesIO()
+    with zipfile.ZipFile(buffer, "w") as archive:
+        archive.writestr("word/document.xml", "<document/>")
+        archive.writestr("word/styles.xml", "<styles/>")
+    with pytest.raises(ValueError, match="Échec de l'extraction"):
+        DocumentExtractor.extract_text(buffer.getvalue(), "many-entries.docx")
+    # Exercise the archive guard's configurable bound directly.
+    with pytest.raises(ValueError, match="trop d'éléments"):
+        document_extractor._validate_docx_archive(buffer.getvalue(), max_entries=1)
+
+
+def test_docx_archive_rejects_excessive_uncompressed_size():
+    import io
+    import zipfile
+
+    buffer = io.BytesIO()
+    with zipfile.ZipFile(buffer, "w", compression=zipfile.ZIP_STORED) as archive:
+        archive.writestr("word/document.xml", "x" * 128)
+    with pytest.raises(ValueError, match="trop volumineux"):
+        document_extractor._validate_docx_archive(
+            buffer.getvalue(), max_uncompressed=64
+        )
+
+
+def test_docx_archive_rejects_suspicious_compression_ratio():
+    import io
+    import zipfile
+
+    buffer = io.BytesIO()
+    with zipfile.ZipFile(buffer, "w", compression=zipfile.ZIP_DEFLATED) as archive:
+        archive.writestr("word/document.xml", "A" * 100_000)
+    with pytest.raises(ValueError, match="Ratio de compression"):
+        document_extractor._validate_docx_archive(buffer.getvalue())
+
