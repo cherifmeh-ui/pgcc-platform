@@ -51,3 +51,13 @@ Le job journalise la durée de restauration. Cette validation prouve la procédu
 ## Critères de clôture
 
 La Phase 0 ne peut pas considérer la récupération comme validée sur la seule base du smoke test CI. Une répétition sur l'environnement de préproduction ou de restauration de la CTF, avec sauvegarde chiffrée, preuve de restauration et RPO/RTO mesurés, reste obligatoire.
+
+
+## Résultats de la validation CI — 2026-11-25
+
+- Run `45585181919`, HEAD code `cf60e82` : tous les jobs CI sont verts.
+- Mise à niveau depuis `0024_audit_outbox`, downgrade `0026 -> 0025`, puis upgrade `head` réussis.
+- `alembic check` : aucune opération de migration supplémentaire détectée.
+- Dump custom et restauration dans une base neuve réussis ; la révision `0026_auth_rate_limit_buckets` et la donnée témoin sont présentes.
+- Durée observée de restauration CI : 0 seconde à la précision de la mesure. Cette valeur ne doit pas être extrapolée à une base de production.
+- La répétition sur une sauvegarde chiffrée réelle et la mesure RPO/RTO restent obligatoires.
