@@ -96,3 +96,17 @@ def test_admin_user_routes_are_registered_and_protected_by_users_manage():
     assert 'prefix="/admin/users"' in endpoint_source
     assert endpoint_source.count('require_permission("users", "manage")') == 5
     assert '"users"' in PERMISSIONS
+
+
+def test_mutating_admin_routes_revalidate_actor_under_row_locks():
+    source = (
+        Path(__file__).parents[1]
+        / "app"
+        / "api"
+        / "v1"
+        / "endpoints"
+        / "admin_users.py"
+    ).read_text(encoding="utf-8")
+    assert source.count("_lock_authorized_admin(") == 4  # helper + 3 mutations
+    assert source.count("expected_auth_version = int(current_user.auth_version or 0)") == 3
+    assert ".execution_options(populate_existing=True)" in source
