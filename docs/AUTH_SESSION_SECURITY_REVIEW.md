@@ -49,3 +49,9 @@ Authentication/session security remains open until the HTTP-level PostgreSQL rot
 
 - Workflow 45569880462 found a test invocation mismatch, not a production request flaw: direct function calls inherited FastAPI's Cookie marker default. The endpoints now use Annotated Cookie parameters with a None default.
 - The browser cookie flow and Origin checks remain in place. Fresh CI validation is pending.
+
+## Refresh-cookie security CI evidence — 2026-11-25
+
+- Workflow 45572713404 passed backend (303 passed/13 skipped), PostgreSQL (13 passed), frontend build/audit and Docker Compose smoke.
+- Cookie-only refresh/logout transport, HttpOnly/Secure/SameSite cookie flags, Origin allowlist, in-memory access token, cookie-backed reload bootstrap and PostgreSQL rotation/replay tests are included in this green run.
+- Remaining: human review of production frontend/API same-site topology, deployment cookie settings, and administrative account/role/MFA reset flows.
