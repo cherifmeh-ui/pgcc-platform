@@ -2,7 +2,7 @@ import pytest
 from unittest.mock import AsyncMock, MagicMock
 
 from app.api.v1.endpoints import auth as auth_endpoint
-from app.api.v1.endpoints.auth import ConfirmMfaRequest, ChangePasswordRequiredResponse
+from app.api.v1.endpoints.auth import ConfirmMfaRequest, ChangePasswordRequiredResponse, ChangePasswordRequest
 from app.core.security import decode_token
 
 
@@ -29,6 +29,7 @@ async def test_mfa_returns_change_password_token_for_forced_password_change(monk
     monkeypatch.setattr(auth_endpoint, "decode_token", lambda token, expected_type: {"sub": user.email})
     monkeypatch.setattr(auth_endpoint, "verify_mfa", lambda secret, code: True)
     monkeypatch.setattr(auth_endpoint, "log_action", AsyncMock())
+    monkeypatch.setattr(auth_endpoint, "enqueue_audit_event", AsyncMock())
 
     response = await auth_endpoint.confirm_mfa(
         payload=ConfirmMfaRequest(pre_auth_token="preauth", mfa_code="123456"),
@@ -82,3 +83,81 @@ async def test_initial_mfa_enrollment_returns_backup_codes_for_forced_password_c
     assert response.backup_codes == backup_codes
     assert user.mfa_enabled is True
     assert user.backup_codes_hashed == ["hashed", "hashed"]
+
+@pytest.mark.asyncio
+async def test_password_change_audit_is_enqueued_before_commit(monkeypatch):
+    from uuid import uuid4
+
+    user = MagicMock(
+        id=uuid4(), email="password-change@example.test", role="viewer",
+        full_name="Password Change", is_active=True, must_change_password=True,
+        password_hash="old-hash", password_changed_at=None,
+    )
+    result = MagicMock()
+    result.scalar_one_or_none.return_value = user
+    order = []
+    db = AsyncMock()
+    db.execute.side_effect = lambda *args, **kwargs: order.append("execute") or result
+    db.commit.side_effect = lambda: order.append("commit")
+    db.rollback.side_effect = lambda: order.append("rollback")
+    monkeypatch.setattr(auth_endpoint, "decode_token", lambda token, expected_type: {"sub": user.email})
+    monkeypatch.setattr(auth_endpoint, "hash_password", lambda password: "new-hash")
+    monkeypatch.setattr(auth_endpoint, "create_access_token", lambda **kwargs: "access")
+    monkeypatch.setattr(auth_endpoint, "create_refresh_token", lambda **kwargs: "refresh")
+    async def persist(*args, **kwargs):
+        order.append("persist_refresh")
+        return "refresh-hash"
+    async def audit(*args, **kwargs):
+        order.append("audit")
+    monkeypatch.setattr(auth_endpoint, "_persist_refresh_session", persist)
+    monkeypatch.setattr(auth_endpoint, "enqueue_audit_event", audit)
+
+    response = await auth_endpoint.change_password(
+        ChangePasswordRequest(
+            change_password_token="change-token", new_password="StrongPassword!123",
+            confirm_password="StrongPassword!123",
+        ), request=MagicMock(), db=db,
+    )
+
+    assert response.access_token == "access"
+    assert user.password_hash == "new-hash"
+    assert user.must_change_password is False
+    assert order.index("audit") < order.index("commit")
+    assert order.index("persist_refresh") < order.index("audit")
+    db.commit.assert_awaited_once()
+    db.rollback.assert_not_awaited()
+
+
+@pytest.mark.asyncio
+async def test_password_change_rolls_back_if_audit_enqueue_fails(monkeypatch):
+    from uuid import uuid4
+
+    user = MagicMock(
+        id=uuid4(), email="password-rollback@example.test", role="viewer",
+        full_name="Password Rollback", is_active=True, must_change_password=True,
+        password_hash="old-hash", password_changed_at=None,
+    )
+    result = MagicMock()
+    result.scalar_one_or_none.return_value = user
+    db = AsyncMock()
+    db.execute.return_value = result
+    monkeypatch.setattr(auth_endpoint, "decode_token", lambda token, expected_type: {"sub": user.email})
+    monkeypatch.setattr(auth_endpoint, "hash_password", lambda password: "new-hash")
+    monkeypatch.setattr(auth_endpoint, "create_access_token", lambda **kwargs: "access")
+    monkeypatch.setattr(auth_endpoint, "create_refresh_token", lambda **kwargs: "refresh")
+    monkeypatch.setattr(auth_endpoint, "_persist_refresh_session", AsyncMock())
+    monkeypatch.setattr(
+        auth_endpoint, "enqueue_audit_event",
+        AsyncMock(side_effect=RuntimeError("simulated password audit failure")),
+    )
+
+    with pytest.raises(RuntimeError, match="simulated password audit failure"):
+        await auth_endpoint.change_password(
+            ChangePasswordRequest(
+                change_password_token="change-token", new_password="StrongPassword!123",
+                confirm_password="StrongPassword!123",
+            ), request=MagicMock(), db=db,
+        )
+
+    db.rollback.assert_awaited_once()
+    db.commit.assert_not_awaited()
