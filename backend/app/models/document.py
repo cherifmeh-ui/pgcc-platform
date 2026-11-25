@@ -19,7 +19,8 @@ class Document(Base):
     content_text = Column(Text, nullable=True) 
     
     # Fichier original (Binaire) - Optionnel selon stratégie stockage
-    file_data = Column(LargeBinary, nullable=True) 
+    file_data = Column(LargeBinary, nullable=True)
+    file_sha256 = Column(String(64), nullable=True)
     filename = Column(String(200), nullable=True)
 
     __table_args__ = (
