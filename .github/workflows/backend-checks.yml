@@ -166,7 +166,10 @@ jobs:
         run: |
           sed 's/^ENVIRONMENT=.*/ENVIRONMENT=production/' .env.example > /tmp/pgcc-production.env
           docker compose --env-file /tmp/pgcc-production.env config > /tmp/pgcc-production-compose.yaml
-          grep -Eq '^[[:space:]]+ENVIRONMENT: production      - name: Start complete development stack
+          grep -Eq '^[[:space:]]+ENVIRONMENT: production$' /tmp/pgcc-production-compose.yaml
+      - name: Build backend image
+        run: docker compose build backend
+      - name: Start complete development stack
         run: docker compose up -d
       - name: Verify API health and frontend proxy
         shell: bash
