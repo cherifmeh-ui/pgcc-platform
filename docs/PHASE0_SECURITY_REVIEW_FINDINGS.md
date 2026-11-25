@@ -253,3 +253,12 @@ Do not close Phase 0 until evidence is attached for:
 - La création d'une relation verrouille le fournisseur puis l'actif cible avant de vérifier son cycle de vie et d'insérer la relation.
 - Le test PostgreSQL concurrent exécute les deux opérations avec des sessions distinctes. Deux résultats seulement sont acceptés : (1) le lien est créé et le retrait est refusé ; ou (2) le retrait est validé et la création du lien est refusée. L'état final ne doit jamais contenir un actif retiré avec une relation fournisseur active.
 - Le contrôle attend une exécution CI PostgreSQL verte sur le HEAD courant.
+
+
+## Antivirus avant extraction documentaire — 2026-11-25
+
+- Le parcours d'upload PDF/DOCX appelle désormais un adaptateur ClamAV via le protocole clamd INSTREAM **avant** tout parsing, extraction, requête de persistance ou indexation.
+- Verdict propre : le parcours peut continuer. Verdict malware : HTTP 422 et aucune extraction/persistance. Scanner non configuré, inaccessible, expiré ou réponse invalide : HTTP 503, refus par défaut.
+- La configuration ajoute `CLAMAV_HOST`, `CLAMAV_PORT` et `CLAMAV_TIMEOUT_SECONDS`. Hors développement, `CLAMAV_HOST` est obligatoire. Compose expose ces variables pour un service ClamAV externe ; aucun moteur antivirus factice n'est embarqué.
+- Tests ajoutés : protocole INSTREAM (verdict propre/détection/erreur), blocage de l'upload en cas d'indisponibilité, refus d'un fichier détecté avant extraction, adaptation des tests PostgreSQL.
+- Limite explicite : l'isolation du parseur PDF/DOCX dans un processus/conteneur à privilèges réduits et l'exploitation du service ClamAV en production restent à déployer et à vérifier. Les tests du protocole simulé ne prouvent pas l'intégration à un daemon réel.
