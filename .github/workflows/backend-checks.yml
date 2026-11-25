@@ -113,7 +113,7 @@ jobs:
         shell: bash
         run: |
           for attempt in {1..60}; do
-            if curl --fail --silent http://localhost:8000/health >/dev/null; then
+            if curl --fail --silent http://localhost:8000/health | grep -q '"status":"healthy"'; then
               break
             fi
             if [ "$attempt" -eq 60 ]; then
