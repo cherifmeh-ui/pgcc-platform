@@ -338,18 +338,19 @@ async def confirm_mfa(
     user.failed_login_attempts = 0
     user.locked_until = None
 
-    await db.commit()
-
     if user.must_change_password:
+        try:
+            await enqueue_audit_event(
+                db, user_email=user.email, action="MFA_SUCCESS_PASSWORD_CHANGE_REQUIRED",
+                resource="auth", resource_id=str(user.id),
+                details="MFA succeeded; mandatory password change required.",
+                event_type="AUTH", request=request,
+            )
+            await db.commit()
+        except Exception:
+            await db.rollback()
+            raise
         change_password_token = create_change_password_token(subject=user.email, role=user.role)
-        await log_action(
-            user_email=user.email,
-            action="MFA_SUCCESS_PASSWORD_CHANGE_REQUIRED",
-            resource="auth",
-            details="MFA réussi; changement obligatoire du mot de passe requis",
-            event_type="AUTH",
-            request=request,
-        )
         return ChangePasswordRequiredResponse(
             change_password_token=change_password_token,
             backup_codes=backup_codes,
@@ -364,17 +365,18 @@ async def confirm_mfa(
 
     access_token = create_access_token(subject=user.email, role=user.role)
     refresh_token = create_refresh_token(subject=user.email)
-    await _persist_refresh_session(db, user, refresh_token)
-    await db.commit()
-
-    await log_action(
-        user_email=user.email,
-        action="MFA_ENROLLED_AND_LOGIN_SUCCESS",
-        resource="auth",
-        details="MFA activé et connexion réussie",
-        event_type="AUTH",
-        request=request,
-    )
+    try:
+        await _persist_refresh_session(db, user, refresh_token)
+        await enqueue_audit_event(
+            db, user_email=user.email, action="MFA_ENROLLED_AND_LOGIN_SUCCESS",
+            resource="auth", resource_id=str(user.id),
+            details="MFA enrollment completed and login succeeded.",
+            event_type="AUTH", request=request,
+        )
+        await db.commit()
+    except Exception:
+        await db.rollback()
+        raise
 
     return TokenPairResponse(
         access_token=access_token,
