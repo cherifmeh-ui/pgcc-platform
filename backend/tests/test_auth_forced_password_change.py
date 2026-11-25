@@ -1,5 +1,6 @@
 import pytest
 from unittest.mock import AsyncMock, MagicMock
+from fastapi import Response
 
 from app.api.v1.endpoints import auth as auth_endpoint
 from app.api.v1.endpoints.auth import ConfirmMfaRequest, ChangePasswordRequiredResponse, ChangePasswordRequest
@@ -36,6 +37,7 @@ async def test_mfa_returns_change_password_token_for_forced_password_change(monk
     response = await auth_endpoint.confirm_mfa(
         payload=ConfirmMfaRequest(pre_auth_token="preauth", mfa_code="123456"),
         request=MagicMock(),
+        response=Response(),
         db=db,
     )
 
@@ -120,7 +122,7 @@ async def test_password_change_audit_is_enqueued_before_commit(monkeypatch):
         ChangePasswordRequest(
             change_password_token="change-token", new_password="StrongPassword!123",
             confirm_password="StrongPassword!123",
-        ), request=MagicMock(), db=db,
+        ), request=MagicMock(), response=Response(), db=db,
     )
 
     assert response.access_token == "access"
