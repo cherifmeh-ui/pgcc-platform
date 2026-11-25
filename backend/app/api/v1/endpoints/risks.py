@@ -274,7 +274,7 @@ async def list_risk_assets(
     db: AsyncSession = Depends(get_db),
     current_user: User = require_permission("risks", "read"),
 ):
-    if not role_has_permission((current_user.role or "").lower(), "assets", "read"):
+    if not role_has_permission((current_user.role or "").strip().lower(), "assets", "read"):
         raise HTTPException(status_code=403, detail="Accès refusé : permission assets:read requise.")
     risk_result = await db.execute(select(Risk.id).where(Risk.id == risk_id))
     if risk_result.scalar_one_or_none() is None:
