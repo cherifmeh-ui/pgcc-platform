@@ -129,7 +129,7 @@ def test_docx_archive_rejects_suspicious_compression_ratio():
 
     buffer = io.BytesIO()
     with zipfile.ZipFile(buffer, "w", compression=zipfile.ZIP_DEFLATED) as archive:
-        archive.writestr("word/document.xml", "A" * 100_000)
+        archive.writestr("word/document.xml", "A" * 2_000_000)
     with pytest.raises(ValueError, match="Ratio de compression"):
         document_extractor._validate_docx_archive(buffer.getvalue())
 
