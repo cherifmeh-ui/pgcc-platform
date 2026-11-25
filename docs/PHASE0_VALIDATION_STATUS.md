@@ -766,3 +766,12 @@ Repository/static hardening is substantially progressed, but the remaining gates
 - Frontend: npm ci and npm run build succeeded.
 - This run includes the latest auth transaction additions, password-change/MFA enrollment audit tests and the RBAC test-data correction.
 - Warnings remain for review; CI success is not equivalent to a production security sign-off.
+
+## Follow-up after green CI — warning cleanup and browser auth gate — 2026-11-25
+
+- Workflow 45568463812 was fully green before this follow-up: backend 297 passed/13 skipped; PostgreSQL 13 passed; frontend build passed.
+- The backend warning trace identified an unawaited AsyncMock from `session.add` in the initial-MFA enrollment unit test. The mock now models SQLAlchemy's synchronous `AsyncSession.add` as a MagicMock and `flush` as AsyncMock.
+- The PostgreSQL SAWarning came from ORM-deleting child chunks and then the parent while the FK also uses ON DELETE CASCADE. Document deletion now bulk-deletes child chunks before deleting the parent.
+- Added root pytest.ini to make asyncio fixture loop scope explicit.
+- These warning fixes are committed after workflow 45568463812 and await a fresh CI run; do not count them as validated yet.
+- The frontend review confirmed refresh and access tokens are persisted in localStorage. GitHub issue #4 tracks the required coordinated HttpOnly-cookie/CSRF/CORS migration. This remains a Phase 0 security blocker.
