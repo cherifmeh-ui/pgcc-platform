@@ -95,7 +95,7 @@ def _set_refresh_cookie(response: Response, token: str) -> None:
         value=token,
         max_age=settings.REFRESH_TOKEN_EXPIRE_DAYS * 24 * 60 * 60,
         httponly=True,
-        secure=settings.ENVIRONMENT.lower() == "production",
+        secure=settings.ENVIRONMENT.lower() != "development",
         samesite="strict",
         path=REFRESH_COOKIE_PATH,
     )
