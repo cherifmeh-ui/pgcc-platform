@@ -1029,3 +1029,12 @@ Repository/static hardening is substantially progressed, but the remaining gates
 - PostgreSQL : **35 tests d'intégration réussis**, dont le nouveau test vérifiant qu'une autorisation fournisseur approuvée empêche le retrait de l'actif et laisse son état inchangé.
 - Frontend et Docker Compose smoke : réussis.
 - La restauration PostgreSQL automatisée a réussi ; durée mesurée dans ce run : 0 seconde. Ce test ne remplace pas une répétition de restauration opérationnelle sur sauvegarde réelle avec contrôle RPO/RTO.
+
+
+## Revue complémentaire — sécurité des archives DOCX (2026-11-25)
+
+- Renforcement des tests de sécurité de l'extracteur DOCX : rejet d'une archive ZIP invalide, d'une archive sans `word/document.xml`, d'un nombre excessif d'entrées, d'un volume décompressé dépassant la limite et d'un ratio de compression suspect.
+- Les contrôles correspondants existent dans `backend/app/services/document_extractor.py` ; les nouveaux cas sont couverts dans `backend/tests/test_document_extractor_security.py`.
+- La limite de taille upload reste de 10 Mio ; l'extension et la signature PDF/DOCX sont vérifiées avant extraction. La signature ZIP `PK` seule n'est pas considérée comme une validation suffisante : la structure DOCX est ensuite contrôlée.
+- Limites non levées : aucun antivirus/quarantaine ni sandbox d'analyse de fichiers n'est intégré ; les ACL restent basées sur le rôle et le type documentaire, sans séparation par département/propriétaire ; l'indexation RAG est présente mais aucune récupération de chunks n'est implémentée. Toute future route de recherche RAG devra appliquer l'ACL dans la requête de récupération, pas après l'extraction des résultats.
+- Validation CI de ces nouveaux tests en attente sur le HEAD courant ; ne pas déclarer cette étape validée avant le résultat du workflow.
