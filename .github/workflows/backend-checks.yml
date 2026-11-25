@@ -153,7 +153,7 @@ jobs:
 
   compose-smoke:
     runs-on: ubuntu-latest
-    timeout-minutes: 15
+    timeout-minutes: 25
     steps:
       - name: Checkout
         uses: actions/checkout@v4
@@ -197,6 +197,46 @@ jobs:
             sleep 2
           done
           test "$status" = "401"
+      - name: Start ClamAV and wait for fresh signature database
+        shell: bash
+        run: |
+          docker compose --profile antivirus up -d clamav
+          for attempt in {1..300}; do
+            health=$(docker inspect --format='{{.State.Health.Status}}' pgcc_clamav 2>/dev/null || true)
+            if [ "$health" = "healthy" ]; then
+              exit 0
+            fi
+            if [ "$health" = "unhealthy" ]; then
+              docker compose logs clamav
+              exit 1
+            fi
+            sleep 5
+          done
+          docker compose logs clamav
+          echo "ClamAV n'est pas devenu opérationnel dans le délai imparti."
+          exit 1
+      - name: Verify real ClamAV clean and EICAR verdicts
+        shell: bash
+        run: |
+          docker compose exec -T backend python - <<'PY'
+          import asyncio
+          from app.services.antivirus import scan_document_bytes, MalwareDetected
+
+          async def main():
+              await scan_document_bytes(b"PGCC ClamAV clean integration fixture")
+              eicar = (
+                  b"X5O!P%@AP[4\\PZX54(P^)7CC)7}$"
+                  b"EICAR-STANDARD-ANTIVIRUS-TEST-FILE!$H+H*"
+              )
+              try:
+                  await scan_document_bytes(eicar)
+              except MalwareDetected:
+                  print("ClamAV : fichier propre accepté, signature EICAR détectée.")
+                  return
+              raise AssertionError("ClamAV n'a pas détecté le fichier de test EICAR.")
+
+          asyncio.run(main())
+          PY
       - name: Show stack logs on failure
         if: failure()
         run: docker compose logs
