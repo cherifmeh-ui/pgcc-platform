@@ -883,7 +883,7 @@ async def link_supplier_asset(
             status_code=409,
             detail="Impossible de créer une relation actif avec un fournisseur suspendu ou terminé.",
         )
-    asset_result = await db.execute(select(Asset).where(Asset.id == data.asset_id))
+    asset_result = await db.execute(select(Asset).where(Asset.id == data.asset_id).with_for_update())
     asset = asset_result.scalar_one_or_none()
     if asset is None:
         raise HTTPException(status_code=404, detail="Actif introuvable")
