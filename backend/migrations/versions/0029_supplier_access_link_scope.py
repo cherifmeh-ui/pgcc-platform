@@ -92,7 +92,7 @@ def downgrade() -> None:
         for item in foreign_keys
     ):
         op.create_foreign_key(
-            "fk_supplier_access_requests_supplier_asset_link_id_supplier_asset_links",
+            "supplier_access_requests_supplier_asset_link_id_fkey",
             "supplier_access_requests",
             "supplier_asset_links",
             ["supplier_asset_link_id"],
