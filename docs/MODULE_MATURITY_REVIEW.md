@@ -686,3 +686,11 @@ Status: targeted code review recorded; additional runtime/API tests remain requi
 - Les placeholders JWT et HMAC du rate limiter sont maintenant refusés hors développement. Les dépassements de seuil produisent un événement de journal structuré sans IP, compte ni clé HMAC ; les seuils et le fonctionnement sont documentés dans `docs/AUTH_RATE_LIMIT_OPERATIONS.md`.
 - Workflow `45855717102` sur le HEAD `d52d5e637874671a9044adf903ca14fe953f566d` : **4/4 jobs réussis**. Backend, PostgreSQL, frontend et Compose sont verts ; le job Compose a aussi validé le profil de production, le build frontend et `nginx -t` avec certificat de test.
 - Restent obligatoires : recette de déploiement réel, validation pare-feu/DNS/certificats, supervision et alertes, calibration des seuils, sauvegarde chiffrée/WAL, exercice de restauration RPO/RTO et revue humaine.
+
+
+### Intégrité documentaire avant contexte IA — 26 novembre 2026
+
+- Le filtre central `readable_context_documents` applique maintenant deux contrôles avant toute insertion de contenu dans le prompt : ACL documentaire existante et validation SHA-256 du binaire stocké.
+- Un document dont le binaire manque, dont le condensat manque ou dont le binaire ne correspond plus au condensat est exclu du contexte IA, y compris pour les rôles privilégiés. Cette mesure évite de traiter un contenu documentaire altéré comme une source fiable.
+- Tests ajoutés dans `backend/tests/test_ai_advanced_document_acl.py` : intégrité valide, binaire modifié et condensat absent ; les cas de classification et la limite de trois sources sont conservés.
+- Validation CI de ce dernier changement en attente au moment de cette note. Vérifier aussi le comportement sur les documents historiques avant déploiement ; les documents sans binaire/condensat seront exclus du contexte jusqu'à régularisation contrôlée.
