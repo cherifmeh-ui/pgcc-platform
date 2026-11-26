@@ -5,7 +5,7 @@ Statut : procédure de validation CI et aide opératoire ; ne remplace pas le pl
 ## Objectifs
 
 1. Vérifier le chemin de mise à niveau depuis la dernière révision historique supportée avant les nouvelles migrations Phase 0.
-2. Vérifier le downgrade/upgrade de la migration de limitation d'authentification, qui ne contient que des compteurs temporaires.
+2. Vérifier le downgrade global de la tête courante vers 0025_user_auth_version, puis la remise à niveau jusqu'à la dernière révision ; ce parcours couvre aussi les migrations documentaires, fournisseur et risques.
 3. Vérifier qu'un dump PostgreSQL complet peut être restauré dans une base neuve et que le numéro Alembic ainsi qu'une donnée témoin sont conservés.
 
 ## Contrôle de la migration initiale
@@ -19,10 +19,11 @@ Le job PostgreSQL doit :
 - appliquer `alembic upgrade head` sur une base vide ;
 - créer une base séparée et exécuter `alembic upgrade 0024_audit_outbox`, puis `alembic upgrade head` ;
 - vérifier `alembic downgrade 0025_user_auth_version`, puis `alembic upgrade head` ;
+- vérifier les précontrôles de cohérence des migrations 0029_supplier_access_link_scope et 0030_risk_integrity_constraints ;
 - insérer une ligne témoin non sensible dans `auth_rate_limit_buckets` ;
 - créer un dump au format custom avec `pg_dump -Fc` ;
 - restaurer avec `pg_restore --exit-on-error --no-owner --no-privileges` dans une base neuve ;
-- vérifier la révision `0026_auth_rate_limit_buckets` et la présence de la ligne témoin.
+- vérifier la révision 0030_risk_integrity_constraints et la présence de la ligne témoin.
 
 Le job journalise la durée de restauration. Cette validation prouve la procédure sur le PostgreSQL éphémère de CI ; elle ne prouve pas la restauration des sauvegardes de production, les permissions de stockage, le chiffrement, la rétention ni les RPO/RTO de l'entreprise.
 
@@ -61,3 +62,12 @@ La Phase 0 ne peut pas considérer la récupération comme validée sur la seule
 - Dump custom et restauration dans une base neuve réussis ; la révision `0026_auth_rate_limit_buckets` et la donnée témoin sont présentes.
 - Durée observée de restauration CI : 0 seconde à la précision de la mesure. Cette valeur ne doit pas être extrapolée à une base de production.
 - La répétition sur une sauvegarde chiffrée réelle et la mesure RPO/RTO restent obligatoires.
+
+
+## Validation étendue — migrations 0029 et 0030 — 26 novembre 2026
+
+- 0029_supplier_access_link_scope ajoute une clé étrangère composite pour garantir que chaque demande d'accès fournisseur référence le même fournisseur et le même actif que son lien. Les lignes historiques incohérentes bloquent la migration avec un diagnostic.
+- 0030_risk_integrity_constraints impose les bornes impact/vraisemblance 1–5, la cohérence score = impact × vraisemblance, une référence non vide et l'unicité de la référence sans distinction de casse ni espaces périphériques. Les données historiques incohérentes bloquent la migration ; aucune correction automatique n'est faite.
+- Workflow 45883850756, HEAD 5ec9173335eb4c9292002436bfd73669c32dfe02 : 4/4 jobs réussis. Le job PostgreSQL a validé alembic upgrade head, alembic check, upgrade historique depuis 0024, downgrade vers 0025 puis upgrade head, sauvegarde/restauration et 40 tests PostgreSQL réussis.
+- Durée observée de restauration CI : 0 seconde à la précision de la mesure. Ne pas extrapoler à une base de production.
+- Le parcours de CI ne remplace toujours pas une restauration d'une sauvegarde chiffrée réelle avec archivage WAL et RPO/RTO approuvés.
