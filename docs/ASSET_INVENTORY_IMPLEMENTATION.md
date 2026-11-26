@@ -130,14 +130,14 @@ Tests unitaires ajoutés : chaîne de dépendances, actif non lié, chemins mult
 
 ## Import CSV contrôlé
 
-- `POST /assets/import/preview` valide un CSV UTF-8, limité à 1 Mo, sans écrire en base.
-- Colonnes autorisées : champs du modèle de création d'actif; les colonnes inconnues sont rejetées.
-- Validation Pydantic des lignes, détection des doublons dans le fichier et dans l'inventaire existant (référence, hostname, numéro de série, insensible à la casse).
+- `POST /assets/import/preview` valide un CSV UTF-8, limité à 1 Mio et 5 000 lignes de données, sans écrire en base.
+- Colonnes autorisées : champs du modèle de création d'actif ; en-têtes vides ou dupliqués, colonnes inconnues et lignes avec cellules supplémentaires sont rejetés.
+- Validation Pydantic des lignes, détection des doublons dans le fichier et dans l'inventaire existant (référence, hostname, numéro de série, insensible à la casse). Les identifiants d'applications sont validés en une requête groupée, sans requête par ligne.
 - Prévisualisation des 20 premières lignes et liste des erreurs par numéro de ligne.
 - `POST /assets/import/confirm` relit et revalide le fichier, puis effectue l'insertion en transaction. Toute contrainte ou erreur annule l'ensemble; aucun actif existant n'est écrasé.
 - Permission requise : `assets:create`; l'import réussi est journalisé.
 - Interface : sélection du CSV, prévalidation, erreurs, aperçu, confirmation explicite et rafraîchissement de l'inventaire.
-- Tests ajoutés pour les doublons et colonnes inconnues.
+- Tests : doublons, colonnes inconnues, taille supérieure à 1 Mio, dépassement de 5 000 lignes, en-têtes dupliqués, cellules supplémentaires et validation groupée des applications.
 
 - Endpoint `GET /assets/import/template` et bouton de téléchargement du modèle CSV avec un exemple de ligne.
 
