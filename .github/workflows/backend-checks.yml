@@ -203,10 +203,14 @@ jobs:
             fi
             sleep 1
           done
-          tls_response=$(docker exec pgcc-production-frontend-smoke sh -c "printf 'GET / HTTP/1.0\\r\\nHost: localhost\\r\\n\\r\\n' | openssl s_client -connect 127.0.0.1:8443 -quiet -servername localhost 2>/dev/null")
-          echo "$tls_response" | grep -q "HTTP/1.1 200 OK"
-          echo "$tls_response" | grep -qi "^Strict-Transport-Security:"
-          echo "$tls_response" | grep -q "<div id=\"app\">"
+          container_ip=$(docker inspect pgcc-production-frontend-smoke --format '{{range .NetworkSettings.Networks}}{{.IPAddress}}{{end}}')
+          test -n "$container_ip"
+          curl --insecure --fail --silent --show-error "https://$container_ip:8443/" -o /tmp/pgcc-production-index.html
+          test -s /tmp/pgcc-production-index.html
+          grep -q '<div id="app">' /tmp/pgcc-production-index.html
+          curl --insecure --silent --head "https://$container_ip:8443/" | grep -qi "^Strict-Transport-Security:"
+          redirect_status=$(curl --silent --output /dev/null --write-out "%{http_code}" "http://$container_ip:8080/")
+          test "$redirect_status" = "308"
       - name: Build backend image
         run: docker compose build backend
       - name: Start complete development stack
