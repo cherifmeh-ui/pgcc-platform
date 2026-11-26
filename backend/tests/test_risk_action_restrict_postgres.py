@@ -13,6 +13,7 @@ from app.models.iso_control import IsoControl  # register ActionItem foreign-key
 from app.models.iso_control_assessment import IsoControlAssessment  # register ActionItem foreign-key target
 from app.models.action_item import ActionItem
 from app.models.risk import Risk
+from app.models.user import User  # register user foreign-key targets
 
 DATABASE_URL = os.getenv("PGCC_INTEGRATION_DATABASE_URL")
 
