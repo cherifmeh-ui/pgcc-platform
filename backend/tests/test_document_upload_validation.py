@@ -75,6 +75,11 @@ async def test_upload_rejects_pdf_extension_with_non_pdf_signature():
 async def test_upload_rejects_docx_with_zip_magic_but_invalid_archive(monkeypatch):
     db = AsyncMock()
     monkeypatch.setattr("app.api.v1.endpoints.documents.scan_document_bytes", AsyncMock())
+    from app.services.isolated_parser_client import ParserRejected
+    monkeypatch.setattr(
+        "app.api.v1.endpoints.documents.extract_document_text",
+        AsyncMock(side_effect=ParserRejected("Échec de l'extraction du document.")),
+    )
     with pytest.raises(HTTPException) as error:
         await upload_document(
             request=MagicMock(),
@@ -138,14 +143,14 @@ async def test_upload_rejects_malware_before_extraction_or_database(monkeypatch)
     from app.services.antivirus import MalwareDetected
 
     db = AsyncMock()
-    extractor = MagicMock()
+    parser_client = AsyncMock()
     monkeypatch.setattr(
         "app.api.v1.endpoints.documents.scan_document_bytes",
         AsyncMock(side_effect=MalwareDetected("Eicar")),
     )
     monkeypatch.setattr(
-        "app.api.v1.endpoints.documents.DocumentExtractor.extract_text",
-        extractor,
+        "app.api.v1.endpoints.documents.extract_document_text",
+        parser_client,
     )
     with pytest.raises(HTTPException) as error:
         await upload_document(
@@ -159,5 +164,5 @@ async def test_upload_rejects_malware_before_extraction_or_database(monkeypatch)
             current_user=MagicMock(email="upload-test@example.invalid"),
         )
     assert error.value.status_code == 422
-    extractor.assert_not_called()
+    parser_client.assert_not_awaited()
     db.execute.assert_not_awaited()
