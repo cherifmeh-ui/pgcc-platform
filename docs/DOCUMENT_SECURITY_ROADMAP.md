@@ -93,3 +93,8 @@ La Phase 0 demeure ouverte jusqu'à la validation des tests, de l'isolation et d
 - Le parseur PDF/DOCX reste dans le processus API. Aucun service parser distinct n'existe encore dans `docker-compose.yaml`. Les contrôles de taille et d'archive ne sont pas une sandbox.
 - Aucun endpoint de recherche vectorielle RAG n'est actuellement identifié dans le service ; ne pas exposer de récupération top-k sans appliquer les ACL dans la requête SQL avant le classement.
 - Prochaine décision : isoler le parsing derrière un protocole interne authentifié/contrôlé, avec taille de requête et réponse bornées, image non-root, filesystem en lecture seule, réseau sans egress, absence d'accès DB/secret/ClamAV, limites CPU/mémoire/PID/temps, timeout et échec fermé. Couvrir le contrat et les pannes en tests unitaires puis en intégration Compose.
+
+
+## Parser isolé — première implémentation
+
+Le chemin d'upload appelle désormais un service de parsing distinct après ClamAV. Le service n'a qu'un réseau Docker interne, sans accès à PostgreSQL ni à Internet, fonctionne en non-root et sous limites CPU/RAM/PID, avec filesystem en lecture seule. Le backend valide la réponse et échoue fermé si le service est absent. L'intégration Compose doit encore confirmer ce nouveau chemin avant toute déclaration de validation.
