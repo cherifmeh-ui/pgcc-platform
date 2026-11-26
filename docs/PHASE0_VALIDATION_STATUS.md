@@ -1218,3 +1218,14 @@ Cette section remplace les anciens états intermédiaires datés du 21 novembre 
 - Les compteurs d'échecs de connexion/MFA et leur audit outbox sont maintenant validés ensemble dans la même transaction ; une défaillance de l'audit entraîne un rollback.
 - Tests unitaires ciblés ajoutés pour ces cas, dont les scénarios de rollback.
 - Le workflow de validation sur le HEAD de code `90392af` est lancé ; ne pas considérer les nouveaux tests comme validés avant son résultat final.
+
+
+## Validation CI — jetons de parcours et concurrence des codes de récupération MFA — 26 novembre 2026
+
+- HEAD de code : `deb6ef52480e21672aa95a5981da040ef96cb8e4`.
+- Workflow `45852812889` : **4/4 jobs réussis**.
+- Backend et frontend : réussis.
+- PostgreSQL : **38 tests réussis**, y compris le test concurrent de consommation unique des codes de récupération MFA.
+- Docker Compose : stack complète, extraction DOCX via le parseur isolé, séparation réseau, authentification du parseur, refus fermé en cas de panne et contrôles antivirus ClamAV sain/EICAR réussis.
+- Migrations, contrôle de dérive du schéma et restauration PostgreSQL CI réussis.
+- La Phase 0 reste ouverte pour les validations opérationnelles de sauvegarde chiffrée/WAL et RPO/RTO, la configuration réelle du proxy et les seuils/alertes de limitation, la revue humaine et l'acceptation des risques résiduels.
