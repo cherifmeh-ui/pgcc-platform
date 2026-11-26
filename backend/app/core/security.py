@@ -114,16 +114,17 @@ def create_refresh_token(
     )
 
 
-def create_pre_auth_token(subject, role: str) -> str:
+def create_pre_auth_token(subject, role: str, auth_version: int = 0) -> str:
     return _create_token(
-        subject, "pre_auth", settings.PRE_AUTH_TOKEN_EXPIRE_MINUTES, {"role": role}
+        subject, "pre_auth", settings.PRE_AUTH_TOKEN_EXPIRE_MINUTES,
+        {"role": role.strip().lower(), "auth_version": int(auth_version)},
     )
 
 
-def create_change_password_token(subject, role: str) -> str:
+def create_change_password_token(subject, role: str, auth_version: int = 0) -> str:
     return _create_token(
         subject, "change_password", settings.CHANGE_PASSWORD_TOKEN_EXPIRE_MINUTES,
-        {"role": role},
+        {"role": role.strip().lower(), "auth_version": int(auth_version)},
     )
 
 
