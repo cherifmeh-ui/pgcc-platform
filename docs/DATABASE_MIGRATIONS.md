@@ -46,3 +46,11 @@ The baseline still uses `Base.metadata.create_all()` for its frozen ten-table se
 ## pgvector initialization
 
 The initial schema uses the PostgreSQL `vector` type for document embeddings. The baseline migration and development startup now execute `CREATE EXTENSION IF NOT EXISTS vector` before creating metadata tables. The database image must include pgvector, and the database role must have permission to create the extension (or it must be provisioned by an administrator). Verify this in the disposable PostgreSQL migration run.
+
+
+## Contraintes d'intégrité ajoutées — révisions 0029 et 0030
+
+- 0029_supplier_access_link_scope lie par contrainte composite la demande d'accès au fournisseur et à l'actif portés par le lien.
+- 0030_risk_integrity_constraints verrouille au niveau base la matrice de calcul du risque (impact et vraisemblance de 1 à 5, score égal au produit), les références non vides et leur unicité normalisée.
+- Les deux migrations effectuent un contrôle préalable des données historiques et interrompent l'upgrade en présence d'incohérences. Les données doivent être analysées et corrigées de manière contrôlée avant nouvelle tentative.
+- La CI valide l'upgrade depuis une base neuve, la mise à niveau depuis 0024_audit_outbox, le downgrade jusqu'à 0025_user_auth_version, la remise à niveau vers 0030, le contrôle de dérive et le dump/restore.
