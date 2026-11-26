@@ -1260,3 +1260,12 @@ Cette section remplace les anciens états intermédiaires datés du 21 novembre 
 - Tests unitaires : portée SQL des lecteurs, refus des rôles non autorisés, intégrité binaire altérée ou empreinte absente, classifications et plafond de trois sources.
 - Workflow `45882921445` sur le HEAD `a6753c81dbdf1cb4b3c2fb4b8f24cef9dbb70a10` : **4/4 jobs réussis** (Backend, PostgreSQL, Frontend, Compose). Le job PostgreSQL valide le nouveau schéma, la migration historique, le downgrade/upgrade, la sauvegarde/restauration et **38 tests PostgreSQL réussis**. Le job Compose valide le profil de production, le frontend TLS, le backend, le parseur isolé, l'authentification du parseur, le mode fermé en cas d'indisponibilité et les verdicts ClamAV propre/EICAR.
 - Cette validation est automatisée sur CI. Elle ne remplace pas une recette de production avec vrais secrets/certificats, une revue réseau/pare-feu, une sauvegarde chiffrée avec WAL, un exercice de restauration RPO/RTO en environnement cible et la revue humaine finale.
+
+
+### Intégrité du score de risque et cohérence des références — 26 novembre 2026
+
+- Migration 0030_risk_integrity_constraints ajoutée : contraintes PostgreSQL sur les bornes impact/vraisemblance, la formule du score, les références non vides et l'unicité insensible à la casse.
+- Le précontrôle refuse les scores historiques incohérents, les références vides et les doublons normalisés ; aucune correction automatique.
+- Test PostgreSQL dédié ajouté et explicitement intégré à la commande CI, avec le test de cohérence fournisseur-actif 0029.
+- Workflow 45883850756 sur le HEAD exact 5ec9173335eb4c9292002436bfd73669c32dfe02 : 4/4 jobs réussis. Backend, PostgreSQL, Frontend et Compose sont verts ; PostgreSQL : 40 tests réussis, migrations, contrôle de dérive, downgrade/upgrade et sauvegarde/restauration validés.
+- La Phase 0 reste ouverte : recette de production avec vrais secrets/certificats, revue réseau et proxy, supervision/alertes, sauvegarde chiffrée/WAL et exercice RPO/RTO en environnement cible, revue humaine et acceptation des risques résiduels.
