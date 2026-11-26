@@ -31,8 +31,8 @@ def test_viewer_context_excludes_restricted_documents_before_prompt():
 def test_auditor_context_can_include_restricted_documents():
     auditor = MagicMock(role="auditor")
     documents = [
-        MagicMock(id="1", doc_type="CONTRAT"),
-        MagicMock(id="2", doc_type="AUDIT_REPORT"),
+        _document("1", "CONTRAT"),
+        _document("2", "AUDIT_REPORT"),
     ]
 
     visible = readable_context_documents(auditor, documents)
