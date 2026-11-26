@@ -59,6 +59,9 @@ async def extract_document(
     except asyncio.TimeoutError as exc:
         task.add_done_callback(lambda _task: _PARSE_SLOTS.release())
         raise HTTPException(status_code=408, detail="Document parsing timed out") from exc
+    except asyncio.CancelledError:
+        task.add_done_callback(lambda _task: _PARSE_SLOTS.release())
+        raise
     except ValueError as exc:
         _PARSE_SLOTS.release()
         raise HTTPException(status_code=400, detail=str(exc)) from exc
