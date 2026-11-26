@@ -138,7 +138,7 @@ jobs:
           echo "PostgreSQL restore duration: $((ended_at - started_at)) seconds"
           restored_version=$(docker exec "$postgres_container" psql -U pgcc_test -d pgcc_restore_test -Atc "SELECT version_num FROM alembic_version")
           restored_fixture=$(docker exec "$postgres_container" psql -U pgcc_test -d pgcc_restore_test -Atc "SELECT count(*) FROM auth_rate_limit_buckets WHERE bucket_key = 'phase0-recovery-fixture'")
-          test "$restored_version" = "0028_document_acl"
+          test "$restored_version" = "0029_supplier_access_link_scope"
           test "$restored_fixture" = "1"
           docker exec "$postgres_container" dropdb -U pgcc_test pgcc_legacy_test
           docker exec "$postgres_container" dropdb -U pgcc_test pgcc_restore_test
