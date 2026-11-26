@@ -18,8 +18,8 @@ from app.core.database import get_db
 from app.models.document import Document
 from app.models.document_chunk import DocumentChunk
 from app.models.iso_control_evidence import IsoControlEvidence
-from app.services.document_extractor import DocumentExtractor
 from app.services.antivirus import scan_document_bytes, AntivirusUnavailable, MalwareDetected
+from app.services.isolated_parser_client import extract_document_text, ParserUnavailable, ParserRejected
 from app.models.user import User
 from app.services.security_logger import enqueue_audit_event
 
@@ -138,9 +138,11 @@ async def upload_document(
         raise HTTPException(status_code=503, detail="Analyse antivirus indisponible ; dépôt refusé par sécurité.") from exc
 
     try:
-        extracted_text, detected_format = DocumentExtractor.extract_text(contents, safe_filename)
-    except ValueError as ve:
-        raise HTTPException(status_code=400, detail=str(ve))
+        extracted_text, detected_format = await extract_document_text(contents, safe_filename)
+    except ParserRejected as exc:
+        raise HTTPException(status_code=400, detail=str(exc)) from exc
+    except ParserUnavailable as exc:
+        raise HTTPException(status_code=503, detail="Service d'extraction indisponible ; dépôt refusé par sécurité.") from exc
 
     size_kb = int((len(contents) + 1023) / 1024)
     existing_q = await db.execute(
