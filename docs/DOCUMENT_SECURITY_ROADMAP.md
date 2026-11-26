@@ -77,3 +77,9 @@ Cette section prévaut sur les constats historiques ci-dessus lorsqu'ils sont co
 5. Achever la revue des permissions et des frontières transactionnelles d'audit, puis faire accepter formellement les risques résiduels.
 
 La Phase 0 demeure ouverte jusqu'à la validation des tests, de l'isolation et des contrôles opérationnels, puis la revue humaine finale.
+
+## Contrôle des dépendances critiques — 26 novembre 2026
+
+- Le chargement du service RAG dans le endpoint documentaire est désormais obligatoire. L'ancien repli `except ImportError: rag_service = None` masquait une dépendance manquante et désactivait silencieusement l'indexation ; une erreur d'import doit maintenant empêcher le démarrage et déclencher une correction de déploiement.
+- Commit de correction : `f4197d8`. Le workflow GitHub Actions associé est en attente au moment de cette note ; cette modification n'est pas encore déclarée validée.
+- Le parsing PDF/DOCX reste exécuté dans le processus API. Il ne faut pas présenter les limites applicatives actuelles comme une sandbox OS. La prochaine évolution doit isoler le parseur dans un service dédié sans accès à la base ni à Internet, avec limites de ressources et protocole strict.
