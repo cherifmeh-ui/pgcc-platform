@@ -21,9 +21,19 @@ Le backend fait confiance uniquement à l'adresse statique du proxy Nginx (172.3
 4. Utiliser un mot de passe PostgreSQL URL-encodé dans DATABASE_URL ; le mot de passe doit correspondre à POSTGRES_PASSWORD.
 5. Définir CORS_ORIGINS avec l'origine HTTPS exacte, sans joker.
 6. Conserver .env.production hors Git et limiter ses permissions au compte de déploiement.
-7. Installer le certificat TLS et la clé privée dans certs/fullchain.pem et certs/privkey.pem. Le dossier certs est monté en lecture seule dans le frontend.
+7. Installer le certificat TLS et la clé privée dans certs/fullchain.pem et certs/privkey.pem. Le dossier certs est monté en lecture seule dans le frontend. L'image nginx-unprivileged exécute Nginx avec l'UID/GID 101 : rendre la chaîne publique lisible et la clé privée accessible uniquement au groupe 101.
 
 Ne pas utiliser les valeurs d'exemple. Le backend refuse les placeholders et les paramètres de sécurité incomplets en environnement de production.
+
+Pour les permissions des certificats, exécuter en tant que root (adapter le chemin si nécessaire) :
+
+```bash
+chown root:101 certs/privkey.pem
+chmod 640 certs/privkey.pem
+chmod 644 certs/fullchain.pem
+```
+
+Ne pas rendre la clé privée lisible par tous (`0644`). Le contrôle CI valide Nginx avec une clé `root:101` en `0640`.
 
 ## Déploiement initial
 
