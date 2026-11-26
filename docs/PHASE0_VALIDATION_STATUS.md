@@ -1269,3 +1269,12 @@ Cette section remplace les anciens états intermédiaires datés du 21 novembre 
 - Test PostgreSQL dédié ajouté et explicitement intégré à la commande CI, avec le test de cohérence fournisseur-actif 0029.
 - Workflow 45883850756 sur le HEAD exact 5ec9173335eb4c9292002436bfd73669c32dfe02 : 4/4 jobs réussis. Backend, PostgreSQL, Frontend et Compose sont verts ; PostgreSQL : 40 tests réussis, migrations, contrôle de dérive, downgrade/upgrade et sauvegarde/restauration validés.
 - La Phase 0 reste ouverte : recette de production avec vrais secrets/certificats, revue réseau et proxy, supervision/alertes, sauvegarde chiffrée/WAL et exercice RPO/RTO en environnement cible, revue humaine et acceptation des risques résiduels.
+
+
+### Conservation des plans d'action et intégrité du registre des risques — 26 novembre 2026
+
+- Migration 0031_risk_action_restrict : le lien ActionItem.risk_id utilise désormais ON DELETE RESTRICT ; le cascade delete-orphan ORM est supprimé. Les actions correctives ne peuvent plus disparaître lors d'une suppression directe du risque.
+- La CI simule l'ancien schéma ON DELETE CASCADE, vérifie la migration vers RESTRICT, le downgrade/upgrade et la conservation des lignes. Un test PostgreSQL confirme que le risque et son action restent présents après une tentative de suppression refusée.
+- L'API de création des risques détecte les références normalisées en doublon et retourne HTTP 409 en cas de collision, y compris concurrente. Les mises à jour d'un risque verrouillent la ligne.
+- Workflow 45885458640 sur le HEAD exact daf4296aef817e7812d55e23cbc55d90547736eb : 4/4 jobs réussis (Backend, PostgreSQL, Frontend, Compose), 41 tests PostgreSQL réussis.
+- PR #1 reste ouverte, Draft et non fusionnée. La Phase 0 reste ouverte jusqu'à la recette de production avec vrais secrets/certificats, la validation réseau/pare-feu et supervision, la sauvegarde chiffrée/WAL et un exercice RPO/RTO en environnement cible, ainsi que la revue humaine et l'acceptation des risques résiduels.
