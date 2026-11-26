@@ -64,6 +64,8 @@ def test_non_development_settings_require_a_managed_mfa_key_ring():
         "CORS_ORIGINS": "https://pgcc.example",
         "AUTH_RATE_LIMIT_HMAC_KEY": "R" * 48,
         "CLAMAV_HOST": "clamav.internal",
+        "PARSER_BASE_URL": "http://parser.internal:8090",
+        "PARSER_SHARED_TOKEN": "P" * 48,
     }
     with pytest.raises(ValidationError, match="MFA_ENCRYPTION_KEYS"):
         Settings(**common)
