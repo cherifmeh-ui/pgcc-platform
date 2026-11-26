@@ -178,7 +178,7 @@ jobs:
           chmod 644 /tmp/pgcc-production-certs/privkey.pem
           image_id=$(docker compose -f docker-compose.production.yaml --env-file .env.production images -q frontend)
           test -n "$image_id"
-          docker run --rm -v /tmp/pgcc-production-certs:/etc/nginx/certs:ro "$image_id" nginx -t
+          docker run --rm -v /tmp/pgcc-production-certs:/etc/nginx/certs:ro --entrypoint nginx "$image_id" -t
       - name: Build backend image
         run: docker compose build backend
       - name: Start complete development stack
