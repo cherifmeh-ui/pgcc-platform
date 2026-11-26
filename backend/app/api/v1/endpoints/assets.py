@@ -301,8 +301,16 @@ async def preview_asset_csv_import(
     reader = csv.DictReader(io.StringIO(decoded))
     if not reader.fieldnames:
         raise HTTPException(status_code=400, detail="CSV vide ou en-tête manquant")
+    normalized_headers = [
+        name.strip() if isinstance(name, str) else ""
+        for name in reader.fieldnames
+    ]
+    if any(not name for name in normalized_headers):
+        raise HTTPException(status_code=422, detail="Le CSV contient un en-tête vide.")
+    if len(normalized_headers) != len(set(normalized_headers)):
+        raise HTTPException(status_code=422, detail="Le CSV contient des en-têtes dupliqués.")
     allowed = set(AssetFields.model_fields)
-    unknown = [name for name in reader.fieldnames if name and name.strip() not in allowed]
+    unknown = [name for name in normalized_headers if name not in allowed]
     if unknown:
         raise HTTPException(status_code=422, detail=f"Colonnes inconnues : {', '.join(unknown)}")
     rows = []
@@ -311,6 +319,13 @@ async def preview_asset_csv_import(
     parsed_row_count = 0
     seen_refs, seen_hostnames, seen_serials = set(), set(), set()
     for row_number, raw_row in enumerate(reader, start=2):
+        if None in raw_row:
+            errors.append({
+                "row": row_number,
+                "error": "Le nombre de colonnes dépasse celui de l'en-tête.",
+            })
+            invalid_row_numbers.add(row_number)
+            continue
         values = {key.strip(): (value.strip() if isinstance(value, str) else value) for key, value in raw_row.items() if key}
         if not any(values.values()):
             continue
