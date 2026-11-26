@@ -77,7 +77,7 @@ async def test_initial_mfa_enrollment_returns_backup_codes_for_forced_password_c
     db.add = MagicMock()
     db.flush = AsyncMock()
     db.execute.return_value = result
-    monkeypatch.setattr(auth_endpoint, "decode_token", lambda token, expected_type: {"sub": user.email})
+    monkeypatch.setattr(auth_endpoint, "decode_token", lambda token, expected_type: {"sub": user.email, "role": user.role, "auth_version": int(user.auth_version or 0)})
     monkeypatch.setattr(auth_endpoint, "verify_mfa", lambda secret, code: True)
     monkeypatch.setattr(auth_endpoint, "generate_backup_codes", lambda count: backup_codes)
     monkeypatch.setattr(auth_endpoint, "hash_backup_codes", lambda codes: ["hashed"] * len(codes))
@@ -115,7 +115,7 @@ async def test_password_change_audit_is_enqueued_before_commit(monkeypatch):
     db.commit.side_effect = lambda: order.append("commit")
     db.rollback.side_effect = lambda: order.append("rollback")
     issued_versions = []
-    monkeypatch.setattr(auth_endpoint, "decode_token", lambda token, expected_type: {"sub": user.email})
+    monkeypatch.setattr(auth_endpoint, "decode_token", lambda token, expected_type: {"sub": user.email, "role": user.role, "auth_version": int(user.auth_version or 0)})
     monkeypatch.setattr(auth_endpoint, "hash_password", lambda password: "new-hash")
     monkeypatch.setattr(auth_endpoint, "create_access_token", lambda **kwargs: issued_versions.append(kwargs["auth_version"]) or "access")
     monkeypatch.setattr(auth_endpoint, "create_refresh_token", lambda **kwargs: "refresh")
@@ -164,7 +164,7 @@ async def test_password_change_rolls_back_if_audit_enqueue_fails(monkeypatch):
     result.scalar_one_or_none.return_value = user
     db = AsyncMock()
     db.execute.return_value = result
-    monkeypatch.setattr(auth_endpoint, "decode_token", lambda token, expected_type: {"sub": user.email})
+    monkeypatch.setattr(auth_endpoint, "decode_token", lambda token, expected_type: {"sub": user.email, "role": user.role, "auth_version": int(user.auth_version or 0)})
     monkeypatch.setattr(auth_endpoint, "hash_password", lambda password: "new-hash")
     monkeypatch.setattr(auth_endpoint, "create_access_token", lambda **kwargs: "access")
     monkeypatch.setattr(auth_endpoint, "create_refresh_token", lambda **kwargs: "refresh")
