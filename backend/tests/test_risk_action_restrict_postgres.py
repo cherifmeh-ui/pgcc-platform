@@ -38,8 +38,9 @@ async def test_database_restricts_risk_deletion_while_actions_exist():
             db.add(risk)
             await db.commit()
             await db.refresh(risk)
+            risk_id = risk.id
             action = ActionItem(
-                risk_id=risk.id,
+                risk_id=risk_id,
                 title="Action must survive risk deletion attempt",
             )
             db.add(action)
@@ -47,18 +48,18 @@ async def test_database_restricts_risk_deletion_while_actions_exist():
             action_id = action.id
 
         async with sessions() as db:
-            persisted_risk = await db.get(Risk, risk.id)
+            persisted_risk = await db.get(Risk, risk_id)
             await db.delete(persisted_risk)
             with pytest.raises(IntegrityError):
                 await db.flush()
             await db.rollback()
 
         async with sessions() as db:
-            assert await db.scalar(select(func.count(Risk.id)).where(Risk.id == risk.id)) == 1
+            assert await db.scalar(select(func.count(Risk.id)).where(Risk.id == risk_id)) == 1
             assert await db.scalar(select(func.count(ActionItem.id)).where(ActionItem.id == action_id)) == 1
     finally:
         async with sessions() as db:
-            await db.execute(delete(ActionItem).where(ActionItem.risk_id == risk.id))
+            await db.execute(delete(ActionItem).where(ActionItem.risk_id == risk_id))
             await db.execute(delete(Risk).where(Risk.id == risk.id))
             await db.commit()
         await engine.dispose()
