@@ -161,3 +161,62 @@ async def test_stale_workflow_token_is_rejected_after_security_version_change(mo
     assert denied.value.status_code == 401
     db.commit.assert_not_awaited()
     db.rollback.assert_not_awaited()
+
+
+@pytest.mark.asyncio
+@pytest.mark.parametrize("flow", ["login", "mfa"])
+@pytest.mark.parametrize("audit_fails", [False, True])
+async def test_failed_authentication_state_and_audit_share_one_transaction(monkeypatch, flow, audit_fails):
+    from fastapi import HTTPException, Response
+
+    user = MagicMock(
+        id="user-failed-auth", email="failed-auth@example.test", role="viewer",
+        auth_version=0, is_active=True, is_locked=False, mfa_enabled=False,
+        mfa_secret="encrypted-placeholder", failed_login_attempts=0,
+        locked_until=None, backup_codes_hashed=None,
+    )
+    result = MagicMock()
+    result.scalar_one_or_none.return_value = user
+    order = []
+    db = AsyncMock()
+    db.execute.return_value = result
+    db.commit.side_effect = lambda: order.append("commit")
+
+    async def audit(*args, **kwargs):
+        order.append("audit")
+        if audit_fails:
+            raise RuntimeError("audit outbox unavailable")
+
+    monkeypatch.setattr(auth_endpoint, "enqueue_audit_event", audit)
+    monkeypatch.setattr(auth_endpoint, "enforce_auth_rate_limit", AsyncMock())
+    if flow == "login":
+        monkeypatch.setattr(auth_endpoint, "verify_password", lambda password, hashed: False)
+        invoke = lambda: auth_endpoint.login(
+            auth_endpoint.LoginRequest(email=user.email, password="wrong-password"),
+            request=MagicMock(), db=db,
+        )
+    else:
+        monkeypatch.setattr(auth_endpoint, "decode_token", lambda token, expected_type: {
+            "sub": user.email, "role": user.role, "auth_version": 0,
+        })
+        monkeypatch.setattr(auth_endpoint, "get_mfa_secret", lambda account: "test-secret")
+        monkeypatch.setattr(auth_endpoint, "verify_mfa", lambda secret, code: False)
+        invoke = lambda: auth_endpoint.confirm_mfa(
+            payload=auth_endpoint.ConfirmMfaRequest(
+                pre_auth_token="preauth", mfa_code="000000",
+            ),
+            request=MagicMock(), response=Response(), db=db,
+        )
+
+    if audit_fails:
+        with pytest.raises(RuntimeError, match="audit outbox unavailable"):
+            await invoke()
+        db.rollback.assert_awaited_once()
+        db.commit.assert_not_awaited()
+        assert order == ["audit"]
+    else:
+        with pytest.raises(HTTPException) as denied:
+            await invoke()
+        assert denied.value.status_code == 401
+        assert order == ["audit", "commit"]
+        db.rollback.assert_not_awaited()
