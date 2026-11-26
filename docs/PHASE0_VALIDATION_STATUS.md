@@ -1196,3 +1196,15 @@ Cette section remplace les anciens états intermédiaires datés du 21 novembre 
 - Les échecs du workflow précédent `45821688338` ont été corrigés : exigences parser avec vraies fins de ligne, tests upload et tests PostgreSQL utilisant le client parser, validations de configuration ordonnées sans masquer les erreurs antérieures.
 - Une étape CI complémentaire vérifiant l'authentification du parser et le refus fermé lorsque le service est arrêté a été ajoutée dans le commit `8469b16`. Son workflow est en attente ; ces deux contrôles ne sont donc pas encore validés.
 - La Phase 0 reste ouverte jusqu'à validation de ces contrôles, tests de surcharge/timeout, revue d'isolation indépendante et exercice de restauration opérationnelle.
+
+
+## Validation du durcissement du parseur — 26 novembre 2026
+
+- HEAD vérifié : `cf74f9bac0fdf00f4d3f4d16be2b1493e5e000cd`.
+- Correction de la normalisation du nom de fichier côté parseur : les séparateurs Windows et Unix sont neutralisés avant l'analyse de l'extension.
+- Le test Compose transmet désormais un chemin Windows simulé au client backend afin de couvrir ce cas de bout en bout.
+- Workflow `45840243321` : **4/4 jobs réussis** (backend, PostgreSQL, frontend et Docker Compose).
+- Le job Compose a réussi l'extraction DOCX réelle, la vérification que le parseur n'est présent que sur `parser_internal`, le refus d'une requête sans authentification, le refus fermé lorsque le parseur est arrêté, puis la reprise du service.
+- Le même job a démarré ClamAV avec une base de signatures à jour et validé les verdicts d'un fichier sain et du fichier de test EICAR.
+- Cette validation couvre le chemin d'intégration et les contrôles CI définis ; elle ne remplace pas une revue indépendante du parseur, des essais de charge/épuisement des ressources ni un exercice de restauration complet.
+- PR #1 toujours ouverte, Draft et non fusionnée. La Phase 0 reste ouverte.
