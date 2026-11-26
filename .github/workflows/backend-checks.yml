@@ -181,10 +181,11 @@ jobs:
             -keyout /tmp/pgcc-production-certs/privkey.pem \
             -out /tmp/pgcc-production-certs/fullchain.pem \
             -subj "/CN=localhost"
-          chown 0:101 /tmp/pgcc-production-certs/privkey.pem
-          chmod 640 /tmp/pgcc-production-certs/privkey.pem
           image_id=$(docker image inspect pgcc-platform-frontend:latest --format "{{.Id}}")
           test -n "$image_id"
+          # Use the image's root context to set the bind-mounted key group safely.
+          docker run --rm --user 0:0 -v /tmp/pgcc-production-certs:/certs:rw --entrypoint /bin/sh "$image_id" -c "chown 0:101 /certs/privkey.pem && chmod 640 /certs/privkey.pem"
+          test "$(stat -c '%a:%u:%g' /tmp/pgcc-production-certs/privkey.pem)" = "640:0:101"
           docker run --rm -v /tmp/pgcc-production-certs:/etc/nginx/certs:ro --entrypoint /bin/sh "$image_id" -c "id; ls -la /etc/nginx/certs; nginx -t"
       - name: Test production frontend on an isolated published network
         shell: bash
