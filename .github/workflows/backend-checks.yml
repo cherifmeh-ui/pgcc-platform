@@ -198,12 +198,16 @@ jobs:
             --tmpfs /var/cache/nginx:rw,noexec,nosuid,size=32m \
             --cap-drop ALL --security-opt no-new-privileges:true \
             "$image_id"
-          for attempt in {1..30}; do
-            if curl --insecure --fail --silent https://127.0.0.1:18443/ -o /tmp/pgcc-production-index.html; then
+          for attempt in {1..10}; do
+            if curl --insecure --fail --silent --show-error https://127.0.0.1:18443/ -o /tmp/pgcc-production-index.html; then
               break
             fi
-            if [ "$attempt" -eq 30 ]; then
+            if [ "$attempt" -eq 10 ]; then
+              echo "Le frontend ne répond pas sur le port TLS publié."
+              docker inspect pgcc-production-frontend-smoke --format '{{json .NetworkSettings.Ports}}'
+              docker port pgcc-production-frontend-smoke || true
               docker logs pgcc-production-frontend-smoke
+              curl --insecure --verbose --max-time 5 https://127.0.0.1:18443/ || true
               exit 1
             fi
             sleep 1
