@@ -136,6 +136,15 @@ def test_non_development_configuration_requires_dedicated_rate_limit_key():
     configured = Settings(**base, AUTH_RATE_LIMIT_HMAC_KEY="r" * 48)
     assert configured.auth_rate_limit_hmac_key == "r" * 48
 
+    with pytest.raises(ValueError, match="AUTH_RATE_LIMIT_HMAC_KEY placeholder"):
+        Settings(**base, AUTH_RATE_LIMIT_HMAC_KEY="CHANGE_ME" + "r" * 48)
+
+    with pytest.raises(ValueError, match="JWT_SECRET placeholder"):
+        Settings(
+            **{**base, "JWT_SECRET": "CHANGE_ME" + "s" * 48},
+            AUTH_RATE_LIMIT_HMAC_KEY="r" * 48,
+        )
+
 
 def test_all_trusted_forwarded_hops_fall_back_to_immediate_peer(monkeypatch):
     monkeypatch.setattr(settings, "AUTH_TRUSTED_PROXY_IPS", "10.0.0.0/24")
