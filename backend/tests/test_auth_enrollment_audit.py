@@ -9,7 +9,7 @@ from app.services.mfa_encryption import MFA_SECRET_PREFIX, get_mfa_secret
 async def test_enrollment_audit_precedes_commit(monkeypatch):
     monkeypatch.setattr(auth_endpoint, "enforce_auth_rate_limit", AsyncMock())
     user = MagicMock(
-        id="user-123", email="enrollment@example.test", mfa_enabled=False,
+        id="user-123", email="enrollment@example.test", role="viewer", auth_version=0, mfa_enabled=False,
         is_active=True, mfa_secret=None,
     )
     result = MagicMock()
@@ -41,7 +41,7 @@ async def test_enrollment_audit_precedes_commit(monkeypatch):
 async def test_enrollment_rolls_back_when_audit_fails(monkeypatch):
     monkeypatch.setattr(auth_endpoint, "enforce_auth_rate_limit", AsyncMock())
     user = MagicMock(
-        id="user-456", email="enrollment-failure@example.test", mfa_enabled=False,
+        id="user-456", email="enrollment-failure@example.test", role="viewer", auth_version=0, mfa_enabled=False,
         is_active=True, mfa_secret=None,
     )
     result = MagicMock()
