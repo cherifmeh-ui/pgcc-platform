@@ -3,11 +3,13 @@ import json
 from fastapi import APIRouter, Depends, HTTPException, Request
 from pydantic import BaseModel, Field
 from sqlalchemy.ext.asyncio import AsyncSession
-from sqlalchemy import select
+from sqlalchemy import select, and_, or_, func, false
 from app.api.deps import require_permission
 from app.core.database import get_db
 from app.models.document import Document
-from app.api.v1.endpoints.documents import can_read_document, document_integrity_valid
+from app.api.v1.endpoints.documents import (
+    INTERNAL_DOCUMENT_TYPES, can_read_document, document_integrity_valid,
+)
 from app.models.user import User
 from app.utils.rbac import role_has_permission
 from app.services.ai_service import ai_service
@@ -23,6 +25,38 @@ def readable_context_documents(user: User, documents: list[Document]) -> list[Do
         document for document in documents
         if can_read_document(user, document) and document_integrity_valid(document)
     ][:3]
+
+
+def readable_context_scope(user: User):
+    """Push the document ACL into SQL before limiting rows and loading file binaries."""
+    role = (getattr(user, "role", None) or "").strip().lower()
+    if role in {"admin", "executive", "auditor"}:
+        return None
+    if role != "viewer":
+        return false()
+
+    internal = func.upper(func.btrim(Document.doc_type)).in_(tuple(INTERNAL_DOCUMENT_TYPES))
+    scopes = [
+        and_(
+            internal,
+            Document.owner_id.is_(None),
+            Document.department.is_(None),
+        )
+    ]
+    user_id = getattr(user, "id", None)
+    if user_id is not None:
+        scopes.append(Document.owner_id == user_id)
+    department = getattr(user, "department", None)
+    if isinstance(department, str) and department.strip():
+        scopes.append(
+            and_(
+                internal,
+                Document.department.is_not(None),
+                func.btrim(Document.department) != "",
+                func.lower(func.btrim(Document.department)) == department.strip().lower(),
+            )
+        )
+    return or_(*scopes)
 
 
 class ContextQueryRequest(BaseModel):
@@ -47,14 +81,18 @@ async def query_with_context(
 
         # Escape SQL LIKE metacharacters from the user-provided control reference.
         escaped_ref = req.control_ref.replace("\\", "\\\\").replace("%", "\\%").replace("_", "\\_")
+        document_query = select(Document).where(
+            (Document.doc_type == "PSSI")
+            | (Document.content_text.ilike(f"%{escaped_ref}%", escape="\\"))
+        )
+        access_scope = readable_context_scope(current_user)
+        if access_scope is not None:
+            document_query = document_query.where(access_scope)
+        # At most three 10 MiB originals are loaded for integrity verification.
+        # The ACL is applied in SQL first so inaccessible rows cannot crowd out
+        # the caller's permitted context documents.
         docs_query = await db.execute(
-            select(Document)
-            .where(
-                (Document.doc_type == "PSSI")
-                | (Document.content_text.ilike(f"%{escaped_ref}%", escape="\\"))
-            )
-            .order_by(Document.created_at.desc())
-            .limit(30)
+            document_query.order_by(Document.created_at.desc()).limit(3)
         )
         docs = readable_context_documents(current_user, docs_query.scalars().all())
         for document in docs:
