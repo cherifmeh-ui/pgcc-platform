@@ -9,6 +9,8 @@ from sqlalchemy import delete, func, select
 from sqlalchemy.exc import IntegrityError
 from sqlalchemy.ext.asyncio import async_sessionmaker, create_async_engine
 
+from app.models.iso_control import IsoControl  # register ActionItem foreign-key target
+from app.models.iso_control_assessment import IsoControlAssessment  # register ActionItem foreign-key target
 from app.models.action_item import ActionItem
 from app.models.risk import Risk
 
