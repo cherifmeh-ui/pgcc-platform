@@ -197,6 +197,30 @@ jobs:
             sleep 2
           done
           test "$status" = "401"
+      - name: Verify isolated parser extraction and network separation
+        shell: bash
+        run: |
+          docker inspect pgcc_parser --format '{{json .NetworkSettings.Networks}}' > /tmp/pgcc-parser-networks.json
+          grep -q 'parser_internal' /tmp/pgcc-parser-networks.json
+          ! grep -q 'pgcc_network' /tmp/pgcc-parser-networks.json
+          docker compose exec -T backend python - <<'PY'
+          import asyncio
+          from io import BytesIO
+          from docx import Document
+          from app.services.isolated_parser_client import extract_document_text
+
+          async def main():
+              document = Document()
+              document.add_paragraph("PGCC isolated parser integration check")
+              stream = BytesIO()
+              document.save(stream)
+              text, detected = await extract_document_text(stream.getvalue(), "parser-check.docx")
+              assert detected == "DOCX"
+              assert "PGCC isolated parser integration check" in text
+              print("Parser isolé : extraction DOCX réussie via le client backend.")
+
+          asyncio.run(main())
+          PY
       - name: Start ClamAV and wait for fresh signature database
         shell: bash
         run: |
