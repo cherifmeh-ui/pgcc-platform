@@ -1141,3 +1141,12 @@ Un test PostgreSQL avec deux sessions concurrentes couvre maintenant la créatio
 - Les tests couvrent la page PDF illisible, le dépassement du budget d'extraction et les entrées DOCX dupliquées.
 - Un premier passage CI a détecté deux régressions de séparateurs de lignes dans les chaînes extraites ; elles ont été corrigées et le HEAD final ci-dessus a passé les tests.
 - **Limite persistante :** le parseur tourne encore dans le processus backend. L'isolation dans un conteneur/service séparé avec réseau et ressources limités demeure une porte de sortie obligatoire de Phase 0.
+
+## Validation du chargement obligatoire RAG — 26 novembre 2026
+
+- HEAD testé : `51b9da291a0dab05bdd9908e02d1942e5ab1a6e1`.
+- Workflow GitHub Actions `45780160855` : **4/4 jobs réussis** (backend, PostgreSQL, frontend, Docker Compose).
+- La correction supprime le repli silencieux qui transformait un échec d'import du service RAG en `rag_service = None`. Le module est désormais une dépendance obligatoire au chargement de l'endpoint documentaire ; un déploiement incomplet échoue explicitement au démarrage au lieu de masquer la fonctionnalité indisponible.
+- La revue confirme que l'extraction PDF/DOCX reste exécutée dans le processus backend. Les limites de taille et de parsing existantes ne constituent pas une sandbox au niveau du système.
+- **Porte de sortie toujours ouverte :** créer un service de parsing isolé, sans accès PostgreSQL, secrets ou Internet, avec filesystem en lecture seule, utilisateur non privilégié, limites CPU/mémoire/PID/temps et tests d'intégration Compose (documents valides/malveillants/malformés, service indisponible et dépassement de ressources).
+- La réussite CI ne vaut pas recette de sécurité ni validation opérationnelle RPO/RTO. La Phase 0 demeure ouverte.
