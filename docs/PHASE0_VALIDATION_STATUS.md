@@ -1150,3 +1150,18 @@ Un test PostgreSQL avec deux sessions concurrentes couvre maintenant la créatio
 - La revue confirme que l'extraction PDF/DOCX reste exécutée dans le processus backend. Les limites de taille et de parsing existantes ne constituent pas une sandbox au niveau du système.
 - **Porte de sortie toujours ouverte :** créer un service de parsing isolé, sans accès PostgreSQL, secrets ou Internet, avec filesystem en lecture seule, utilisateur non privilégié, limites CPU/mémoire/PID/temps et tests d'intégration Compose (documents valides/malveillants/malformés, service indisponible et dépassement de ressources).
 - La réussite CI ne vaut pas recette de sécurité ni validation opérationnelle RPO/RTO. La Phase 0 demeure ouverte.
+
+## Point de situation faisant autorité — 26 novembre 2026
+
+Cette section remplace les anciens états intermédiaires datés du 21 novembre lorsqu'ils contredisent les validations plus récentes ci-dessous.
+
+- Branche : `chore/phase0-stabilization` ; PR #1 ouverte, Draft, non fusionnée ; base `main`.
+- HEAD vérifié : `15718efc516f80ca3ae127701de718a5a9890851`.
+- Workflow GitHub Actions `45782195858` sur ce HEAD : **4/4 jobs réussis** — backend, PostgreSQL, frontend et Docker Compose.
+- La CI PostgreSQL exécute les tests de cycle de vie des comptes administrateurs, les tests d'intégration des sessions, de la cartographie, des accès fournisseurs, du cycle documentaire/RAG, du MFA, des journaux append-only, de l'outbox d'audit et du rate limiting.
+- Le dépôt contient maintenant le routeur `/admin/users`, inclus dans le routeur API, avec gestion des comptes, MFA et révocation de sessions. Les mutations vérifient l'acteur administrateur MFA sous verrou, protègent le dernier administrateur actif avec MFA, invalident les sessions et enregistrent l'audit dans la transaction. Des tests PostgreSQL couvrent rollback d'audit, changement de rôle, reset MFA, révocation, acteur obsolète et concurrence sur le dernier administrateur.
+- ClamAV est intégré avant extraction et l'intégration Compose teste un verdict propre et la détection EICAR réelle. SHA-256 et ACL propriétaire/département sont présents pour les documents.
+- Le chargement du service RAG est obligatoire : l'échec d'import ne désactive plus silencieusement l'indexation.
+- **Blocage restant confirmé par inspection Compose et du code :** aucun service parser isolé n'est déployé ; PDF/DOCX sont encore extraits dans le processus API. Les limites Python ne remplacent pas l'isolation OS/conteneur.
+- Le job de restauration CI prouve un dump/restore sur base PostgreSQL jetable et vérifie la révision et une donnée témoin. Il ne prouve pas la restauration chiffrée dans l'environnement cible, les objectifs RPO/RTO ni la procédure opérationnelle.
+- La Phase 0 reste ouverte : isolation du parsing et tests de panne/ressources, exercice de restauration cible, vérification du durcissement de production (TLS, secrets, logs/alertes), revue humaine et acceptation formelle des risques résiduels restent obligatoires.
