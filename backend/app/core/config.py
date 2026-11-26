@@ -132,11 +132,6 @@ class Settings(BaseSettings):
 
         if self.PARSER_BASE_URL and not self.PARSER_BASE_URL.startswith("http://"):
             raise ValueError("PARSER_BASE_URL doit utiliser le réseau interne HTTP du service parser.")
-        if self.ENVIRONMENT.lower() != "development":
-            if not self.PARSER_BASE_URL.strip() or len(self.PARSER_SHARED_TOKEN.strip()) < 32:
-                raise ValueError("PARSER_BASE_URL et PARSER_SHARED_TOKEN sont obligatoires hors développement.")
-            if self.PARSER_SHARED_TOKEN.strip().startswith("CHANGE_ME"):
-                raise ValueError("PARSER_SHARED_TOKEN placeholder interdit hors développement.")
 
         if self.CLAMAV_PORT < 1 or self.CLAMAV_PORT > 65535:
             raise ValueError("CLAMAV_PORT doit être compris entre 1 et 65535.")
@@ -173,6 +168,11 @@ class Settings(BaseSettings):
         if self.AI_ENABLED and self.AI_PROVIDER == "ollama" and not self.OLLAMA_BASE_URL:
             raise ValueError("AI_PROVIDER=ollama necessite OLLAMA_BASE_URL.")
 
+        if self.ENVIRONMENT.lower() != "development":
+            if not self.PARSER_BASE_URL.strip() or len(self.PARSER_SHARED_TOKEN.strip()) < 32:
+                raise ValueError("PARSER_BASE_URL et PARSER_SHARED_TOKEN sont obligatoires hors développement.")
+            if self.PARSER_SHARED_TOKEN.strip().startswith("CHANGE_ME"):
+                raise ValueError("PARSER_SHARED_TOKEN placeholder interdit hors développement.")
         return self
 
     def masked_database_url(self) -> str:
