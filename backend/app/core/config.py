@@ -53,6 +53,10 @@ class Settings(BaseSettings):
     CLAMAV_PORT: int = 3310
     CLAMAV_TIMEOUT_SECONDS: int = 30
 
+    # --- Isolated document parser ---
+    PARSER_BASE_URL: str = ""
+    PARSER_SHARED_TOKEN: str = ""
+
     # --- CORS ---
     CORS_ORIGINS: str = "http://localhost:5173,http://localhost:3000"
 
@@ -125,6 +129,12 @@ class Settings(BaseSettings):
                 raise ValueError("CORS wildcard interdit en production.")
             if self.JWT_ALGORITHM == "HS256" and self.JWT_SECRET.startswith("CHANGE_ME"):
                 raise ValueError("JWT_SECRET placeholder interdit en production.")
+
+        if self.PARSER_BASE_URL and not self.PARSER_BASE_URL.startswith("http://"):
+            raise ValueError("PARSER_BASE_URL doit utiliser le réseau interne HTTP du service parser.")
+        if self.ENVIRONMENT.lower() != "development":
+            if not self.PARSER_BASE_URL.strip() or len(self.PARSER_SHARED_TOKEN.strip()) < 32:
+                raise ValueError("PARSER_BASE_URL et PARSER_SHARED_TOKEN sont obligatoires hors développement.")
 
         if self.CLAMAV_PORT < 1 or self.CLAMAV_PORT > 65535:
             raise ValueError("CLAMAV_PORT doit être compris entre 1 et 65535.")
