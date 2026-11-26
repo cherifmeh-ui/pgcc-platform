@@ -5,6 +5,7 @@ from uuid import UUID
 from fastapi import APIRouter, Depends, HTTPException, Request, status
 from pydantic import BaseModel, ConfigDict
 from sqlalchemy import select, func
+from sqlalchemy.exc import IntegrityError
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.api.deps import require_permission
@@ -70,11 +71,14 @@ async def create_risk(
     db: AsyncSession = Depends(get_db),
     current_user: User = require_permission("risks", "create"),
 ):
-    existing = await db.execute(select(Risk).where(Risk.ref == risk_data.ref))
+    normalized_ref = risk_data.ref.strip().lower()
+    existing = await db.execute(
+        select(Risk.id).where(func.lower(func.btrim(Risk.ref)) == normalized_ref)
+    )
     if existing.scalar_one_or_none():
         raise HTTPException(
-            status_code=status.HTTP_400_BAD_REQUEST,
-            detail=f"Le risque {risk_data.ref} existe déjà.",
+            status_code=status.HTTP_409_CONFLICT,
+            detail=f"La référence de risque {risk_data.ref} existe déjà.",
         )
 
     data = risk_data.model_dump()
@@ -87,16 +91,27 @@ async def create_risk(
 
     new_risk = Risk(**data)
     db.add(new_risk)
-    await enqueue_audit_event(
-        db,
-        user_email=current_user.email,
-        action="CREATE",
-        resource="risks",
-        resource_id=new_risk.ref,
-        details=f"Risque créé: {new_risk.title} (Niveau: {new_risk.risk_level})",
-        request=request,
-    )
-    await db.commit()
+    try:
+        await db.flush()
+        await enqueue_audit_event(
+            db,
+            user_email=current_user.email,
+            action="CREATE",
+            resource="risks",
+            resource_id=new_risk.ref,
+            details=f"Risque créé: {new_risk.title} (Niveau: {new_risk.risk_level})",
+            request=request,
+        )
+        await db.commit()
+    except IntegrityError as exc:
+        await db.rollback()
+        raise HTTPException(
+            status_code=status.HTTP_409_CONFLICT,
+            detail="Référence de risque déjà utilisée ou contrainte d'intégrité invalide.",
+        ) from exc
+    except Exception:
+        await db.rollback()
+        raise
     await db.refresh(new_risk)
 
     return RiskResponse(
@@ -125,7 +140,7 @@ async def update_risk(
     db: AsyncSession = Depends(get_db),
     current_user: User = require_permission("risks", "update"),
 ):
-    result = await db.execute(select(Risk).where(Risk.id == risk_id))
+    result = await db.execute(select(Risk).where(Risk.id == risk_id).with_for_update())
     risk = result.scalar_one_or_none()
 
     if not risk:
