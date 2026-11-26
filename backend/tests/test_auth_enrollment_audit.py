@@ -110,7 +110,8 @@ async def test_mfa_enrollment_token_uses_bumped_auth_version(monkeypatch):
 
 @pytest.mark.asyncio
 @pytest.mark.parametrize("flow", ["enrollment", "confirmation", "password_change"])
-async def test_stale_workflow_token_is_rejected_after_security_version_change(monkeypatch, flow):
+@pytest.mark.parametrize("stale_claim", ["version", "role", "missing_version"])
+async def test_stale_workflow_token_is_rejected_after_security_version_change(monkeypatch, flow, stale_claim):
     from fastapi import Response, HTTPException
 
     monkeypatch.setattr(auth_endpoint, "enforce_auth_rate_limit", AsyncMock())
@@ -127,7 +128,11 @@ async def test_stale_workflow_token_is_rejected_after_security_version_change(mo
     monkeypatch.setattr(
         auth_endpoint, "decode_token",
         lambda token, expected_type: {
-            "sub": user.email, "role": user.role, "auth_version": 1,
+            "sub": user.email,
+            "role": "auditor" if stale_claim == "role" else user.role,
+            "auth_version": None if stale_claim == "missing_version" else (
+                1 if stale_claim == "version" else user.auth_version
+            ),
         },
     )
 
