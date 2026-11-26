@@ -644,3 +644,12 @@ Status: targeted code review recorded; additional runtime/API tests remain requi
 - Authentification : la rotation des refresh tokens, la révocation des sessions sur changement de politique, la détection de rejeu, le logout et le changement de mot de passe utilisent un événement d'audit dans la transaction de session correspondante. Des appels de télémétrie d'authentification utilisent encore `log_action()` avec une transaction outbox séparée ; l'atomicité de ces événements avec les mises à jour d'état de connexion/échec doit être évaluée séparément.
 - Preuve CI du HEAD précédent `c067628` : workflow `45840592943`, 4/4 jobs réussis (backend, PostgreSQL, frontend, Compose). Les tests PostgreSQL incluent la rotation concurrente, la détection de rejeu et le rollback si l'enqueue d'audit échoue.
 - Cette revue corrige les notes historiques précédentes qui indiquaient encore que les workflows fournisseurs et certains flux documentaires n'étaient pas migrés. Elle ne clôt pas la revue complète de l'audit transactionnel.
+
+
+### Cartographie — cohérence des relations et concurrence PostgreSQL — 26 novembre 2026
+
+- Le modèle applique des clés étrangères `ON DELETE RESTRICT` pour les relations actif↔actif, actif↔risque et actif↔application ; les références de relations ne disparaissent donc pas silencieusement lors d'une suppression.
+- La création des dépendances `depends_on` prend un verrou transactionnel PostgreSQL `pg_advisory_xact_lock` commun, puis verrouille les deux actifs dans l'ordre déterministe de leur identifiant avant de vérifier le cycle et d'insérer l'arête.
+- Les tests PostgreSQL `test_asset_relationships_postgres.py` couvrent les deux créations simultanées de dépendances opposées (une seule direction acceptée) ainsi que la course entre création d'un lien actif-risque et suppression du risque. Les tests de cycle et d'état de retrait complètent ces contrôles.
+- Le workflow `45840592943` sur le HEAD `c067628` a validé le job PostgreSQL et l'ensemble des 4 jobs. Le contrôle de parité modèle/migrations a également réussi.
+- **Contrôle restant :** vérifier la couverture de concurrence pour toutes les autres mutations de relations et réaliser une revue opérationnelle de la stratégie de verrouillage sous charge. Les contraintes FK et les tests actuels ne valent pas preuve de charge en production.
