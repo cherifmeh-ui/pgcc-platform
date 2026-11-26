@@ -142,7 +142,7 @@ jobs:
           test "$restored_fixture" = "1"
           docker exec "$postgres_container" dropdb -U pgcc_test pgcc_legacy_test
           docker exec "$postgres_container" dropdb -U pgcc_test pgcc_restore_test
-      - name: Run PostgreSQL integration tests (sessions, asset graph, supplier access and document/RAG lifecycle, classification ACL, upload uniqueness and audit-log append-only/durable outbox)
+      - name: Run PostgreSQL integration tests (sessions, asset graph, supplier-link and risk integrity, document/RAG lifecycle, classification ACL, upload uniqueness and audit-log append-only/durable outbox)
         env:
           PYTHONPATH: backend
           DATABASE_URL: postgresql+asyncpg://pgcc_test:pgcc_test@localhost:5432/pgcc_test
