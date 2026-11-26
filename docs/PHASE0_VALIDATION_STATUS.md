@@ -1229,3 +1229,15 @@ Cette section remplace les anciens états intermédiaires datés du 21 novembre 
 - Docker Compose : stack complète, extraction DOCX via le parseur isolé, séparation réseau, authentification du parseur, refus fermé en cas de panne et contrôles antivirus ClamAV sain/EICAR réussis.
 - Migrations, contrôle de dérive du schéma et restauration PostgreSQL CI réussis.
 - La Phase 0 reste ouverte pour les validations opérationnelles de sauvegarde chiffrée/WAL et RPO/RTO, la configuration réelle du proxy et les seuils/alertes de limitation, la revue humaine et l'acceptation des risques résiduels.
+
+
+## Profil de production durci — validation CI de configuration et d'image — 26 novembre 2026
+
+- HEAD : `d52d5e637874671a9044adf903ca14fe953f566d`.
+- Workflow `45855717102` : **4/4 jobs réussis**.
+- Le CI valide `docker-compose.production.yaml`, construit l'image frontend Vue/Nginx non privilégiée et valide la configuration TLS Nginx avec un certificat de test.
+- Le profil sépare les réseaux internes PostgreSQL, parseur, antivirus et application ; aucun port hôte n'est publié pour PostgreSQL, backend, parser ou ClamAV.
+- Le backend embarque les migrations Alembic pour permettre une migration explicite avant démarrage.
+- Les événements de rate limiting sont structurés et exempts d'identifiants personnels ; la politique, les seuils initiaux, le proxy de confiance et les indicateurs à agréger sont documentés.
+- **Non validé à ce stade :** démarrage du profil production avec certificats et secrets réels, tests de réseau/pare-feu sur l'environnement cible, supervision et alertes réelles, sauvegarde chiffrée/WAL et restauration RPO/RTO.
+- La Phase 0 reste ouverte jusqu'à la recette opérationnelle, la revue humaine et l'acceptation formelle des risques résiduels.
