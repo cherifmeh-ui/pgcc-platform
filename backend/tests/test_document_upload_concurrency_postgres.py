@@ -48,8 +48,8 @@ async def test_concurrent_uploads_with_same_filename_return_one_conflict(monkeyp
     )
 
     monkeypatch.setattr(
-        "app.api.v1.endpoints.documents.DocumentExtractor.extract_text",
-        lambda _contents, _filename: ("safe extracted text", "PDF"),
+        "app.api.v1.endpoints.documents.extract_document_text",
+        AsyncMock(return_value=("safe extracted text", "PDF")),
     )
 
     async def upload_once():
@@ -139,8 +139,8 @@ async def test_upload_rolls_back_document_when_audit_outbox_enqueue_fails(monkey
     )
 
     monkeypatch.setattr(
-        "app.api.v1.endpoints.documents.DocumentExtractor.extract_text",
-        lambda _contents, _filename: ("safe extracted text", "PDF"),
+        "app.api.v1.endpoints.documents.extract_document_text",
+        AsyncMock(return_value=("safe extracted text", "PDF")),
     )
     monkeypatch.setattr(
         "app.api.v1.endpoints.documents.enqueue_audit_event",
