@@ -214,7 +214,7 @@ jobs:
               document.add_paragraph("PGCC isolated parser integration check")
               stream = BytesIO()
               document.save(stream)
-              text, detected = await extract_document_text(stream.getvalue(), "parser-check.docx")
+              text, detected = await extract_document_text(stream.getvalue(), r"C:\\fakepath\\parser-check.docx")
               assert detected == "DOCX"
               assert "PGCC isolated parser integration check" in text
               print("Parser isolé : extraction DOCX réussie via le client backend.")
