@@ -92,6 +92,21 @@ def _mfa_confirmed_at_epoch(user: User) -> int | None:
         value = value.replace(tzinfo=timezone.utc)
     return int(value.timestamp())
 
+def _assert_workflow_token_current(data: dict, user: User) -> None:
+    """Reject short-lived workflow tokens issued before an account security change."""
+    token_version = data.get("auth_version")
+    if (
+        isinstance(token_version, bool)
+        or not isinstance(token_version, int)
+        or token_version != int(user.auth_version or 0)
+        or data.get("role") != (user.role or "").strip().lower()
+    ):
+        raise HTTPException(
+            status_code=status.HTTP_401_UNAUTHORIZED,
+            detail="Jeton de parcours invalide après une modification du compte. Reconnectez-vous.",
+        )
+
+
 REFRESH_COOKIE_NAME = "pgcc_refresh"
 REFRESH_COOKIE_PATH = "/api/v1/auth"
 
@@ -228,7 +243,9 @@ async def login(
             detail="Email ou mot de passe incorrect.",
         )
 
-    pre_auth_token = create_pre_auth_token(subject=user.email, role=user.role)
+    pre_auth_token = create_pre_auth_token(
+        subject=user.email, role=user.role, auth_version=user.auth_version
+    )
 
     await log_action(
         user_email=user.email,
@@ -277,6 +294,7 @@ async def start_enrollment(
 
     if not user:
         raise HTTPException(status_code=401, detail="Utilisateur non trouvé.")
+    _assert_workflow_token_current(data, user)
 
     # Enrôlement uniquement pour les comptes sans MFA actif.
     if user.mfa_enabled:
@@ -343,6 +361,7 @@ async def confirm_mfa(
 
     if not user:
         raise HTTPException(status_code=401, detail="Utilisateur non trouvé.")
+    _assert_workflow_token_current(data, user)
 
     if not user.mfa_secret:
         raise HTTPException(
@@ -410,6 +429,7 @@ async def confirm_mfa(
 
     if user.must_change_password:
         try:
+            await db.flush()
             await enqueue_audit_event(
                 db, user_email=user.email, action="MFA_SUCCESS_PASSWORD_CHANGE_REQUIRED",
                 resource="auth", resource_id=str(user.id),
@@ -420,7 +440,9 @@ async def confirm_mfa(
         except Exception:
             await db.rollback()
             raise
-        change_password_token = create_change_password_token(subject=user.email, role=user.role)
+        change_password_token = create_change_password_token(
+            subject=user.email, role=user.role, auth_version=user.auth_version
+        )
         return ChangePasswordRequiredResponse(
             change_password_token=change_password_token,
             backup_codes=backup_codes,
@@ -508,6 +530,7 @@ async def change_password(
 
     if not user.is_active:
         raise HTTPException(status_code=403, detail="Compte désactivé.")
+    _assert_workflow_token_current(data, user)
     if not user.must_change_password:
         raise HTTPException(
             status_code=403,
