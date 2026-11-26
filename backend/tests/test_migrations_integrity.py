@@ -447,3 +447,27 @@ def test_document_acl_migration_adds_owner_department_and_restrictive_fk():
     assert "owner_id" in model and "department" in model
     assert "document" in env_source
     assert "op.drop_column" in source
+
+
+
+def test_risk_integrity_migration_matches_model_and_guards_legacy_data():
+    migration = MIGRATIONS_DIR / "0030_risk_integrity_constraints.py"
+    source = migration.read_text(encoding="utf-8")
+    model = (
+        MIGRATIONS_DIR.parent.parent / "app" / "models" / "risk.py"
+    ).read_text(encoding="utf-8")
+    assert 'revision = "0030_risk_integrity_constraints"' in source
+    assert 'down_revision = "0029_supplier_access_link_scope"' in source
+    for constraint in (
+        "ck_risks_impact_range",
+        "ck_risks_likelihood_range",
+        "ck_risks_score_consistency",
+        "ck_risks_ref_nonblank",
+        "uq_risks_ref_ci",
+    ):
+        assert constraint in source
+        assert constraint in model
+    assert "risk_level <> impact * likelihood" in source
+    assert "lower(btrim(ref))" in source
+    assert "no automatic data rewrite" in source.lower()
+    assert "def downgrade() -> None:" in source
