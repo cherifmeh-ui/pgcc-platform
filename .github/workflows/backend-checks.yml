@@ -122,7 +122,7 @@ jobs:
           actual_legacy_digest=$(docker exec "$postgres_container" psql -U pgcc_test -d pgcc_legacy_test -Atc "SELECT file_sha256 FROM documents WHERE filename = 'phase0-legacy-sha256-fixture.pdf'")
           test "$actual_legacy_digest" = "$expected_legacy_digest"
           version=$(docker exec "$postgres_container" psql -U pgcc_test -d pgcc_legacy_test -Atc "SELECT version_num FROM alembic_version")
-          test "$version" = "0028_document_acl"
+          test "$version" = "0029_supplier_access_link_scope"
       - name: Verify PostgreSQL backup and restore
         shell: bash
         run: |
