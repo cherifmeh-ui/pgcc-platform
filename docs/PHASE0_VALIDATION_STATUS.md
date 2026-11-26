@@ -1249,3 +1249,14 @@ Cette section remplace les anciens états intermédiaires datés du 21 novembre 
 - Un document dont le binaire manque, dont le condensat manque ou dont le binaire ne correspond plus au condensat est exclu du contexte IA, y compris pour les rôles privilégiés. Cette mesure évite de traiter un contenu documentaire altéré comme une source fiable.
 - Tests ajoutés dans `backend/tests/test_ai_advanced_document_acl.py` : intégrité valide, binaire modifié et condensat absent ; les cas de classification et la limite de trois sources sont conservés.
 - Validation CI de ce dernier changement en attente au moment de cette note. Vérifier aussi le comportement sur les documents historiques avant déploiement ; les documents sans binaire/condensat seront exclus du contexte jusqu'à régularisation contrôlée.
+
+
+### Cohérence des autorisations fournisseurs et récupération RAG bornée — 26 novembre 2026
+
+- Migration `0029_supplier_access_link_scope` : ajout d'une clé étrangère composite entre `supplier_access_requests(supplier_asset_link_id, supplier_id, asset_id)` et `supplier_asset_links(id, supplier_id, asset_id)`. La base interdit désormais toute demande qui associerait un lien à un autre fournisseur ou actif.
+- Avant ajout de la contrainte, la migration détecte les lignes historiques orphelines ou incohérentes et interrompt l'opération avec un diagnostic explicite ; aucune correction automatique de données historiques n'est tentée.
+- Test PostgreSQL dédié : les discordances fournisseur et actif sont refusées par la base ; une demande dont les trois identifiants correspondent est acceptée.
+- Le contexte IA applique maintenant la portée ACL au niveau SQL avant la limite de résultats, puis conserve la vérification ACL et SHA-256 en défense en profondeur. La récupération est limitée à trois documents afin de borner le chargement des fichiers originaux nécessaires à la vérification d'intégrité.
+- Tests unitaires : portée SQL des lecteurs, refus des rôles non autorisés, intégrité binaire altérée ou empreinte absente, classifications et plafond de trois sources.
+- Workflow `45882921445` sur le HEAD `a6753c81dbdf1cb4b3c2fb4b8f24cef9dbb70a10` : **4/4 jobs réussis** (Backend, PostgreSQL, Frontend, Compose). Le job PostgreSQL valide le nouveau schéma, la migration historique, le downgrade/upgrade, la sauvegarde/restauration et **38 tests PostgreSQL réussis**. Le job Compose valide le profil de production, le frontend TLS, le backend, le parseur isolé, l'authentification du parseur, le mode fermé en cas d'indisponibilité et les verdicts ClamAV propre/EICAR.
+- Cette validation est automatisée sur CI. Elle ne remplace pas une recette de production avec vrais secrets/certificats, une revue réseau/pare-feu, une sauvegarde chiffrée avec WAL, un exercice de restauration RPO/RTO en environnement cible et la revue humaine finale.
