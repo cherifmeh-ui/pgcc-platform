@@ -68,6 +68,11 @@ Not yet implemented in the current risk model: separate inherent and residual as
 Migration strategy: establish and test an Alembic baseline first; then introduce assessment/history/acceptance entities with an explicit legacy methodology label for existing records. Avoid destructive backfills or silently changing existing scores.
 
 
-## Data integrity note
+## Data integrity note — implementation validated 2026-11-26
 
-The API currently blocks hard deletion of risks with linked actions. The ORM/database cascade behavior is not yet changed because the repository does not have a validated migration baseline. A future Alembic migration should change the risk-action foreign key to RESTRICT/NO ACTION and remove ORM delete-orphan cascade, after testing existing data and upgrade/rollback behavior. Do not make this schema change only in ORM metadata against an existing database.
+- The API refuses hard deletion of a risk while corrective actions remain linked (HTTP 409).
+- ORM delete-orphan cascade has been removed from Risk.actions; passive deletion delegates to PostgreSQL.
+- Migration 0031_risk_action_restrict changes ActionItem.risk_id from ON DELETE CASCADE to ON DELETE RESTRICT.
+- A PostgreSQL integration test proves that a direct ORM/database deletion is rejected and both the risk and its corrective action remain present.
+- The legacy-upgrade CI path explicitly simulates the former CASCADE foreign key, applies the migration, and checks PostgreSQL's delete rule is RESTRICT. The downgrade/upgrade path is also exercised.
+- This protects corrective-action traceability against direct database or alternate API deletion paths.
