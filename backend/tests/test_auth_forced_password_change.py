@@ -13,7 +13,7 @@ async def test_mfa_returns_change_password_token_for_forced_password_change(monk
     monkeypatch.setattr(auth_endpoint, "enforce_auth_rate_limit", AsyncMock())
     user = MagicMock(
         email="forced@example.test",
-        role="viewer",
+        role="viewer", auth_version=0,
         full_name="Forced User",
         is_active=True,
         is_locked=False,
@@ -156,7 +156,7 @@ async def test_password_change_rolls_back_if_audit_enqueue_fails(monkeypatch):
     from uuid import uuid4
 
     user = MagicMock(
-        id=uuid4(), email="password-rollback@example.test", role="viewer",
+        id=uuid4(), email="password-rollback@example.test", role="viewer", auth_version=0,
         full_name="Password Rollback", is_active=True, must_change_password=True,
         password_hash="old-hash", password_changed_at=None,
     )
