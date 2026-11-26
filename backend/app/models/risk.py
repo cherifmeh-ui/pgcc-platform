@@ -2,7 +2,7 @@
 import uuid
 from datetime import datetime, timezone
 from sqlalchemy.orm import relationship
-from sqlalchemy import Column, DateTime, ForeignKey, Integer, String, Text
+from sqlalchemy import CheckConstraint, Column, DateTime, ForeignKey, Index, Integer, String, Text, text
 from sqlalchemy.dialects.postgresql import UUID
 
 from app.core.database import Base
@@ -14,6 +14,16 @@ def utcnow():
 
 class Risk(Base):
     __tablename__ = "risks"
+    __table_args__ = (
+        CheckConstraint("impact BETWEEN 1 AND 5", name="ck_risks_impact_range"),
+        CheckConstraint("likelihood BETWEEN 1 AND 5", name="ck_risks_likelihood_range"),
+        CheckConstraint(
+            "risk_level BETWEEN 1 AND 25 AND risk_level = impact * likelihood",
+            name="ck_risks_score_consistency",
+        ),
+        CheckConstraint("btrim(ref) <> ''", name="ck_risks_ref_nonblank"),
+        Index("uq_risks_ref_ci", text("lower(btrim(ref))"), unique=True),
+    )
 
     id = Column(UUID(as_uuid=True), primary_key=True, default=uuid.uuid4)
 
