@@ -1175,3 +1175,15 @@ Cette section remplace les anciens états intermédiaires datés du 21 novembre 
 - Les contrôles actuels du parseur (taille, nombre de pages, volume ZIP, ratio de compression et budget de texte) limitent certains abus mais ne constituent pas une frontière de sécurité au niveau OS.
 - Décision : ne pas ajouter un conteneur parser décoratif sans basculer effectivement le chemin d'upload vers ce service. L'implémentation doit inclure un client backend à timeout et taille bornés, un service d'extraction sans route de sortie, un protocole interne minimal, des tests de contrat et des tests Compose prouvant l'absence d'accès DB/Internet et le refus fermé en cas d'indisponibilité.
 - État de la PR : #1 ouverte, Draft, non fusionnée ; base `main`. La Phase 0 reste ouverte.
+
+
+## Implémentation initiale du parser isolé — 26 novembre 2026
+
+- Ajout d'un service FastAPI séparé sous `parser/`, avec endpoint `/v1/extract`, authentification par secret partagé (comparaison constante), limite d'entrée 10 Mio, formats PDF/DOCX uniquement, signature de fichier, délai d'extraction et réponses structurées.
+- Image dédiée non-root ; Compose active `read_only`, `tmpfs` borné, `cap_drop: ALL`, `no-new-privileges`, mémoire 512 Mio, CPU 1 et PID 64.
+- Le parser est connecté uniquement au réseau Compose `parser_internal` marqué `internal: true`, sans PostgreSQL, ClamAV, volume applicatif, URL Ollama ni port publié. Le backend est le seul client sur ce réseau et conserve son réseau applicatif distinct.
+- Le chemin upload du backend appelle maintenant `isolated_parser_client` après le verdict antivirus. Les erreurs de service entraînent HTTP 503 (refus fermé) ; les refus de document donnent HTTP 400. Réponse bornée à 8 Mio et timeout réseau explicite.
+- Configuration `PARSER_BASE_URL` et `PARSER_SHARED_TOKEN` ajoutée ; en production, URL et secret sont obligatoires et le placeholder est refusé.
+- Tests unitaires du client ajoutés : succès, configuration absente, indisponibilité et réponse invalide. Le job Compose vérifie que le parser n'est connecté qu'au réseau interne et réalise une extraction DOCX réelle depuis le backend.
+- Commits de cette tranche : `1441169`, `6abb098`, `6928c9b`, `74dd8af`, `8362d63`, `fe1a2f8`, `ee35b37`, `aa7f2a6`, `2bd97ce`, `9e141cc`, puis durcissement du validateur de configuration.
+- **Validation en attente :** aucun succès CI n'est revendiqué pour ce nouveau chemin tant que les jobs backend, PostgreSQL et Compose n'ont pas terminé. L'intégration est une première tranche, à compléter par tests d'authentification du parser, timeout réel, panne du parser, test de dépassement de ressources et revue de sécurité indépendante.
