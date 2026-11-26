@@ -33,6 +33,7 @@ async def test_database_restricts_risk_deletion_while_actions_exist():
         risk_level=6,
         status="Ouvert",
     )
+    risk_id = None
     try:
         async with sessions() as db:
             db.add(risk)
@@ -58,8 +59,9 @@ async def test_database_restricts_risk_deletion_while_actions_exist():
             assert await db.scalar(select(func.count(Risk.id)).where(Risk.id == risk_id)) == 1
             assert await db.scalar(select(func.count(ActionItem.id)).where(ActionItem.id == action_id)) == 1
     finally:
-        async with sessions() as db:
-            await db.execute(delete(ActionItem).where(ActionItem.risk_id == risk_id))
-            await db.execute(delete(Risk).where(Risk.id == risk_id))
-            await db.commit()
+        if risk_id is not None:
+            async with sessions() as db:
+                await db.execute(delete(ActionItem).where(ActionItem.risk_id == risk_id))
+                await db.execute(delete(Risk).where(Risk.id == risk_id))
+                await db.commit()
         await engine.dispose()
