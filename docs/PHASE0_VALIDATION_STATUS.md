@@ -1241,3 +1241,11 @@ Cette section remplace les anciens états intermédiaires datés du 21 novembre 
 - Les événements de rate limiting sont structurés et exempts d'identifiants personnels ; la politique, les seuils initiaux, le proxy de confiance et les indicateurs à agréger sont documentés.
 - **Non validé à ce stade :** démarrage du profil production avec certificats et secrets réels, tests de réseau/pare-feu sur l'environnement cible, supervision et alertes réelles, sauvegarde chiffrée/WAL et restauration RPO/RTO.
 - La Phase 0 reste ouverte jusqu'à la recette opérationnelle, la revue humaine et l'acceptation formelle des risques résiduels.
+
+
+### Intégrité documentaire avant contexte IA — 26 novembre 2026
+
+- Le filtre central `readable_context_documents` applique maintenant deux contrôles avant toute insertion de contenu dans le prompt : ACL documentaire existante et validation SHA-256 du binaire stocké.
+- Un document dont le binaire manque, dont le condensat manque ou dont le binaire ne correspond plus au condensat est exclu du contexte IA, y compris pour les rôles privilégiés. Cette mesure évite de traiter un contenu documentaire altéré comme une source fiable.
+- Tests ajoutés dans `backend/tests/test_ai_advanced_document_acl.py` : intégrité valide, binaire modifié et condensat absent ; les cas de classification et la limite de trois sources sont conservés.
+- Validation CI de ce dernier changement en attente au moment de cette note. Vérifier aussi le comportement sur les documents historiques avant déploiement ; les documents sans binaire/condensat seront exclus du contexte jusqu'à régularisation contrôlée.
