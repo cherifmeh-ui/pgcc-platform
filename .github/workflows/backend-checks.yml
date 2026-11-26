@@ -167,6 +167,18 @@ jobs:
         run: docker compose -f docker-compose.production.yaml --env-file .env.production config --quiet
       - name: Build production frontend image
         run: docker compose -f docker-compose.production.yaml --env-file .env.production build frontend
+      - name: Validate production Nginx TLS configuration
+        shell: bash
+        run: |
+          mkdir -p /tmp/pgcc-production-certs
+          openssl req -x509 -nodes -days 1 -newkey rsa:2048 \
+            -keyout /tmp/pgcc-production-certs/privkey.pem \
+            -out /tmp/pgcc-production-certs/fullchain.pem \
+            -subj "/CN=localhost"
+          chmod 644 /tmp/pgcc-production-certs/privkey.pem
+          image_id=$(docker compose -f docker-compose.production.yaml --env-file .env.production images -q frontend)
+          test -n "$image_id"
+          docker run --rm -v /tmp/pgcc-production-certs:/etc/nginx/certs:ro "$image_id" nginx -t
       - name: Build backend image
         run: docker compose build backend
       - name: Start complete development stack
