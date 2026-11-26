@@ -83,3 +83,13 @@ La Phase 0 demeure ouverte jusqu'à la validation des tests, de l'isolation et d
 - Le chargement du service RAG dans le endpoint documentaire est désormais obligatoire. L'ancien repli `except ImportError: rag_service = None` masquait une dépendance manquante et désactivait silencieusement l'indexation ; une erreur d'import doit maintenant empêcher le démarrage et déclencher une correction de déploiement.
 - Commit de correction : `f4197d8`. Le workflow GitHub Actions associé est en attente au moment de cette note ; cette modification n'est pas encore déclarée validée.
 - Le parsing PDF/DOCX reste exécuté dans le processus API. Il ne faut pas présenter les limites applicatives actuelles comme une sandbox OS. La prochaine évolution doit isoler le parseur dans un service dédié sans accès à la base ni à Internet, avec limites de ressources et protocole strict.
+
+## État vérifié — 26 novembre 2026
+
+- Le workflow du HEAD `15718efc516f80ca3ae127701de718a5a9890851` (`45782195858`) a terminé avec les quatre jobs réussis : backend, PostgreSQL, frontend et Docker Compose.
+- ClamAV est utilisé avant l'extraction ; l'intégration Compose teste un fichier propre et EICAR avec le vrai daemon.
+- Le SHA-256 original, `owner_id` et `department` sont persistés. La politique documentaire est réutilisée dans les opérations de consultation et de contexte IA existantes.
+- Le service RAG est une dépendance obligatoire au chargement de l'endpoint documentaire : aucun repli silencieux vers `None`.
+- Le parseur PDF/DOCX reste dans le processus API. Aucun service parser distinct n'existe encore dans `docker-compose.yaml`. Les contrôles de taille et d'archive ne sont pas une sandbox.
+- Aucun endpoint de recherche vectorielle RAG n'est actuellement identifié dans le service ; ne pas exposer de récupération top-k sans appliquer les ACL dans la requête SQL avant le classement.
+- Prochaine décision : isoler le parsing derrière un protocole interne authentifié/contrôlé, avec taille de requête et réponse bornées, image non-root, filesystem en lecture seule, réseau sans egress, absence d'accès DB/secret/ClamAV, limites CPU/mémoire/PID/temps, timeout et échec fermé. Couvrir le contrat et les pannes en tests unitaires puis en intégration Compose.
