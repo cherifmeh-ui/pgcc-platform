@@ -1165,3 +1165,13 @@ Cette section remplace les anciens états intermédiaires datés du 21 novembre 
 - **Blocage restant confirmé par inspection Compose et du code :** aucun service parser isolé n'est déployé ; PDF/DOCX sont encore extraits dans le processus API. Les limites Python ne remplacent pas l'isolation OS/conteneur.
 - Le job de restauration CI prouve un dump/restore sur base PostgreSQL jetable et vérifie la révision et une donnée témoin. Il ne prouve pas la restauration chiffrée dans l'environnement cible, les objectifs RPO/RTO ni la procédure opérationnelle.
 - La Phase 0 reste ouverte : isolation du parsing et tests de panne/ressources, exercice de restauration cible, vérification du durcissement de production (TLS, secrets, logs/alertes), revue humaine et acceptation formelle des risques résiduels restent obligatoires.
+
+## Revue complémentaire du pipeline documentaire — 26 novembre 2026
+
+- HEAD de référence pour cette revue : `3170988c53af112656ce7cce5ac3982465a9dfbe`.
+- Le workflow `45785777439` a terminé backend, frontend et PostgreSQL avec succès ; le job Docker Compose est encore en cours au moment de cette mise à jour. Ne pas annoncer 4/4 avant sa conclusion.
+- Vérification du code : le dépôt antivirus est appelé avant extraction ; le parseur PDF/DOCX est toutefois directement importé et exécuté par `documents.py` dans le processus API.
+- Vérification Compose : aucun service parser dédié n'est défini. Le backend demeure sur le réseau bridge partagé et reçoit aussi une URL Ollama via `host.docker.internal`. Le futur parseur ne devra pas hériter de ces accès réseau, de la base, des volumes backend ou des variables secrètes.
+- Les contrôles actuels du parseur (taille, nombre de pages, volume ZIP, ratio de compression et budget de texte) limitent certains abus mais ne constituent pas une frontière de sécurité au niveau OS.
+- Décision : ne pas ajouter un conteneur parser décoratif sans basculer effectivement le chemin d'upload vers ce service. L'implémentation doit inclure un client backend à timeout et taille bornés, un service d'extraction sans route de sortie, un protocole interne minimal, des tests de contrat et des tests Compose prouvant l'absence d'accès DB/Internet et le refus fermé en cas d'indisponibilité.
+- État de la PR : #1 ouverte, Draft, non fusionnée ; base `main`. La Phase 0 reste ouverte.
