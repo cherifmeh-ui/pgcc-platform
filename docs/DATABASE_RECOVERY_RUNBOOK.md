@@ -19,7 +19,7 @@ Le job PostgreSQL doit :
 - appliquer `alembic upgrade head` sur une base vide ;
 - créer une base séparée et exécuter `alembic upgrade 0024_audit_outbox`, puis `alembic upgrade head` ;
 - vérifier `alembic downgrade 0025_user_auth_version`, puis `alembic upgrade head` ;
-- vérifier les précontrôles de cohérence des migrations 0029_supplier_access_link_scope et 0030_risk_integrity_constraints ;
+- vérifier les précontrôles de cohérence des migrations 0029_supplier_access_link_scope et 0031_risk_action_restrict ;
 - insérer une ligne témoin non sensible dans `auth_rate_limit_buckets` ;
 - créer un dump au format custom avec `pg_dump -Fc` ;
 - restaurer avec `pg_restore --exit-on-error --no-owner --no-privileges` dans une base neuve ;
@@ -71,3 +71,11 @@ La Phase 0 ne peut pas considérer la récupération comme validée sur la seule
 - Workflow 45883850756, HEAD 5ec9173335eb4c9292002436bfd73669c32dfe02 : 4/4 jobs réussis. Le job PostgreSQL a validé alembic upgrade head, alembic check, upgrade historique depuis 0024, downgrade vers 0025 puis upgrade head, sauvegarde/restauration et 40 tests PostgreSQL réussis.
 - Durée observée de restauration CI : 0 seconde à la précision de la mesure. Ne pas extrapoler à une base de production.
 - Le parcours de CI ne remplace toujours pas une restauration d'une sauvegarde chiffrée réelle avec archivage WAL et RPO/RTO approuvés.
+
+
+## Conservation des actions liées aux risques — révision 0031
+
+- La migration 0031 remplace la FK action_items.risk_id ON DELETE CASCADE par ON DELETE RESTRICT et supprime le cascade delete-orphan ORM.
+- La CI simule une ancienne base avec CASCADE avant l'upgrade, vérifie le passage à RESTRICT, puis teste downgrade/upgrade.
+- Un test PostgreSQL confirme qu'une suppression directe du risque avec une action liée est rejetée et que l'action est conservée.
+- Workflow 45885458640 sur HEAD daf4296aef817e7812d55e23cbc55d90547736eb : 4/4 jobs réussis, 41 tests PostgreSQL réussis.
