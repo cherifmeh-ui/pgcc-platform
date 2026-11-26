@@ -674,3 +674,15 @@ Status: targeted code review recorded; additional runtime/API tests remain requi
 - PostgreSQL : migrations, contrôle de dérive, chemin de migration historique, downgrade/upgrade et restauration CI réussis.
 - Docker Compose : extraction réelle via le parseur isolé, réseau interne, authentification, refus fermé à l'indisponibilité du parseur et verdicts ClamAV sain/EICAR réussis.
 - Cette CI ne remplace pas l'exercice de restauration chiffrée dans l'environnement cible, la validation RPO/RTO, la revue du proxy et des seuils de rate limiting, ni la revue humaine finale.
+
+
+### Déploiement de production et exploitation du rate limiting — 26 novembre 2026
+
+- Ajout d'un profil distinct `docker-compose.production.yaml` : base PostgreSQL non publiée sur l'hôte, réseaux internes séparés pour DB, parseur et antivirus, backend sans port public ni montage de code, parseur durci, ClamAV seul autorisé à sortir pour ses mises à jour, frontend Vue compilé servi par Nginx non privilégié en TLS.
+- Ajout de l'image frontend multi-stage, de la configuration Nginx TLS et des en-têtes de sécurité, du modèle `.env.production.example` et du guide `docs/PRODUCTION_DEPLOYMENT.md`.
+- L'image backend embarque maintenant `alembic.ini` et les migrations pour permettre une migration explicite avant démarrage.
+- Le proxy Nginx remplace `X-Forwarded-For` par l'adresse source observée ; le backend ne fait confiance qu'à son IP statique. Le backend n'est pas directement publié.
+- Le CI valide la syntaxe du profil de production, construit l'image frontend et valide la configuration Nginx avec un certificat de test. **Le profil de production n'a pas encore été démarré avec des certificats et secrets réels dans l'environnement cible.**
+- Les placeholders JWT et HMAC du rate limiter sont maintenant refusés hors développement. Les dépassements de seuil produisent un événement de journal structuré sans IP, compte ni clé HMAC ; les seuils et le fonctionnement sont documentés dans `docs/AUTH_RATE_LIMIT_OPERATIONS.md`.
+- Workflow `45855717102` sur le HEAD `d52d5e637874671a9044adf903ca14fe953f566d` : **4/4 jobs réussis**. Backend, PostgreSQL, frontend et Compose sont verts ; le job Compose a aussi validé le profil de production, le build frontend et `nginx -t` avec certificat de test.
+- Restent obligatoires : recette de déploiement réel, validation pare-feu/DNS/certificats, supervision et alertes, calibration des seuils, sauvegarde chiffrée/WAL, exercice de restauration RPO/RTO et revue humaine.
