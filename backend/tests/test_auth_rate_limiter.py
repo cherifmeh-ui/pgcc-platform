@@ -127,6 +127,8 @@ def test_non_development_configuration_requires_dedicated_rate_limit_key():
         "ENVIRONMENT": "staging",
         "CLAMAV_HOST": "clamav.internal",
         "MFA_ENCRYPTION_KEYS": Fernet.generate_key().decode("ascii"),
+        "PARSER_BASE_URL": "http://parser.internal:8090",
+        "PARSER_SHARED_TOKEN": "P" * 48,
     }
     with pytest.raises(ValueError, match="AUTH_RATE_LIMIT_HMAC_KEY"):
         Settings(**base)
