@@ -403,7 +403,7 @@ jobs:
           frontend_image=$(docker compose -p pgccprod -f docker-compose.production.yaml --env-file .env.production images -q frontend)
           test -n "$frontend_image"
           docker run --rm --user 0:0 -v "$PWD/certs:/certs:rw" --entrypoint /bin/sh "$frontend_image" -c "chown 0:101 /certs/privkey.pem && chmod 640 /certs/privkey.pem"
-          test "$(stat -c '%a:%u:%g' certs/privkey.pem)" = "640:0:101"
+          docker run --rm -v "$PWD/certs:/etc/nginx/certs:ro" --entrypoint /bin/sh "$frontend_image" -c "test \$(stat -c '%a:%u:%g' /etc/nginx/certs/privkey.pem) = 640:0:101 && nginx -t"
       - name: Start production dependencies and wait for health
         shell: bash
         run: |
