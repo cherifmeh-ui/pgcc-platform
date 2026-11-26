@@ -25,6 +25,9 @@ from app.utils.rbac import role_has_permission
 
 router = APIRouter(prefix="/assets", tags=["Cartographie des actifs"])
 
+MAX_ASSET_IMPORT_BYTES = 1_048_576
+MAX_ASSET_IMPORT_ROWS = 5_000
+
 AssetType = Literal[
     "process", "information", "application", "hardware", "software",
     "infrastructure", "network", "service", "cloud_resource", "facility", "other",
@@ -288,8 +291,8 @@ async def preview_asset_csv_import(
     """Validate a CSV inventory without writing to the database."""
     if not file.filename or not file.filename.lower().endswith(".csv"):
         raise HTTPException(status_code=415, detail="Veuillez fournir un fichier CSV")
-    raw = await file.read(1_048_577)
-    if len(raw) > 1_048_576:
+    raw = await file.read(MAX_ASSET_IMPORT_BYTES + 1)
+    if len(raw) > MAX_ASSET_IMPORT_BYTES:
         raise HTTPException(status_code=413, detail="Fichier CSV limité à 1 Mo")
     try:
         decoded = raw.decode("utf-8-sig")
@@ -312,6 +315,11 @@ async def preview_asset_csv_import(
         if not any(values.values()):
             continue
         parsed_row_count += 1
+        if parsed_row_count > MAX_ASSET_IMPORT_ROWS:
+            raise HTTPException(
+                status_code=413,
+                detail=f"Import CSV limité à {MAX_ASSET_IMPORT_ROWS} lignes de données.",
+            )
         try:
             asset = AssetCreate.model_validate(values)
             normalized = asset.model_dump(mode="json")
