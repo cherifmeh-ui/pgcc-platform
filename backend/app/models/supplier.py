@@ -3,7 +3,7 @@ from uuid import uuid4
 
 from sqlalchemy import (
     Boolean, CheckConstraint, Column, Date, DateTime, ForeignKey, Index, Integer,
-    String, Text, UniqueConstraint, Numeric, func, text,
+    String, Text, UniqueConstraint, ForeignKeyConstraint, Numeric, func, text,
 )
 from sqlalchemy.dialects.postgresql import UUID as PG_UUID, JSONB
 
@@ -153,6 +153,7 @@ class SupplierAssetLink(Base):
         CheckConstraint("access_level IN ('Aucun', 'Standard', 'Privilégié')", name="ck_supplier_asset_links_access"),
         CheckConstraint("status IN ('Actif', 'Suspendu', 'Terminé')", name="ck_supplier_asset_links_status"),
         UniqueConstraint("supplier_id", "asset_id", "relationship_type", name="uq_supplier_asset_link"),
+        UniqueConstraint("id", "supplier_id", "asset_id", name="uq_supplier_asset_link_scope"),
         Index("ix_supplier_asset_links_asset_status", "asset_id", "status"),
     )
     id = Column(PG_UUID(as_uuid=True), primary_key=True, default=uuid4)
@@ -181,10 +182,16 @@ class SupplierAccessRequest(Base):
         Index("ix_supplier_access_requests_supplier_status", "supplier_id", "status", "end_date"),
         Index("ix_supplier_access_requests_asset_status", "asset_id", "status", "end_date"),
         Index("uq_supplier_access_requests_open_link", "supplier_asset_link_id", unique=True, postgresql_where=text("status IN ('Demandé', 'Approuvé', 'Suspendu')")),
+        ForeignKeyConstraint(
+            ["supplier_asset_link_id", "supplier_id", "asset_id"],
+            ["supplier_asset_links.id", "supplier_asset_links.supplier_id", "supplier_asset_links.asset_id"],
+            name="fk_supplier_access_requests_link_scope",
+            ondelete="RESTRICT",
+        ),
     )
     id = Column(PG_UUID(as_uuid=True), primary_key=True, default=uuid4)
     supplier_id = Column(PG_UUID(as_uuid=True), ForeignKey("suppliers.id", ondelete="RESTRICT"), nullable=False, index=True)
-    supplier_asset_link_id = Column(PG_UUID(as_uuid=True), ForeignKey("supplier_asset_links.id", ondelete="RESTRICT"), nullable=False, index=True)
+    supplier_asset_link_id = Column(PG_UUID(as_uuid=True), nullable=False, index=True)
     asset_id = Column(PG_UUID(as_uuid=True), ForeignKey("assets.id", ondelete="RESTRICT"), nullable=False, index=True)
     access_level = Column(String(20), nullable=False)
     data_access = Column(Boolean, nullable=False, default=False, server_default="false")
