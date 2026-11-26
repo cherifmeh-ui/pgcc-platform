@@ -1278,3 +1278,12 @@ Cette section remplace les anciens états intermédiaires datés du 21 novembre 
 - L'API de création des risques détecte les références normalisées en doublon et retourne HTTP 409 en cas de collision, y compris concurrente. Les mises à jour d'un risque verrouillent la ligne.
 - Workflow 45885458640 sur le HEAD exact daf4296aef817e7812d55e23cbc55d90547736eb : 4/4 jobs réussis (Backend, PostgreSQL, Frontend, Compose), 41 tests PostgreSQL réussis.
 - PR #1 reste ouverte, Draft et non fusionnée. La Phase 0 reste ouverte jusqu'à la recette de production avec vrais secrets/certificats, la validation réseau/pare-feu et supervision, la sauvegarde chiffrée/WAL et un exercice RPO/RTO en environnement cible, ainsi que la revue humaine et l'acceptation des risques résiduels.
+
+
+### Bornage et robustesse de l'import CSV des actifs — 26 novembre 2026
+
+- Limites d'entrée : 1 Mio et 5 000 lignes de données, lecture bornée à la taille maximale + 1 octet.
+- Rejet des en-têtes vides ou dupliqués, des colonnes inconnues et des lignes contenant plus de cellules que l'en-tête.
+- Validation groupée des identifiants d'applications : une seule requête SQL pour l'ensemble du fichier, au lieu d'une requête par ligne.
+- Tests Backend ajoutés pour les limites de taille/lignes, les en-têtes ambigus, les colonnes supplémentaires et le traitement groupé.
+- Workflow 45886912425 sur le HEAD 4e61f518b20cc82f4a3e6a6b85f59afb0cba8076 : 4/4 jobs réussis ; les 41 tests PostgreSQL restent verts.
