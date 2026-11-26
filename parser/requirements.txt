@@ -1,0 +1,1 @@
+fastapi==0.115.0\nuvicorn==0.30.6\npython-multipart==0.0.9\npypdf==5.0.1\npython-docx==1.1.2\n
