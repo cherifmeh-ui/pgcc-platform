@@ -31,7 +31,7 @@ async def extract_document_text(data: bytes, filename: str) -> tuple[str, str]:
                 files={"file": (filename, data, "application/octet-stream")},
             ) as response:
                 if response.status_code != 200:
-                    if response.status_code in {400, 413, 415, 408}:
+                    if response.status_code in {400, 413, 415}:
                         raise ParserRejected(f"Extraction refusée ({response.status_code}).")
                     raise ParserUnavailable(f"Service d'extraction indisponible ({response.status_code}).")
                 chunks = []
