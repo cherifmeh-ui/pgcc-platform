@@ -135,6 +135,8 @@ class Settings(BaseSettings):
         if self.ENVIRONMENT.lower() != "development":
             if not self.PARSER_BASE_URL.strip() or len(self.PARSER_SHARED_TOKEN.strip()) < 32:
                 raise ValueError("PARSER_BASE_URL et PARSER_SHARED_TOKEN sont obligatoires hors développement.")
+            if self.PARSER_SHARED_TOKEN.strip().startswith("CHANGE_ME"):
+                raise ValueError("PARSER_SHARED_TOKEN placeholder interdit hors développement.")
 
         if self.CLAMAV_PORT < 1 or self.CLAMAV_PORT > 65535:
             raise ValueError("CLAMAV_PORT doit être compris entre 1 et 65535.")
