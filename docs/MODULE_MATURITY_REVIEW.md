@@ -635,3 +635,12 @@ Status: targeted code review recorded; additional runtime/API tests remain requi
 - PostgreSQL concurrency fixtures supplied MagicMock Request objects; the real audit payload then contained non-JSON-serializable mock values for client IP/user-agent. Replaced these with concrete Starlette Request instances in the integration tests.
 - Follow-up test-only commits: 1067a1f, d2b45bf, df9e3b4. Validation of the latest commit is required before treating these fixes as accepted.
 - No production endpoint behavior was changed in these follow-up commits. Supplier audit migration remains pending.
+
+
+### Audit transaction-boundary recheck — 26 novembre 2026
+
+- Revue statique du code courant : les opérations de mutation des fournisseurs utilisent désormais `enqueue_audit_event(db, ...)` après le `flush()` métier et avant le `commit()`. Le module `suppliers.py` n'appelle plus `log_action()` pour ces mutations ; l'événement d'audit et la modification fournisseur partagent la transaction SQLAlchemy.
+- Documents : dépôt et suppression ajoutent leur événement d'audit avant le commit. L'indexation RAG ajoute également l'événement dans la transaction qui remplace les chunks et marque le document indexé.
+- Authentification : la rotation des refresh tokens, la révocation des sessions sur changement de politique, la détection de rejeu, le logout et le changement de mot de passe utilisent un événement d'audit dans la transaction de session correspondante. Des appels de télémétrie d'authentification utilisent encore `log_action()` avec une transaction outbox séparée ; l'atomicité de ces événements avec les mises à jour d'état de connexion/échec doit être évaluée séparément.
+- Preuve CI du HEAD précédent `c067628` : workflow `45840592943`, 4/4 jobs réussis (backend, PostgreSQL, frontend, Compose). Les tests PostgreSQL incluent la rotation concurrente, la détection de rejeu et le rollback si l'enqueue d'audit échoue.
+- Cette revue corrige les notes historiques précédentes qui indiquaient encore que les workflows fournisseurs et certains flux documentaires n'étaient pas migrés. Elle ne clôt pas la revue complète de l'audit transactionnel.
