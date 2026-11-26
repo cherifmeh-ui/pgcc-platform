@@ -133,3 +133,48 @@ async def test_csv_preview_checks_repeated_application_references_in_one_query()
     assert response["can_import"] is True
     assert response["rows_valid"] == 2
     assert db.execute.await_count == 2
+
+
+
+@pytest.mark.asyncio
+async def test_csv_preview_rejects_duplicate_normalized_headers():
+    upload = UploadFile(
+        filename="assets.csv",
+        file=BytesIO(b"reference, reference,name,asset_type,criticality\nA-001,A-002,Asset,hardware,Moyenne"),
+    )
+    db = AsyncMock()
+
+    with pytest.raises(HTTPException) as exc:
+        await preview_asset_csv_import(
+            file=upload,
+            db=db,
+            current_user=MagicMock(email="tester@example.test"),
+        )
+
+    assert exc.value.status_code == 422
+    assert "en-têtes dupliqués" in exc.value.detail
+    db.execute.assert_not_awaited()
+
+
+@pytest.mark.asyncio
+async def test_csv_preview_rejects_rows_with_extra_columns():
+    upload = UploadFile(
+        filename="assets.csv",
+        file=BytesIO(
+            b"reference,name,asset_type,criticality\n"
+            b"A-001,Asset,hardware,Moyenne,unexpected"
+        ),
+    )
+    db = AsyncMock()
+
+    response = await preview_asset_csv_import(
+        file=upload,
+        db=db,
+        current_user=MagicMock(email="tester@example.test"),
+    )
+
+    assert response["can_import"] is False
+    assert response["rows_valid"] == 0
+    assert response["errors"][0]["row"] == 2
+    assert "dépasse" in response["errors"][0]["error"]
+    db.execute.assert_not_awaited()
