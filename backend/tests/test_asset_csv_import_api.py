@@ -3,6 +3,7 @@ from unittest.mock import AsyncMock, MagicMock
 
 import pytest
 from starlette.datastructures import UploadFile
+from fastapi import HTTPException
 
 from app.api.v1.endpoints.assets import preview_asset_csv_import
 
@@ -57,3 +58,49 @@ def test_csv_export_formula_protection():
     assert _csv_safe_value("=HYPERLINK(\"https://example.test\")").startswith("'=")
     assert _csv_safe_value("+cmd") == "'+cmd"
     assert _csv_safe_value(None) == ""
+
+
+
+@pytest.mark.asyncio
+async def test_csv_preview_rejects_file_larger_than_one_mib_before_parsing():
+    from app.api.v1.endpoints.assets import MAX_ASSET_IMPORT_BYTES
+
+    upload = UploadFile(
+        filename="assets.csv",
+        file=BytesIO(b"x" * (MAX_ASSET_IMPORT_BYTES + 1)),
+    )
+    db = AsyncMock()
+
+    with pytest.raises(HTTPException) as exc:
+        await preview_asset_csv_import(
+            file=upload,
+            db=db,
+            current_user=MagicMock(email="tester@example.test"),
+        )
+
+    assert exc.value.status_code == 413
+    db.execute.assert_not_awaited()
+
+
+@pytest.mark.asyncio
+async def test_csv_preview_rejects_more_than_five_thousand_data_rows():
+    from app.api.v1.endpoints.assets import MAX_ASSET_IMPORT_ROWS
+
+    rows = [
+        f"ASSET-{index},Asset {index},hardware,Moyenne"
+        for index in range(MAX_ASSET_IMPORT_ROWS + 1)
+    ]
+    csv_data = "reference,name,asset_type,criticality\n" + "\n".join(rows)
+    upload = UploadFile(filename="assets.csv", file=BytesIO(csv_data.encode("utf-8")))
+    db = AsyncMock()
+
+    with pytest.raises(HTTPException) as exc:
+        await preview_asset_csv_import(
+            file=upload,
+            db=db,
+            current_user=MagicMock(email="tester@example.test"),
+        )
+
+    assert exc.value.status_code == 413
+    assert str(MAX_ASSET_IMPORT_ROWS) in exc.value.detail
+    db.execute.assert_not_awaited()
