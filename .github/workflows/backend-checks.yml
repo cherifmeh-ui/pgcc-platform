@@ -179,6 +179,39 @@ jobs:
           image_id=$(docker image inspect pgcc-platform-frontend:latest --format "{{.Id}}")
           test -n "$image_id"
           docker run --rm -v /tmp/pgcc-production-certs:/etc/nginx/certs:ro --entrypoint /bin/sh "$image_id" -c "id; ls -la /etc/nginx/certs; nginx -t"
+      - name: Test production frontend on an isolated published network
+        shell: bash
+        run: |
+          image_id=$(docker image inspect pgcc-platform-frontend:latest --format "{{.Id}}")
+          docker network create --internal pgcc-production-smoke
+          cleanup() {
+            docker rm -f pgcc-production-frontend-smoke >/dev/null 2>&1 || true
+            docker network rm pgcc-production-smoke >/dev/null 2>&1 || true
+          }
+          trap cleanup EXIT
+          docker run -d --name pgcc-production-frontend-smoke \
+            --network pgcc-production-smoke \
+            -p 127.0.0.1:18443:8443 -p 127.0.0.1:18080:8080 \
+            -v /tmp/pgcc-production-certs:/etc/nginx/certs:ro \
+            --read-only \
+            --tmpfs /tmp:rw,noexec,nosuid,size=16m \
+            --tmpfs /var/cache/nginx:rw,noexec,nosuid,size=32m \
+            --cap-drop ALL --security-opt no-new-privileges:true \
+            "$image_id"
+          for attempt in {1..30}; do
+            if curl --insecure --fail --silent https://127.0.0.1:18443/ -o /tmp/pgcc-production-index.html; then
+              break
+            fi
+            if [ "$attempt" -eq 30 ]; then
+              docker logs pgcc-production-frontend-smoke
+              exit 1
+            fi
+            sleep 1
+          done
+          test -s /tmp/pgcc-production-index.html
+          redirect_status=$(curl --silent --output /dev/null --write-out "%{http_code}" http://127.0.0.1:18080/)
+          test "$redirect_status" = "308"
+          curl --insecure --silent --head https://127.0.0.1:18443/ | grep -qi "Strict-Transport-Security"
       - name: Build backend image
         run: docker compose build backend
       - name: Start complete development stack
