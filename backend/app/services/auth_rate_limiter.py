@@ -179,6 +179,7 @@ async def enforce_auth_rate_limit(
 
     now = utcnow()
     blocked_until_values: list[datetime] = []
+    blocked_scope: str | None = None
     try:
         for kind, identity, (limit, window_seconds, cooldown_seconds) in buckets:
             scope = f"{action}:{kind}"
@@ -194,6 +195,7 @@ async def enforce_auth_rate_limit(
             )
             if blocked_until is not None and blocked_until > now:
                 blocked_until_values.append(blocked_until)
+                blocked_scope = kind
                 if kind == "ip":
                     break
         await db.commit()
@@ -209,6 +211,15 @@ async def enforce_auth_rate_limit(
         retry_after = max(
             1,
             math.ceil((max(blocked_until_values) - now).total_seconds()),
+        )
+        logger.warning(
+            "Authentication request rate limited",
+            extra={
+                "security_event": "auth_rate_limit_exceeded",
+                "auth_action": action,
+                "bucket_scope": blocked_scope,
+                "retry_after_seconds": retry_after,
+            },
         )
         raise HTTPException(
             status_code=429,
