@@ -165,3 +165,51 @@ def test_non_development_configuration_requires_antivirus_host():
             MFA_ENCRYPTION_KEYS=Fernet.generate_key().decode("ascii"),
             AUTH_RATE_LIMIT_HMAC_KEY="r" * 48,
         )
+
+
+@pytest.mark.asyncio
+async def test_rate_limit_emits_privacy_safe_structured_event_and_retry_after(monkeypatch, caplog):
+    from datetime import timedelta
+    import logging
+    import app.services.auth_rate_limiter as limiter
+
+    monkeypatch.setattr(settings, "AUTH_RATE_LIMIT_HMAC_KEY", "k" * 48)
+    now = limiter.utcnow()
+    monkeypatch.setattr(limiter, "utcnow", lambda: now)
+
+    async def blocked_bucket(*args, **kwargs):
+        return now + timedelta(seconds=75)
+
+    monkeypatch.setattr(limiter, "_increment_bucket", blocked_bucket)
+    db = AsyncMock()
+    request = Request(
+        {
+            "type": "http",
+            "method": "POST",
+            "path": "/auth/login",
+            "headers": [],
+            "client": ("198.51.100.44", 1234),
+            "server": ("localhost", 80),
+            "scheme": "http",
+            "query_string": b"",
+        }
+    )
+
+    with caplog.at_level(logging.WARNING, logger="app.services.auth_rate_limiter"):
+        with pytest.raises(HTTPException) as denied:
+            await limiter.enforce_auth_rate_limit(
+                db, request, "login", subject="private@example.com",
+            )
+
+    assert denied.value.status_code == 429
+    assert denied.value.headers["Retry-After"] == "75"
+    record = next(
+        record for record in caplog.records
+        if getattr(record, "security_event", None) == "auth_rate_limit_exceeded"
+    )
+    assert record.auth_action == "login"
+    assert record.bucket_scope == "ip"
+    assert record.retry_after_seconds == 75
+    assert "198.51.100.44" not in record.getMessage()
+    assert "private@example.com" not in record.getMessage()
+    db.commit.assert_awaited_once()
