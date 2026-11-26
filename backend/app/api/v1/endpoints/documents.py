@@ -23,11 +23,9 @@ from app.services.antivirus import scan_document_bytes, AntivirusUnavailable, Ma
 from app.models.user import User
 from app.services.security_logger import enqueue_audit_event
 
-# ⬇️ IMPORT DU SERVICE RAG POUR L'INDEXATION VECTORIELLE
-try:
-    from app.services.rag_service import rag_service
-except ImportError:
-    rag_service = None # Fallback si le module n'est pas encore déployé
+# Le service RAG est une dépendance obligatoire : une erreur d'import doit
+# empêcher le démarrage plutôt que désactiver silencieusement l'indexation.
+from app.services.rag_service import rag_service
 
 router = APIRouter(prefix="/documents", tags=["Gestion Documentaire"])
 
@@ -316,9 +314,6 @@ async def trigger_indexation(
     Déclenche l'indexation vectorielle (RAG) d'un document.
     Le traitement est exécuté de manière synchrone dans cette version; le endpoint retourne 200 après son résultat.
     """
-    if not rag_service:
-        raise HTTPException(status_code=503, detail="Service RAG indisponible. Vérifiez que 'rag_service.py' est bien chargé.")
-
     try:
         uid = uuid.UUID(doc_id)
     except ValueError:
