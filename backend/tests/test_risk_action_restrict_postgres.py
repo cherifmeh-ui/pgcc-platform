@@ -60,6 +60,6 @@ async def test_database_restricts_risk_deletion_while_actions_exist():
     finally:
         async with sessions() as db:
             await db.execute(delete(ActionItem).where(ActionItem.risk_id == risk_id))
-            await db.execute(delete(Risk).where(Risk.id == risk.id))
+            await db.execute(delete(Risk).where(Risk.id == risk_id))
             await db.commit()
         await engine.dispose()
