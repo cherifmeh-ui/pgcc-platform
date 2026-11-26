@@ -112,15 +112,21 @@ jobs:
           docker exec "$postgres_container" dropdb -U pgcc_test --if-exists pgcc_legacy_test
           docker exec "$postgres_container" createdb -U pgcc_test pgcc_legacy_test
           DATABASE_URL=postgresql+asyncpg://pgcc_test:pgcc_test@localhost:5432/pgcc_legacy_test alembic upgrade 0024_audit_outbox
+          # Simulate the deployed legacy CASCADE policy before migration 0031.
+          docker exec "$postgres_container" psql -U pgcc_test -d pgcc_legacy_test -v ON_ERROR_STOP=1 -c "ALTER TABLE action_items DROP CONSTRAINT IF EXISTS fk_action_items_risk_id_risks_restrict; ALTER TABLE action_items DROP CONSTRAINT IF EXISTS action_items_risk_id_fkey; ALTER TABLE action_items ADD CONSTRAINT action_items_risk_id_fkey FOREIGN KEY (risk_id) REFERENCES risks(id) ON DELETE CASCADE"
           docker exec "$postgres_container" psql -U pgcc_test -d pgcc_legacy_test -v ON_ERROR_STOP=1 -c "INSERT INTO documents (id, title, doc_type, filename, file_data) VALUES (gen_random_uuid(), 'Phase 0 legacy digest fixture', 'PSSI', 'phase0-legacy-sha256-fixture.pdf', decode('255044462d6c6567616379', 'hex'))"
           expected_legacy_digest=$(printf '%s' '%PDF-legacy' | sha256sum | awk '{print $1}')
           DATABASE_URL=postgresql+asyncpg://pgcc_test:pgcc_test@localhost:5432/pgcc_legacy_test alembic upgrade head
           actual_legacy_digest=$(docker exec "$postgres_container" psql -U pgcc_test -d pgcc_legacy_test -Atc "SELECT file_sha256 FROM documents WHERE filename = 'phase0-legacy-sha256-fixture.pdf'")
           test "$actual_legacy_digest" = "$expected_legacy_digest"
+          delete_rule=$(docker exec "$postgres_container" psql -U pgcc_test -d pgcc_legacy_test -Atc "SELECT confdeltype FROM pg_constraint WHERE conname = 'fk_action_items_risk_id_risks_restrict'")
+          test "$delete_rule" = "r"
           DATABASE_URL=postgresql+asyncpg://pgcc_test:pgcc_test@localhost:5432/pgcc_legacy_test alembic downgrade 0025_user_auth_version
           DATABASE_URL=postgresql+asyncpg://pgcc_test:pgcc_test@localhost:5432/pgcc_legacy_test alembic upgrade head
           actual_legacy_digest=$(docker exec "$postgres_container" psql -U pgcc_test -d pgcc_legacy_test -Atc "SELECT file_sha256 FROM documents WHERE filename = 'phase0-legacy-sha256-fixture.pdf'")
           test "$actual_legacy_digest" = "$expected_legacy_digest"
+          delete_rule=$(docker exec "$postgres_container" psql -U pgcc_test -d pgcc_legacy_test -Atc "SELECT confdeltype FROM pg_constraint WHERE conname = 'fk_action_items_risk_id_risks_restrict'")
+          test "$delete_rule" = "r"
           version=$(docker exec "$postgres_container" psql -U pgcc_test -d pgcc_legacy_test -Atc "SELECT version_num FROM alembic_version")
           test "$version" = "0031_risk_action_restrict"
       - name: Verify PostgreSQL backup and restore
