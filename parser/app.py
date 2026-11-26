@@ -31,7 +31,7 @@ async def extract_document(
 ):
     if not hmac.compare_digest(x_parser_token, TOKEN):
         raise HTTPException(status_code=401, detail="Unauthorized")
-    filename = (file.filename or "").replace("\\\\", "/").split("/")[-1]
+    filename = re.sub(r"[\\\\/]+", "/", file.filename or "").split("/")[-1]
     filename = re.sub(r"[^A-Za-z0-9._ -]", "_", filename).strip(" .")
     if not filename or len(filename) > 200:
         raise HTTPException(status_code=400, detail="Invalid filename")
