@@ -33,7 +33,7 @@ services:
     volumes:
       - clamav_db:/var/lib/clamav
     networks:
-      - app_internal
+      - clamav_internal
       - clamav_egress
     healthcheck:
       test: ["CMD", "clamdscan", "--ping=3"]
@@ -115,6 +115,7 @@ services:
       - app_internal
       - db_internal
       - parser_internal
+      - clamav_internal
     read_only: true
     tmpfs:
       - /tmp:rw,noexec,nosuid,size=64m
@@ -191,6 +192,8 @@ networks:
   db_internal:
     internal: true
   parser_internal:
+    internal: true
+  clamav_internal:
     internal: true
   clamav_egress:
     driver: bridge
