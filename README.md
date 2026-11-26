@@ -50,6 +50,8 @@ La référence d'architecture pour les évolutions futures est documentée dans 
 - [Modèle de données cible](docs/TARGET_DATA_MODEL.md)
 - [Interactions entre modules](docs/MODULE_INTERACTIONS.md)
 - [Implémentation Cartographie — MVP](docs/ASSET_INVENTORY_IMPLEMENTATION.md)
+- [Déploiement de production durci](docs/PRODUCTION_DEPLOYMENT.md)
+- [Exploitation du rate limiting d'authentification](docs/AUTH_RATE_LIMIT_OPERATIONS.md)
 
 Ces documents définissent l'orientation modulaire de PGCC et la roadmap. Ils ne remplacent pas l'analyse du code existant avant une migration.
 
