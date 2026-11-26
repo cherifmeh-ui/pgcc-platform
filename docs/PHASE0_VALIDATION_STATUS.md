@@ -1208,3 +1208,13 @@ Cette section remplace les anciens états intermédiaires datés du 21 novembre 
 - Le même job a démarré ClamAV avec une base de signatures à jour et validé les verdicts d'un fichier sain et du fichier de test EICAR.
 - Cette validation couvre le chemin d'intégration et les contrôles CI définis ; elle ne remplace pas une revue indépendante du parseur, des essais de charge/épuisement des ressources ni un exercice de restauration complet.
 - PR #1 toujours ouverte, Draft et non fusionnée. La Phase 0 reste ouverte.
+
+
+## Complément — parcours d'authentification temporaires — 26 novembre 2026
+
+- Les jetons de pré-authentification et de changement obligatoire de mot de passe sont liés à la version de sécurité du compte et à son rôle normalisé.
+- Le backend refuse les jetons dont la version est périmée, le rôle ne correspond plus ou le claim `auth_version` manque, pour les parcours d'enrôlement MFA, de confirmation MFA et de changement de mot de passe.
+- Les changements de mot de passe obligatoires reçoivent leur jeton après persistance du nouvel état MFA et de la version de sécurité correspondante.
+- Les compteurs d'échecs de connexion/MFA et leur audit outbox sont maintenant validés ensemble dans la même transaction ; une défaillance de l'audit entraîne un rollback.
+- Tests unitaires ciblés ajoutés pour ces cas, dont les scénarios de rollback.
+- Le workflow de validation sur le HEAD de code `90392af` est lancé ; ne pas considérer les nouveaux tests comme validés avant son résultat final.
