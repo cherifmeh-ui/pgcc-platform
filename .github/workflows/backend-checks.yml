@@ -221,6 +221,47 @@ jobs:
 
           asyncio.run(main())
           PY
+      - name: Verify parser authentication and fail-closed outage handling
+        shell: bash
+        run: |
+          docker compose exec -T backend python - <<'PY'
+          import asyncio
+          import httpx
+          from app.services.isolated_parser_client import extract_document_text, ParserUnavailable
+
+          async def verify_authentication():
+              async with httpx.AsyncClient() as client:
+                  response = await client.post(
+                      'http://parser:8090/v1/extract',
+                      files={'file': ('unauthorized.pdf', b'%PDF-test', 'application/pdf')},
+                  )
+              assert response.status_code == 401, response.status_code
+
+          asyncio.run(verify_authentication())
+          PY
+          docker compose stop parser
+          docker compose exec -T backend python - <<'PY'
+          import asyncio
+          from app.services.isolated_parser_client import extract_document_text, ParserUnavailable
+
+          async def verify_outage():
+              try:
+                  await extract_document_text(b'%PDF-test', 'outage.pdf')
+              except ParserUnavailable:
+                  print('Parser indisponible : dépôt refusé (fail closed).')
+                  return
+              raise AssertionError('Le dépôt aurait dû être refusé.')
+
+          asyncio.run(verify_outage())
+          PY
+          docker compose start parser
+          for attempt in {1..30}; do
+            health=$(docker inspect --format='{{.State.Health.Status}}' pgcc_parser 2>/dev/null || true)
+            if [ "$health" = "healthy" ]; then exit 0; fi
+            sleep 2
+          done
+          docker compose logs parser
+          exit 1
       - name: Start ClamAV and wait for fresh signature database
         shell: bash
         run: |
