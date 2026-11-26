@@ -282,3 +282,20 @@ Do not close Phase 0 until evidence is attached for:
 - La liste, l'aperçu, le téléchargement et le contexte IA utilisent la même fonction de décision d'accès. Une FK RESTRICT empêche la suppression d'un utilisateur propriétaire sans réaffectation préalable.
 - Tests unitaires et PostgreSQL ajoutés pour les accès propriétaire, département, autre département et document restreint.
 - La migration et les tests doivent encore être validés sur le HEAD final par CI ; aucun résultat n'est présumé.
+
+
+## Résolutions confirmées et état courant — 26 novembre 2026
+
+Les constats historiques ci-dessus décrivent l'état au moment de leur rédaction. Les contrôles suivants ont depuis été implémentés et validés sur la CI :
+
+- Parseur PDF/DOCX isolé sur réseau interne dédié, authentification obligatoire, refus fermé en cas d'indisponibilité, extraction DOCX réelle et tests de séparation réseau.
+- ClamAV exécuté en CI avec base de signatures à jour : un fichier sain est accepté et le fichier de test EICAR est détecté.
+- ACL documentaire appliquée dans la requête SQL avant la limite de résultats ; vérification ACL et SHA-256 en défense en profondeur avant inclusion dans le contexte IA ; récupération limitée à trois documents.
+- Cohérence propriétaire/département du document appliquée sur liste, aperçu, téléchargement et contexte IA.
+- Cohérence des demandes d'accès fournisseur imposée par FK composite (migration 0029) ; les demandes incohérentes sont rejetées par PostgreSQL.
+- Intégrité du score de risque imposée par contraintes (migration 0030) ; référence non vide et unicité insensible à la casse ; précontrôle bloquant des données historiques incohérentes.
+- Conservation des actions correctives garantie par FK RESTRICT (migration 0031), sans cascade ORM. La CI simule l'ancien CASCADE et prouve sa conversion.
+- Profil Compose de production distinct, frontend TLS testé, backend/parser/DB/ClamAV non publiés, réseaux internes séparés et configuration Nginx validée.
+- Workflow 45885458640, HEAD daf4296aef817e7812d55e23cbc55d90547736eb : 4/4 jobs réussis ; 41 tests PostgreSQL réussis ; migration, schéma, downgrade/upgrade, sauvegarde/restauration CI et tests antivirus réels réussis.
+
+Restent à réaliser hors CI : déploiement de recette avec secrets et certificats réels, revue pare-feu/DNS/proxy, supervision et alertes, calibration des seuils, sauvegarde chiffrée et archivage WAL, restauration mesurée RPO/RTO, tests de charge/épuisement de ressources et revue indépendante. Ces points bloquent toujours la clôture de Phase 0.
