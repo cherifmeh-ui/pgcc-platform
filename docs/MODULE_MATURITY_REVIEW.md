@@ -653,3 +653,13 @@ Status: targeted code review recorded; additional runtime/API tests remain requi
 - Les tests PostgreSQL `test_asset_relationships_postgres.py` couvrent les deux créations simultanées de dépendances opposées (une seule direction acceptée) ainsi que la course entre création d'un lien actif-risque et suppression du risque. Les tests de cycle et d'état de retrait complètent ces contrôles.
 - Le workflow `45840592943` sur le HEAD `c067628` a validé le job PostgreSQL et l'ensemble des 4 jobs. Le contrôle de parité modèle/migrations a également réussi.
 - **Contrôle restant :** vérifier la couverture de concurrence pour toutes les autres mutations de relations et réaliser une revue opérationnelle de la stratégie de verrouillage sous charge. Les contraintes FK et les tests actuels ne valent pas preuve de charge en production.
+
+
+### Authentification — invalidation des jetons de parcours et audit des échecs — 26 novembre 2026
+
+- Les jetons temporaires de pré-authentification et de changement obligatoire du mot de passe portent maintenant le rôle normalisé et `auth_version`.
+- Les endpoints de démarrage d'enrôlement MFA, de confirmation MFA et de changement obligatoire du mot de passe comparent ces claims à l'état utilisateur verrouillé en base. Un jeton ancien, un rôle divergent ou un claim de version absent est refusé en HTTP 401.
+- Après activation initiale du MFA, le flush qui incrémente `auth_version` précède l'émission du jeton de changement de mot de passe. Le jeton est donc lié à la nouvelle version de sécurité.
+- Les échecs de mot de passe et de MFA enregistrent désormais l'événement d'audit dans la même transaction que l'incrément du compteur d'échecs et, le cas échéant, le verrouillage du compte. Si l'outbox échoue, l'état d'échec est annulé plutôt que conservé sans audit.
+- Tests ajoutés : claims de jetons normalisés/versionnés ; jetons périmés par version, rôle ou absence de claim sur les trois parcours ; ordre audit/commit et rollback en cas d'échec de l'outbox pour login et MFA.
+- **Validation CI de cette révision en cours** au moment de la rédaction. La revue humaine du déploiement, du reverse-proxy et des paramètres de production reste requise.
