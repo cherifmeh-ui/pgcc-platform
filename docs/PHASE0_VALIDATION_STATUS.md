@@ -1187,3 +1187,12 @@ Cette section remplace les anciens états intermédiaires datés du 21 novembre 
 - Tests unitaires du client ajoutés : succès, configuration absente, indisponibilité et réponse invalide. Le job Compose vérifie que le parser n'est connecté qu'au réseau interne et réalise une extraction DOCX réelle depuis le backend.
 - Commits de cette tranche : `1441169`, `6abb098`, `6928c9b`, `74dd8af`, `8362d63`, `fe1a2f8`, `ee35b37`, `aa7f2a6`, `2bd97ce`, `9e141cc`, puis durcissement du validateur de configuration.
 - **Validation en attente :** aucun succès CI n'est revendiqué pour ce nouveau chemin tant que les jobs backend, PostgreSQL et Compose n'ont pas terminé. L'intégration est une première tranche, à compléter par tests d'authentification du parser, timeout réel, panne du parser, test de dépassement de ressources et revue de sécurité indépendante.
+
+## Résultats CI du premier chemin parser isolé — 26 novembre 2026
+
+- Workflow `45822023676`, HEAD `ae28e64e583e94a416a49e823636003db8b8dbe4` : **4/4 jobs réussis** (backend, PostgreSQL, frontend, Docker Compose).
+- Backend et frontend réussis ; PostgreSQL intégration réussie.
+- Le job Compose a validé la configuration, construit le service parser, démarré le stack, vérifié l'API et le proxy, vérifié que le conteneur parser est uniquement sur le réseau `parser_internal`, puis réalisé une extraction DOCX réelle via le client du backend.
+- Les échecs du workflow précédent `45821688338` ont été corrigés : exigences parser avec vraies fins de ligne, tests upload et tests PostgreSQL utilisant le client parser, validations de configuration ordonnées sans masquer les erreurs antérieures.
+- Une étape CI complémentaire vérifiant l'authentification du parser et le refus fermé lorsque le service est arrêté a été ajoutée dans le commit `8469b16`. Son workflow est en attente ; ces deux contrôles ne sont donc pas encore validés.
+- La Phase 0 reste ouverte jusqu'à validation de ces contrôles, tests de surcharge/timeout, revue d'isolation indépendante et exercice de restauration opérationnelle.
