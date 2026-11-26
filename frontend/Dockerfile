@@ -13,3 +13,8 @@ FROM nginxinc/nginx-unprivileged:stable-alpine
 COPY --from=build /app/dist /usr/share/nginx/html
 COPY nginx.production.conf /etc/nginx/conf.d/default.conf
 EXPOSE 8080 8443
+
+# Bypass the stock entrypoint scripts: they try to mutate default.conf,
+# which is intentionally read-only in the production container.
+ENTRYPOINT ["nginx"]
+CMD ["-g", "daemon off;"]
