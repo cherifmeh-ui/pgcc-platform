@@ -339,12 +339,26 @@ async def preview_asset_csv_import(
         except Exception as exc:
             errors.append({"row": row_number, "error": str(exc)})
             invalid_row_numbers.add(row_number)
-    for row in rows:
-        try:
-            await _ensure_application_exists(row["data"].get("application_id"), db)
-        except HTTPException as exc:
-            errors.append({"row": row["row"], "error": exc.detail})
-            invalid_row_numbers.add(row["row"])
+    application_ids = {
+        UUID(row["data"]["application_id"])
+        for row in rows
+        if row["data"].get("application_id")
+    }
+    if application_ids:
+        application_result = await db.execute(
+            select(Application.id).where(Application.id.in_(application_ids))
+        )
+        existing_application_ids = {
+            str(application_id) for application_id in application_result.scalars().all()
+        }
+        for row in rows:
+            application_id = row["data"].get("application_id")
+            if application_id and application_id not in existing_application_ids:
+                errors.append({
+                    "row": row["row"],
+                    "error": "Application associée introuvable",
+                })
+                invalid_row_numbers.add(row["row"])
     if rows:
         refs = [row["data"]["reference"] for row in rows]
         hostnames = [row["data"]["hostname"] for row in rows if row["data"].get("hostname")]
