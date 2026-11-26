@@ -366,3 +366,219 @@ jobs:
       - name: Stop stack
         if: always()
         run: docker compose down --volumes --remove-orphans
+
+  production-runtime-smoke:
+    runs-on: ubuntu-latest
+    timeout-minutes: 25
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+      - name: Generate ephemeral production secrets and TLS certificate
+        shell: bash
+        run: |
+          cp .env.production.example .env.production
+          DB_PASSWORD=$(openssl rand -hex 24)
+          JWT_SECRET=$(openssl rand -hex 64)
+          MFA_KEY=$(python -c "import base64,secrets; print(base64.urlsafe_b64encode(secrets.token_bytes(32)).decode())")
+          HMAC_KEY=$(openssl rand -hex 32)
+          PARSER_TOKEN=$(openssl rand -hex 32)
+          for secret in "$DB_PASSWORD" "$JWT_SECRET" "$MFA_KEY" "$HMAC_KEY" "$PARSER_TOKEN"; do
+            echo "::add-mask::$secret"
+          done
+          sed -i "s|^POSTGRES_PASSWORD=.*|POSTGRES_PASSWORD=$DB_PASSWORD|" .env.production
+          sed -i "s|^DATABASE_URL=.*|DATABASE_URL=postgresql+asyncpg://pgcc_user:$DB_PASSWORD@postgres:5432/pgcc_prod|" .env.production
+          sed -i "s|^JWT_SECRET=.*|JWT_SECRET=$JWT_SECRET|" .env.production
+          sed -i "s|^MFA_ENCRYPTION_KEYS=.*|MFA_ENCRYPTION_KEYS=$MFA_KEY|" .env.production
+          sed -i "s|^AUTH_RATE_LIMIT_HMAC_KEY=.*|AUTH_RATE_LIMIT_HMAC_KEY=$HMAC_KEY|" .env.production
+          sed -i "s|^PARSER_SHARED_TOKEN=.*|PARSER_SHARED_TOKEN=$PARSER_TOKEN|" .env.production
+          mkdir -p certs
+          openssl req -x509 -nodes -days 1 -newkey rsa:2048 \
+            -keyout certs/privkey.pem -out certs/fullchain.pem -subj "/CN=localhost"
+          chmod 644 certs/fullchain.pem
+      - name: Build hardened production images
+        run: docker compose -p pgccprod -f docker-compose.production.yaml --env-file .env.production build
+      - name: Set least-privilege TLS key ownership
+        shell: bash
+        run: |
+          frontend_image=$(docker compose -p pgccprod -f docker-compose.production.yaml --env-file .env.production images -q frontend)
+          test -n "$frontend_image"
+          docker run --rm --user 0:0 -v "$PWD/certs:/certs:rw" --entrypoint /bin/sh "$frontend_image" -c "chown 0:101 /certs/privkey.pem && chmod 640 /certs/privkey.pem"
+          test "$(stat -c '%a:%u:%g' certs/privkey.pem)" = "640:0:101"
+      - name: Start production dependencies and wait for health
+        shell: bash
+        run: |
+          compose=(docker compose -p pgccprod -f docker-compose.production.yaml --env-file .env.production)
+          "${compose[@]}" up -d postgres parser clamav
+          for service in postgres parser clamav; do
+            ready=false
+            for attempt in {1..240}; do
+              container=$("${compose[@]}" ps -q "$service")
+              if [ -n "$container" ]; then
+                health=$(docker inspect --format='{{.State.Health.Status}}' "$container" 2>/dev/null || true)
+                if [ "$health" = "healthy" ]; then
+                  ready=true
+                  break
+                fi
+                if [ "$health" = "unhealthy" ]; then
+                  "${compose[@]}" logs "$service"
+                  exit 1
+                fi
+              fi
+              sleep 5
+            done
+            if [ "$ready" != true ]; then
+              "${compose[@]}" logs "$service"
+              echo "Le service de production $service n'est pas devenu sain."
+              exit 1
+            fi
+          done
+      - name: Apply production database migrations
+        run: docker compose -p pgccprod -f docker-compose.production.yaml --env-file .env.production run --rm --no-deps backend alembic upgrade head
+      - name: Start production backend and frontend
+        run: docker compose -p pgccprod -f docker-compose.production.yaml --env-file .env.production up -d backend frontend
+      - name: Verify production health, TLS, proxy and network isolation
+        shell: bash
+        run: |
+          compose=(docker compose -p pgccprod -f docker-compose.production.yaml --env-file .env.production)
+          for service in backend frontend; do
+            ready=false
+            for attempt in {1..60}; do
+              container=$("${compose[@]}" ps -q "$service")
+              health=$(docker inspect --format='{{.State.Health.Status}}' "$container" 2>/dev/null || true)
+              if [ "$health" = "healthy" ]; then
+                ready=true
+                break
+              fi
+              sleep 2
+            done
+            if [ "$ready" != true ]; then
+              "${compose[@]}" logs "$service"
+              exit 1
+            fi
+          done
+          frontend_ip=$(docker inspect "$("${compose[@]}" ps -q frontend)" --format '{{range .NetworkSettings.Networks}}{{.IPAddress}}{{end}}')
+          test "$frontend_ip" = "172.31.10.10"
+          curl --insecure --fail --silent --show-error "https://$frontend_ip:8443/" -o /tmp/pgcc-production-index.html
+          test -s /tmp/pgcc-production-index.html
+          grep -q '<div id="app">' /tmp/pgcc-production-index.html
+          curl --insecure --silent --head "https://$frontend_ip:8443/" | grep -qi "^Strict-Transport-Security:"
+          redirect_status=$(curl --silent --output /dev/null --write-out "%{http_code}" "http://$frontend_ip:8080/")
+          test "$redirect_status" = "308"
+          api_status=$(curl --insecure --silent --output /dev/null --write-out "%{http_code}" "https://$frontend_ip:8443/api/v1/me/profile")
+          test "$api_status" = "401"
+          python - <<'PY'
+          import json
+          import subprocess
+
+          def inspect(service):
+              container = subprocess.check_output(
+                  ["docker", "compose", "-p", "pgccprod", "-f", "docker-compose.production.yaml",
+                   "--env-file", ".env.production", "ps", "-q", service], text=True
+              ).strip()
+              assert container, service
+              networks = json.loads(subprocess.check_output(
+                  ["docker", "inspect", "--format", "{{json .NetworkSettings.Networks}}", container],
+                  text=True,
+              ))
+              bindings = json.loads(subprocess.check_output(
+                  ["docker", "inspect", "--format", "{{json .HostConfig.PortBindings}}", container],
+                  text=True,
+              ))
+              return set(networks), bindings
+
+          expected = {
+              "postgres": {"pgccprod_db_internal"},
+              "parser": {"pgccprod_parser_internal"},
+              "clamav": {"pgccprod_clamav_internal", "pgccprod_clamav_egress"},
+              "backend": {"pgccprod_app_internal", "pgccprod_db_internal",
+                          "pgccprod_parser_internal", "pgccprod_clamav_internal"},
+              "frontend": {"pgccprod_app_internal"},
+          }
+          for service, expected_networks in expected.items():
+              networks, bindings = inspect(service)
+              assert networks == expected_networks, (service, networks)
+              if service != "frontend":
+                  assert not bindings or all(not values for values in bindings.values()), (service, bindings)
+          print("Réseaux de production et absence de ports publics internes vérifiés.")
+          PY
+      - name: Verify production parser extraction, authentication and fail-closed behavior
+        shell: bash
+        run: |
+          compose=(docker compose -p pgccprod -f docker-compose.production.yaml --env-file .env.production)
+          "${compose[@]}" exec -T backend python - <<'PY'
+          import asyncio
+          import httpx
+          from io import BytesIO
+          from docx import Document
+          from app.services.isolated_parser_client import extract_document_text, ParserUnavailable
+
+          async def main():
+              document = Document()
+              document.add_paragraph("PGCC production parser integration check")
+              stream = BytesIO()
+              document.save(stream)
+              text, detected = await extract_document_text(stream.getvalue(), r"C:\\fakepath\\production-check.docx")
+              assert detected == "DOCX"
+              assert "PGCC production parser integration check" in text
+              async with httpx.AsyncClient() as client:
+                  unauthorized = await client.post(
+                      "http://parser:8090/v1/extract",
+                      files={"file": ("unauthorized.pdf", b"%PDF-test", "application/pdf")},
+                  )
+              assert unauthorized.status_code == 401
+              print("Parseur production : extraction DOCX et authentification validées.")
+
+          asyncio.run(main())
+          PY
+          "${compose[@]}" stop parser
+          "${compose[@]}" exec -T backend python - <<'PY'
+          import asyncio
+          from app.services.isolated_parser_client import extract_document_text, ParserUnavailable
+
+          async def main():
+              try:
+                  await extract_document_text(b"%PDF-test", "outage.pdf")
+              except ParserUnavailable:
+                  print("Parseur indisponible : dépôt refusé (fail closed).")
+                  return
+              raise AssertionError("Le dépôt aurait dû être refusé.")
+
+          asyncio.run(main())
+          PY
+          "${compose[@]}" start parser
+          for attempt in {1..30}; do
+            container=$("${compose[@]}" ps -q parser)
+            health=$(docker inspect --format='{{.State.Health.Status}}' "$container" 2>/dev/null || true)
+            if [ "$health" = "healthy" ]; then exit 0; fi
+            sleep 2
+          done
+          "${compose[@]}" logs parser
+          exit 1
+      - name: Verify production ClamAV clean and EICAR verdicts
+        shell: bash
+        run: |
+          docker compose -p pgccprod -f docker-compose.production.yaml --env-file .env.production exec -T backend python - <<'PY'
+          import asyncio
+          from app.services.antivirus import scan_document_bytes, MalwareDetected
+
+          async def main():
+              await scan_document_bytes(b"PGCC production ClamAV clean fixture")
+              eicar = (
+                  b"X5O!P%@AP[4\\PZX54(P^)7CC)7}$"
+                  b"EICAR-STANDARD-ANTIVIRUS-TEST-FILE!$H+H*"
+              )
+              try:
+                  await scan_document_bytes(eicar)
+              except MalwareDetected:
+                  print("ClamAV production : fichier sain accepté, EICAR détecté.")
+                  return
+              raise AssertionError("ClamAV n'a pas détecté EICAR.")
+
+          asyncio.run(main())
+          PY
+      - name: Show production stack logs on failure
+        if: failure()
+        run: docker compose -p pgccprod -f docker-compose.production.yaml --env-file .env.production logs || true
+      - name: Stop production stack
+        if: always()
+        run: docker compose -p pgccprod -f docker-compose.production.yaml --env-file .env.production down --volumes --remove-orphans || true
