@@ -1,17 +1,26 @@
 from unittest.mock import MagicMock
+import hashlib
 
 import pytest
 
 from app.api.v1.endpoints.ai_advanced import readable_context_documents
 
 
+def _document(doc_id, doc_type, payload=None, digest=None):
+    payload = payload if payload is not None else ("document-" + doc_id).encode()
+    return MagicMock(
+        id=doc_id, doc_type=doc_type, file_data=payload,
+        file_sha256=digest or hashlib.sha256(payload).hexdigest(),
+    )
+
+
 def test_viewer_context_excludes_restricted_documents_before_prompt():
     viewer = MagicMock(role="viewer")
     documents = [
-        MagicMock(id="1", doc_type="CONTRAT"),
-        MagicMock(id="2", doc_type="PSSI"),
-        MagicMock(id="3", doc_type="AUDIT_REPORT"),
-        MagicMock(id="4", doc_type="PROCEDURE"),
+        _document("1", "CONTRAT"),
+        _document("2", "PSSI"),
+        _document("3", "AUDIT_REPORT"),
+        _document("4", "PROCEDURE"),
     ]
 
     visible = readable_context_documents(viewer, documents)
@@ -34,10 +43,31 @@ def test_auditor_context_can_include_restricted_documents():
 def test_context_acl_limits_prompt_sources_to_three_documents():
     viewer = MagicMock(role="viewer")
     documents = [
-        MagicMock(id=str(index), doc_type="PSSI")
+        _document(str(index), "PSSI")
         for index in range(5)
     ]
 
     visible = readable_context_documents(viewer, documents)
 
     assert len(visible) == 3
+
+
+
+def test_context_excludes_document_with_modified_binary():
+    viewer = MagicMock(role="viewer")
+    original = b"%PDF-1.7 original"
+    corrupted = _document(
+        "corrupted", "PSSI", payload=b"%PDF-1.7 modified",
+        digest=hashlib.sha256(original).hexdigest(),
+    )
+    valid = _document("valid", "PSSI")
+    visible = readable_context_documents(viewer, [corrupted, valid])
+    assert [document.id for document in visible] == ["valid"]
+
+
+def test_context_excludes_document_without_binary_digest():
+    viewer = MagicMock(role="viewer")
+    missing_digest = MagicMock(
+        id="legacy", doc_type="PSSI", file_data=b"legacy content", file_sha256=None
+    )
+    assert readable_context_documents(viewer, [missing_digest]) == []
