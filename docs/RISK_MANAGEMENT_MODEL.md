@@ -65,7 +65,7 @@ The current code implements a basic 1–5 impact and likelihood matrix (score = 
 
 Not yet implemented in the current risk model: separate inherent and residual assessments, rationale/evidence for ratings, methodology version, acceptance authority and expiry, assessment history, formal treatment options, risk appetite thresholds, and archival workflow. Risk score must not be interpreted as compliance or formal acceptance.
 
-Migration strategy: establish and test an Alembic baseline first; then introduce assessment/history/acceptance entities with an explicit legacy methodology label for existing records. Avoid destructive backfills or silently changing existing scores.
+Migration strategy: the Alembic baseline and revisions through 0031 are now exercised in PostgreSQL CI, including legacy upgrade and downgrade/upgrade checks. Future assessment/history/acceptance entities must use reviewed migrations and an explicit legacy methodology label for existing records. Avoid destructive backfills or silently changing existing scores.
 
 
 ## Data integrity note — implementation validated 2026-11-26
