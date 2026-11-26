@@ -227,16 +227,21 @@ async def login(
             user.locked_until = _now() + timedelta(minutes=settings.LOGIN_LOCK_MINUTES)
             user.failed_login_attempts = 0
 
-        await db.commit()
-
-        await log_action(
-            user_email=user.email,
-            action="LOGIN_FAILED",
-            resource="auth",
-            details="Mot de passe incorrect",
-            event_type="AUTH",
-            request=request,
-        )
+        try:
+            await enqueue_audit_event(
+                db,
+                user_email=user.email,
+                action="LOGIN_FAILED",
+                resource="auth",
+                resource_id=str(user.id),
+                details="Mot de passe incorrect",
+                event_type="AUTH",
+                request=request,
+            )
+            await db.commit()
+        except Exception:
+            await db.rollback()
+            raise
 
         raise HTTPException(
             status_code=status.HTTP_401_UNAUTHORIZED,
@@ -395,15 +400,21 @@ async def confirm_mfa(
         if locked:
             user.locked_until = _now() + timedelta(minutes=settings.LOGIN_LOCK_MINUTES)
             user.failed_login_attempts = 0
-        await db.commit()
-        await log_action(
-            user_email=user.email,
-            action="MFA_FAILED",
-            resource="auth",
-            details="Code MFA invalide" + ("; compte verrouillé temporairement" if locked else ""),
-            event_type="AUTH",
-            request=request,
-        )
+        try:
+            await enqueue_audit_event(
+                db,
+                user_email=user.email,
+                action="MFA_FAILED",
+                resource="auth",
+                resource_id=str(user.id),
+                details="Code MFA invalide" + ("; compte verrouillé temporairement" if locked else ""),
+                event_type="AUTH",
+                request=request,
+            )
+            await db.commit()
+        except Exception:
+            await db.rollback()
+            raise
         if locked:
             raise HTTPException(
                 status_code=status.HTTP_423_LOCKED,
