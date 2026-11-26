@@ -7,7 +7,7 @@ from sqlalchemy import select
 from app.api.deps import require_permission
 from app.core.database import get_db
 from app.models.document import Document
-from app.api.v1.endpoints.documents import can_read_document
+from app.api.v1.endpoints.documents import can_read_document, document_integrity_valid
 from app.models.user import User
 from app.utils.rbac import role_has_permission
 from app.services.ai_service import ai_service
@@ -19,7 +19,10 @@ router = APIRouter(prefix="/ai-advanced", tags=["IA Avancée"])
 
 def readable_context_documents(user: User, documents: list[Document]) -> list[Document]:
     """Apply the canonical document ACL before document text enters an AI prompt."""
-    return [document for document in documents if can_read_document(user, document)][:3]
+    return [
+        document for document in documents
+        if can_read_document(user, document) and document_integrity_valid(document)
+    ][:3]
 
 
 class ContextQueryRequest(BaseModel):
