@@ -127,8 +127,9 @@ class Settings(BaseSettings):
                 raise ValueError("DEBUG doit être désactivé en production.")
             if "*" in self.cors_origins_list:
                 raise ValueError("CORS wildcard interdit en production.")
-            if self.JWT_ALGORITHM == "HS256" and self.JWT_SECRET.startswith("CHANGE_ME"):
-                raise ValueError("JWT_SECRET placeholder interdit en production.")
+        if self.ENVIRONMENT.lower() != "development":
+            if self.JWT_ALGORITHM == "HS256" and self.JWT_SECRET.strip().startswith("CHANGE_ME"):
+                raise ValueError("JWT_SECRET placeholder interdit hors développement.")
 
         if self.PARSER_BASE_URL and not self.PARSER_BASE_URL.startswith("http://"):
             raise ValueError("PARSER_BASE_URL doit utiliser le réseau interne HTTP du service parser.")
@@ -148,8 +149,11 @@ class Settings(BaseSettings):
 
         if self.AUTH_RATE_LIMIT_HMAC_KEY and len(self.AUTH_RATE_LIMIT_HMAC_KEY.strip()) < 32:
             raise ValueError("AUTH_RATE_LIMIT_HMAC_KEY doit contenir au moins 32 caractères.")
-        if self.ENVIRONMENT.lower() != "development" and len(self.auth_rate_limit_hmac_key) < 32:
-            raise ValueError("AUTH_RATE_LIMIT_HMAC_KEY est obligatoire hors développement.")
+        if self.ENVIRONMENT.lower() != "development":
+            if len(self.auth_rate_limit_hmac_key) < 32:
+                raise ValueError("AUTH_RATE_LIMIT_HMAC_KEY est obligatoire hors développement.")
+            if self.auth_rate_limit_hmac_key.upper().startswith("CHANGE_ME"):
+                raise ValueError("AUTH_RATE_LIMIT_HMAC_KEY placeholder interdit hors développement.")
 
         if self.ENVIRONMENT.lower() != "development" and not self.CLAMAV_HOST.strip():
             raise ValueError("CLAMAV_HOST est obligatoire hors développement : upload bloqué sans antivirus.")
