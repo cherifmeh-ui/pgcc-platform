@@ -54,3 +54,11 @@ The initial schema uses the PostgreSQL `vector` type for document embeddings. Th
 - 0030_risk_integrity_constraints verrouille au niveau base la matrice de calcul du risque (impact et vraisemblance de 1 à 5, score égal au produit), les références non vides et leur unicité normalisée.
 - Les deux migrations effectuent un contrôle préalable des données historiques et interrompent l'upgrade en présence d'incohérences. Les données doivent être analysées et corrigées de manière contrôlée avant nouvelle tentative.
 - La CI valide l'upgrade depuis une base neuve, la mise à niveau depuis 0024_audit_outbox, le downgrade jusqu'à 0025_user_auth_version, la remise à niveau vers 0030, le contrôle de dérive et le dump/restore.
+
+
+## Conservation des plans d'action — révision 0031
+
+- 0031_risk_action_restrict remplace la suppression en cascade du risque vers les plans d'action par une contrainte RESTRICT et retire le cascade delete-orphan ORM.
+- Le job PostgreSQL simule explicitement une base historique dont la FK action_items.risk_id est encore ON DELETE CASCADE, puis vérifie que la migration la remplace par RESTRICT.
+- Le test PostgreSQL dédié tente de supprimer un risque directement avec une action liée : l'opération est refusée et les deux lignes restent présentes.
+- La révision courante après migration est 0031_risk_action_restrict.
