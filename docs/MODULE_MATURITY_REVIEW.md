@@ -663,3 +663,14 @@ Status: targeted code review recorded; additional runtime/API tests remain requi
 - Les échecs de mot de passe et de MFA enregistrent désormais l'événement d'audit dans la même transaction que l'incrément du compteur d'échecs et, le cas échéant, le verrouillage du compte. Si l'outbox échoue, l'état d'échec est annulé plutôt que conservé sans audit.
 - Tests ajoutés : claims de jetons normalisés/versionnés ; jetons périmés par version, rôle ou absence de claim sur les trois parcours ; ordre audit/commit et rollback en cas d'échec de l'outbox pour login et MFA.
 - **Validation CI de cette révision en cours** au moment de la rédaction. La revue humaine du déploiement, du reverse-proxy et des paramètres de production reste requise.
+
+
+### Validation CI des derniers contrôles d'authentification — 26 novembre 2026
+
+- HEAD de code validé : `deb6ef52480e21672aa95a5981da040ef96cb8e4`.
+- Workflow `45852812889` : **4/4 jobs réussis** (backend, PostgreSQL, frontend et Docker Compose).
+- Backend : tests unitaires réussis, incluant les contrôles de claims des jetons temporaires et les rollbacks lorsque l'outbox échoue.
+- PostgreSQL : **38 tests réussis**. Le nouveau test de concurrence MFA prouve qu'un code de récupération présenté simultanément par deux sessions ne peut être consommé qu'une seule fois ; une seule session de renouvellement active est créée et les deux tentatives sont auditées.
+- PostgreSQL : migrations, contrôle de dérive, chemin de migration historique, downgrade/upgrade et restauration CI réussis.
+- Docker Compose : extraction réelle via le parseur isolé, réseau interne, authentification, refus fermé à l'indisponibilité du parseur et verdicts ClamAV sain/EICAR réussis.
+- Cette CI ne remplace pas l'exercice de restauration chiffrée dans l'environnement cible, la validation RPO/RTO, la revue du proxy et des seuils de rate limiting, ni la revue humaine finale.
