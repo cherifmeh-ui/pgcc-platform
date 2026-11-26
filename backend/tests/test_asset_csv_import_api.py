@@ -1,4 +1,5 @@
 from io import BytesIO
+from uuid import uuid4
 from unittest.mock import AsyncMock, MagicMock
 
 import pytest
@@ -104,3 +105,31 @@ async def test_csv_preview_rejects_more_than_five_thousand_data_rows():
     assert exc.value.status_code == 413
     assert str(MAX_ASSET_IMPORT_ROWS) in exc.value.detail
     db.execute.assert_not_awaited()
+
+
+
+@pytest.mark.asyncio
+async def test_csv_preview_checks_repeated_application_references_in_one_query():
+    application_id = uuid4()
+    csv_data = (
+        "reference,name,asset_type,criticality,application_id\n"
+        f"APP-001,Serveur 1,hardware,Moyenne,{application_id}\n"
+        f"APP-002,Serveur 2,hardware,Élevée,{application_id}\n"
+    )
+    upload = UploadFile(filename="assets.csv", file=BytesIO(csv_data.encode("utf-8")))
+    db = AsyncMock()
+    application_result = MagicMock()
+    application_result.scalars.return_value.all.return_value = [application_id]
+    asset_result = MagicMock()
+    asset_result.scalars.return_value.all.return_value = []
+    db.execute.side_effect = [application_result, asset_result]
+
+    response = await preview_asset_csv_import(
+        file=upload,
+        db=db,
+        current_user=MagicMock(email="tester@example.test"),
+    )
+
+    assert response["can_import"] is True
+    assert response["rows_valid"] == 2
+    assert db.execute.await_count == 2
