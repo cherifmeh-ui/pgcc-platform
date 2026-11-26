@@ -48,7 +48,7 @@ async def test_enrollment_rolls_back_when_audit_fails(monkeypatch):
     result.scalar_one_or_none.return_value = user
     db = AsyncMock()
     db.execute.return_value = result
-    monkeypatch.setattr(auth_endpoint, "decode_token", lambda token, expected_type: {"sub": user.email})
+    monkeypatch.setattr(auth_endpoint, "decode_token", lambda token, expected_type: {"sub": user.email, "role": user.role, "auth_version": int(user.auth_version or 0)})
     monkeypatch.setattr(auth_endpoint, "generate_mfa_secret", lambda: "TEST-SECRET")
     monkeypatch.setattr(
         auth_endpoint, "enqueue_audit_event",
@@ -84,7 +84,7 @@ async def test_mfa_enrollment_token_uses_bumped_auth_version(monkeypatch):
 
     db.flush.side_effect = flush_and_bump_version
     issued_versions = []
-    monkeypatch.setattr(auth_endpoint, "decode_token", lambda token, expected_type: {"sub": user.email})
+    monkeypatch.setattr(auth_endpoint, "decode_token", lambda token, expected_type: {"sub": user.email, "role": user.role, "auth_version": int(user.auth_version or 0)})
     monkeypatch.setattr(auth_endpoint, "verify_mfa", lambda secret, code: True)
     monkeypatch.setattr(auth_endpoint, "generate_backup_codes", lambda count: ["BACKUP-CODE"])
     monkeypatch.setattr(auth_endpoint, "hash_backup_codes", lambda codes: ["hashed"])
@@ -170,7 +170,7 @@ async def test_failed_authentication_state_and_audit_share_one_transaction(monke
     from fastapi import HTTPException, Response
 
     user = MagicMock(
-        id="user-failed-auth", email="failed-auth@example.test", role="viewer",
+        id="user-failed-auth", email="failed-auth@example.com", role="viewer",
         auth_version=0, is_active=True, is_locked=False, mfa_enabled=False,
         mfa_secret="encrypted-placeholder", failed_login_attempts=0,
         locked_until=None, backup_codes_hashed=None,
