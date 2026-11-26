@@ -55,3 +55,10 @@ async def test_isolated_parser_client_rejects_invalid_response(monkeypatch):
     _client_with_response(monkeypatch, response)
     with pytest.raises(parser.ParserUnavailable):
         await parser.extract_document_text(b"%PDF-test", "policy.pdf")
+
+
+@pytest.mark.asyncio
+async def test_isolated_parser_client_classifies_parser_timeout_as_unavailable(monkeypatch):
+    _client_with_response(monkeypatch, httpx.Response(408, text="parser timeout"))
+    with pytest.raises(parser.ParserUnavailable):
+        await parser.extract_document_text(b"%PDF-test", "policy.pdf")
