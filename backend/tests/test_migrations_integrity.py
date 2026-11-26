@@ -471,3 +471,23 @@ def test_risk_integrity_migration_matches_model_and_guards_legacy_data():
     assert "lower(btrim(ref))" in source
     assert "no automatic data rewrite" in source.lower()
     assert "def downgrade() -> None:" in source
+
+
+
+def test_risk_action_restrict_migration_matches_models_and_preserves_history():
+    migration = MIGRATIONS_DIR / "0031_risk_action_restrict.py"
+    source = migration.read_text(encoding="utf-8")
+    action_model = (
+        MIGRATIONS_DIR.parent.parent / "app" / "models" / "action_item.py"
+    ).read_text(encoding="utf-8")
+    risk_model = (
+        MIGRATIONS_DIR.parent.parent / "app" / "models" / "risk.py"
+    ).read_text(encoding="utf-8")
+    assert 'revision = "0031_risk_action_restrict"' in source
+    assert 'down_revision = "0030_risk_integrity_constraints"' in source
+    assert "fk_action_items_risk_id_risks_restrict" in source
+    assert 'ondelete="RESTRICT"' in source
+    assert 'ondelete="RESTRICT"' in action_model
+    assert 'passive_deletes="all"' in risk_model
+    assert "delete-orphan" not in risk_model
+    assert 'ondelete="CASCADE"' in source.split("def downgrade() -> None:", 1)[1]
