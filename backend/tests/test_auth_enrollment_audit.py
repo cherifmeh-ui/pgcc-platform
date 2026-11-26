@@ -18,7 +18,7 @@ async def test_enrollment_audit_precedes_commit(monkeypatch):
     db = AsyncMock()
     db.execute.side_effect = lambda *args, **kwargs: order.append("select") or result
     db.commit.side_effect = lambda: order.append("commit")
-    monkeypatch.setattr(auth_endpoint, "decode_token", lambda token, expected_type: {"sub": user.email})
+    monkeypatch.setattr(auth_endpoint, "decode_token", lambda token, expected_type: {"sub": user.email, "role": user.role, "auth_version": int(user.auth_version or 0)})
     monkeypatch.setattr(auth_endpoint, "generate_mfa_secret", lambda: "TEST-SECRET")
     monkeypatch.setattr(auth_endpoint, "get_mfa_uri", lambda secret, email: "otpauth://test")
 
