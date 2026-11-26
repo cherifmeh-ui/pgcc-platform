@@ -3,7 +3,7 @@ import hashlib
 
 import pytest
 
-from app.api.v1.endpoints.ai_advanced import readable_context_documents
+from app.api.v1.endpoints.ai_advanced import readable_context_documents, readable_context_scope
 
 
 def _document(doc_id, doc_type, payload=None, digest=None):
@@ -71,3 +71,22 @@ def test_context_excludes_document_without_binary_digest():
         id="legacy", doc_type="PSSI", file_data=b"legacy content", file_sha256=None
     )
     assert readable_context_documents(viewer, [missing_digest]) == []
+
+
+
+def test_viewer_document_scope_is_pushed_into_sql():
+    viewer = MagicMock(role="viewer", id=None, department=" DI ")
+    compiled = str(readable_context_scope(viewer).compile())
+    assert "documents.owner_id IS NULL" in compiled
+    assert "documents.department IS NULL" in compiled
+    assert "documents.doc_type" in compiled
+    assert "documents.department" in compiled
+
+
+def test_privileged_document_scope_does_not_add_restrictive_filter():
+    assert readable_context_scope(MagicMock(role=" AUDITOR ")) is None
+
+
+def test_unprivileged_non_viewer_document_scope_fails_closed():
+    compiled = str(readable_context_scope(MagicMock(role="editor")).compile())
+    assert "false" in compiled.lower()
