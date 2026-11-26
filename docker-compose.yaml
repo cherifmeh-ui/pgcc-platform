@@ -69,6 +69,8 @@ services:
       CLAMAV_HOST: ${CLAMAV_HOST:-clamav}
       CLAMAV_PORT: ${CLAMAV_PORT:-3310}
       CLAMAV_TIMEOUT_SECONDS: ${CLAMAV_TIMEOUT_SECONDS:-30}
+      PARSER_BASE_URL: http://parser:8090
+      PARSER_SHARED_TOKEN: ${PARSER_SHARED_TOKEN:-}
       AI_ENABLED: ${AI_ENABLED:-false}
       ENVIRONMENT: ${ENVIRONMENT:-development}
     ports:
@@ -79,15 +81,49 @@ services:
       clamav:
         condition: service_healthy
         required: false
+      parser:
+        condition: service_healthy
     extra_hosts:
       # Permet au conteneur Docker d'accéder à localhost:11434 de Windows/Mac/Linux Hôte
       - "host.docker.internal:host-gateway"
     networks:
       - pgcc_network
+      - parser_internal
     volumes:
       # Mount du code source pour hot-reload en dev
       - ./backend/app:/app/app
       - ./backend/scripts:/app/scripts
+
+  # ===================================================================
+  # PARSER PDF/DOCX ISOLÉ — aucun accès DB, ClamAV ou réseau sortant.
+  # Seul le backend partage ce réseau interne.
+  # ===================================================================
+  parser:
+    build:
+      context: .
+      dockerfile: parser/Dockerfile
+    container_name: pgcc_parser
+    restart: unless-stopped
+    environment:
+      PARSER_SHARED_TOKEN: ${PARSER_SHARED_TOKEN:-}
+    read_only: true
+    tmpfs:
+      - /tmp:rw,noexec,nosuid,size=16m
+    cap_drop:
+      - ALL
+    security_opt:
+      - no-new-privileges:true
+    mem_limit: 512m
+    cpus: 1.0
+    pids_limit: 64
+    healthcheck:
+      test: ["CMD", "python", "-c", "import urllib.request; urllib.request.urlopen('http://127.0.0.1:8090/health', timeout=2)"]
+      interval: 15s
+      timeout: 3s
+      retries: 3
+      start_period: 20s
+    networks:
+      - parser_internal
 
   # ===================================================================
   # FRONTEND VUE.JS / VITE (Serveur de Développement Node.js)
@@ -126,3 +162,6 @@ volumes:
 networks:
   pgcc_network:
     driver: bridge
+  parser_internal:
+    driver: bridge
+    internal: true
