@@ -106,3 +106,53 @@ async def test_mfa_enrollment_token_uses_bumped_auth_version(monkeypatch):
     assert user.auth_version == 1
     db.flush.assert_awaited_once()
     db.commit.assert_awaited_once()
+
+
+@pytest.mark.asyncio
+@pytest.mark.parametrize("flow", ["enrollment", "confirmation", "password_change"])
+async def test_stale_workflow_token_is_rejected_after_security_version_change(monkeypatch, flow):
+    from fastapi import Response, HTTPException
+
+    monkeypatch.setattr(auth_endpoint, "enforce_auth_rate_limit", AsyncMock())
+    user = MagicMock(
+        id="user-stale", email="stale@example.test", role="viewer",
+        auth_version=2, is_active=True, is_locked=False, mfa_enabled=False,
+        mfa_secret="encrypted-placeholder", must_change_password=True,
+        failed_login_attempts=0, locked_until=None, backup_codes_hashed=None,
+    )
+    result = MagicMock()
+    result.scalar_one_or_none.return_value = user
+    db = AsyncMock()
+    db.execute.return_value = result
+    monkeypatch.setattr(
+        auth_endpoint, "decode_token",
+        lambda token, expected_type: {
+            "sub": user.email, "role": user.role, "auth_version": 1,
+        },
+    )
+
+    with pytest.raises(HTTPException) as denied:
+        if flow == "enrollment":
+            await auth_endpoint.start_enrollment(
+                request=MagicMock(), credentials="Bearer stale-token", db=db,
+            )
+        elif flow == "confirmation":
+            await auth_endpoint.confirm_mfa(
+                payload=auth_endpoint.ConfirmMfaRequest(
+                    pre_auth_token="stale-token", mfa_code="123456",
+                ),
+                request=MagicMock(), response=Response(), db=db,
+            )
+        else:
+            await auth_endpoint.change_password(
+                auth_endpoint.ChangePasswordRequest(
+                    change_password_token="stale-token",
+                    new_password="StrongPassword!123",
+                    confirm_password="StrongPassword!123",
+                ),
+                request=MagicMock(), response=Response(), db=db,
+            )
+
+    assert denied.value.status_code == 401
+    db.commit.assert_not_awaited()
+    db.rollback.assert_not_awaited()
