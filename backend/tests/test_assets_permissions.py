@@ -95,3 +95,42 @@ async def test_asset_permission_dependency_enforces_full_role_action_matrix(
         with pytest.raises(HTTPException) as exc:
             await dependency(current_user=user)
         assert exc.value.status_code == 403
+
+
+@pytest.mark.parametrize(
+    ("role", "asset_read", "risk_read", "supplier_asset_read", "asset_update", "risk_update", "supplier_manage_assets"),
+    [
+        ("admin", True, True, True, True, True, True),
+        ("executive", True, True, False, False, False, False),
+        ("auditor", True, True, True, False, False, False),
+        ("viewer", False, True, False, False, False, False),
+        ("unknown", False, False, False, False, False, False),
+    ],
+)
+def test_cross_module_asset_risk_supplier_permissions_are_consistent(
+    role,
+    asset_read,
+    risk_read,
+    supplier_asset_read,
+    asset_update,
+    risk_update,
+    supplier_manage_assets,
+):
+    """Lock down cross-module authorization intersections used by Cartography."""
+    assert role_has_permission(role, "assets", "read") is asset_read
+    assert role_has_permission(role, "risks", "read") is risk_read
+    assert role_has_permission(role, "suppliers", "read_assets") is supplier_asset_read
+    assert role_has_permission(role, "assets", "update") is asset_update
+    assert role_has_permission(role, "risks", "update") is risk_update
+    assert role_has_permission(role, "suppliers", "manage_assets") is supplier_manage_assets
+
+    # Mutating cross-module links must never be available unless both sides
+    # of the relationship can be updated by the same principal.
+    if role_has_permission(role, "assets", "update") and role_has_permission(
+        role, "risks", "update"
+    ):
+        assert role == "admin"
+    if role_has_permission(role, "assets", "update") and role_has_permission(
+        role, "suppliers", "manage_assets"
+    ):
+        assert role == "admin"
