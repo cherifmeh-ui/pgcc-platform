@@ -401,3 +401,24 @@ Phase 1 est **démarrée**, mais aucun sous-jalon fonctionnel n'est déclaré te
 2. Étendre les tests JWT aux routes Risques↔Cartographie et Fournisseurs↔Cartographie, y compris les rôles Executive, Auditor et Viewer.
 3. Profiler les requêtes de l'analyse d'impact et obtenir des plans `EXPLAIN (ANALYZE, BUFFERS)` sur un volume représentatif avant toute décision d'index.
 4. Reprendre l'analyse des modèles d'organisation et de responsabilité des actifs, sans migration destructive.
+
+
+### Tranche sécurité intermodules — JWT réel sur Risques et Fournisseurs
+
+- HEAD de départ contrôlé : `ff5aeb89aca0e3a667bc9c00adea6453cc8163ea`. La branche de travail et `main` étaient distinctes ; PR #1 restait ouverte, Draft et non fusionnée.
+- Les workflows Push et PR de ce HEAD documentaire ont terminé avec succès, chacun avec 5/5 jobs : backend, frontend, PostgreSQL integration, Compose smoke et production runtime smoke.
+- Constat : les routes `GET /risks/{risk_id}/assets` et `GET /suppliers/assets/{asset_id}/suppliers` avaient des tests HTTP avec surcharge d'utilisateur, mais pas encore de couverture JWT réel équivalente à celle de la route Graphe des actifs.
+- Correction de couverture dans `backend/tests/test_asset_http_authorization.py` :
+  - JWT signé Auditor, rôle et `auth_version` relus depuis l'utilisateur courant, accès autorisé aux actifs liés à un risque ;
+  - JWT signé Auditor, accès autorisé aux fournisseurs liés à un actif ;
+  - JWT signé Executive, refus 403 sur la lecture des fournisseurs liés à un actif.
+- Le helper HTTP JWT monte désormais les routeurs Assets, Risks et Suppliers dans la même application de test.
+- Commit : `17d63c0b561d8d30c2d10a1e262957b88a14ff43` — `test(cartography): exercise risk and supplier routes with real JWTs`.
+- Limite de preuve : ces tests vérifient le décodage JWT, la résolution de l'utilisateur en base simulée et les contrôles d'autorisation HTTP ; ils ne constituent pas un parcours PostgreSQL réel de bout en bout. Le test d'intégration PostgreSQL reste séparé.
+- CI du commit : déclenchée après le push ; résultats à vérifier avant de considérer cette tranche validée.
+
+### Prochaine tranche
+
+1. Vérifier les workflows Push et PR du commit JWT intermodules.
+2. Examiner les tests existants de rotation et révocation pour identifier les étapes manquantes du parcours login/MFA/cookie/refresh/logout.
+3. Ajouter un test de parcours HTTP complet réutilisant les fixtures existantes, sans réimplémenter le système d'authentification dans les tests.
