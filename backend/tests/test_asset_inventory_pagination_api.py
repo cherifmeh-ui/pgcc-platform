@@ -61,9 +61,9 @@ async def test_asset_inventory_page_returns_zero_pages_for_empty_inventory():
 
 def test_canonical_inventory_filters_cover_all_shared_dimensions():
     from sqlalchemy.dialects import postgresql
-    from app.api.v1.endpoints.assets import _build_asset_inventory_filters
+    from app.services.asset_inventory import build_asset_inventory_filters
 
-    filters = _build_asset_inventory_filters(
+    filters = build_asset_inventory_filters(
         q="  serveur  ",
         asset_type="hardware",
         criticality="Critique",
@@ -78,6 +78,8 @@ def test_canonical_inventory_filters_cover_all_shared_dimensions():
         str(item.compile(dialect=postgresql.dialect(), compile_kwargs={"literal_binds": True}))
         for item in filters
     )
+
+    sql = sql.replace("%%", "%")
 
     assert "assets.retired_at IS NULL" in sql
     assert "assets.lifecycle_status NOT IN ('Retiré', 'Décommissionné')" in sql
