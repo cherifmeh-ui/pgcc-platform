@@ -319,8 +319,8 @@ async def test_csv_import_rolls_back_assets_when_audit_outbox_enqueue_fails(monk
 async def test_csv_preview_rejects_unknown_application_id():
     application_id = uuid4()
     csv_data = (
-        "reference,name,asset_type,criticality,application_id\\n"
-        f"APP-UNKNOWN-001,Serveur orphelin,hardware,Moyenne,{application_id}\\n"
+        "reference,name,asset_type,criticality,application_id\n"
+        f"APP-UNKNOWN-001,Serveur orphelin,hardware,Moyenne,{application_id}\n"
     )
     upload = UploadFile(filename="assets.csv", file=BytesIO(csv_data.encode("utf-8")))
     db = AsyncMock()
