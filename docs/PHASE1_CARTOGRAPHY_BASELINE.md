@@ -344,7 +344,7 @@ Phase 1 est **démarrée**, mais aucun sous-jalon fonctionnel n'est déclaré te
 - Frontend, Compose Smoke et Production Runtime Smoke : jobs réussis dans les deux workflows.
 - Les messages PostgreSQL `ERROR` relevés dans les logs concernent des tests négatifs intentionnels (contraintes FK/UNIQUE/CHECK et journal append-only) ; la suite PostgreSQL se termine bien avec 47 tests réussis.
 - Revue RBAC intermodules : les rôles ayant accès à la lecture Cartographie et à la lecture des risques sont admin, executive et auditor ; Viewer peut lire les risques mais pas l'inventaire des actifs. La lecture des relations fournisseurs-actifs est limitée à admin/auditor. Les opérations de modification de liens Asset↔Risk et Asset↔Supplier sont réservées à admin, qui possède les permissions de modification des deux modules. Cette intersection est maintenant verrouillée par un test paramétré de matrice dans `backend/tests/test_assets_permissions.py`.
-- Commit de test de matrice RBAC : `9f7d3948e3c0b33e2aae008c9ef771c6ecbc8391`. **Validation CI de ce nouveau commit encore en attente** au moment de cette mise à jour.
+- Commit de test de matrice RBAC : `9f7d3948e3c0b33e2aae008c9ef771c6ecbc8391`. Sa validation CI est documentée dans la tranche consolidée ci-dessous.
 - PR #1 reste ouverte, Draft et non fusionnée ; `main` reste inchangée.
 
 ### Suite de validation Cartographie
@@ -353,3 +353,27 @@ Phase 1 est **démarrée**, mais aucun sous-jalon fonctionnel n'est déclaré te
 2. Compléter les tests HTTP d'accès aux routes croisées (risques et fournisseurs), notamment les refus avant accès DB.
 3. Passer aux tests JWT end-to-end et aux contrôles de volumétrie/performance du graphe, de la qualité d'inventaire et de l'analyse d'impact.
 4. Maintenir ouverte la décision métier sur les colonnes sensibles de l'export CSV et le modèle de rattachement des responsables d'actifs.
+
+
+### Tranche performance SQL et autorisations HTTP croisées — validation CI complète
+
+- HEAD validé : `4b775fd883afd09da492b66989f9e2fed4bd9751`.
+- Workflows Push `45978265241` et Pull Request `45978271743` : **5/5 jobs réussis chacun**.
+- Backend : **523 passed, 49 skipped, 1 warning** dans les deux workflows.
+- PostgreSQL Integration : **48 passed** dans les deux workflows. Le test `test_inventory_quality_sql_aggregates_active_assets_and_blank_values` est explicitement inclus dans la commande CI depuis le commit `f9e1ea317fa7cf54a8f7b38029d576dd051b1825`; il valide sur PostgreSQL les actifs actifs/retirés, les champs NULL ou blancs, les dates de support échues et à échéance dans les 90 jours.
+- Frontend, Compose Smoke et Production Runtime Smoke : succès dans les deux workflows. Les vérifications runtime incluent santé, TLS/proxy, séparation réseau, parser, gestion fail-closed et ClamAV réel (fichier sain accepté, EICAR détecté).
+- Optimisation de `GET /assets/graph` : les relations sont maintenant filtrées en SQL par deux sous-requêtes sur les actifs actifs (source et cible), au lieu de charger toutes les relations puis filtrer en Python. Les tests vérifient la présence des deux prédicats SQL.
+- Optimisation de `GET /assets/quality` : les compteurs de complétude et les indicateurs de fin de support sont calculés par une agrégation SQL unique. Le comportement conserve l'exclusion des actifs retirés et considère les chaînes nulles, vides ou composées d'espaces comme des champs manquants.
+- Couverture HTTP intermodules ajoutée dans `backend/tests/test_asset_http_authorization.py` : Viewer ne peut pas lire les actifs liés à un risque sans permission `assets:read`; Executive et Viewer ne peuvent pas consulter les fournisseurs liés à un actif sans `suppliers:read_assets`; Auditor peut accéder à cette route. Les refus vérifient qu'aucune requête DB n'est exécutée.
+- Les commits de cette tranche sont `55322b53` (agrégation SQL qualité), `0212f133` (tests agrégations), `5e01fa12` (filtrage SQL graphe), `0df27b84` (normalisation des champs blancs), `edfc1147` (test PostgreSQL), `f9e1ea31` (inclusion explicite dans le workflow CI) et `4b775fd8` (tests HTTP RBAC croisés).
+- Un avertissement de dépréciation Node.js 20 apparaît dans les runners GitHub Actions ; il ne fait pas échouer les tests. Les erreurs PostgreSQL consignées par les tests négatifs sont attendues et les suites se terminent avec succès.
+- Limites restantes : aucune mesure de charge représentative ni plan `EXPLAIN ANALYZE` n'a été exécuté. Cette optimisation réduit les lignes chargées/transférées mais ne constitue pas une preuve de latence sous volumétrie de production. L'analyse d'impact transitive et ses jointures associées restent à profiler.
+- PR #1 reste ouverte, Draft et non fusionnée ; la branche `main` reste inchangée.
+
+### Prochaine tranche de validation Cartographie
+
+1. Profiler l'analyse d'impact transitive et vérifier les plans SQL/index existants sur un jeu de données représentatif, sans ajouter d'index spéculatif.
+2. Compléter les parcours JWT end-to-end des routes Cartographie, Risques et Fournisseurs ; les tests HTTP actuels utilisent des dépendances utilisateur surchargées et ne remplacent pas les tests JWT.
+3. Examiner les permissions et les accès DB sur les autres routes Asset↔Risk et Asset↔Supplier, puis couvrir les refus et succès par rôle.
+4. Poursuivre l'inventaire des modèles User/organisation avant toute évolution du rattachement owner/custodian/direction.
+5. Garder ouvertes les décisions métier relatives à la confidentialité des exports CSV et à la validation des responsables d'actifs.
