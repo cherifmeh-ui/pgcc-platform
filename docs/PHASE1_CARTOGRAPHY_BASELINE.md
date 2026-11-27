@@ -163,3 +163,25 @@ Phase 1 est **démarrée**, mais aucun sous-jalon fonctionnel n'est déclaré te
 1. Compléter les tests HTTP authentifiés des routes Asset, en couvrant au minimum lecture, mutation et export par rôle.
 2. Revoir les routes de relation Asset↔Risk et les permissions croisées avec le module Risques.
 3. Continuer la matrice cycle de vie et intégrité PostgreSQL avant toute évolution du schéma.
+
+
+### Tranche import CSV — atomicité et cohérence audit
+
+- HEAD précédent : `02920bb24df11e4fa7a2032b5ca06deb8c342a10`.
+- Validation CI observée sur ce HEAD : les deux workflows (Push et PR) sont terminés avec succès, chacun avec 5/5 jobs réussis : backend, PostgreSQL integration, Compose smoke, frontend et production runtime smoke.
+- Constat : les tests CSV couvraient la prévalidation, les limites, les doublons et le chemin nominal, mais ne verrouillaient pas explicitement les garanties de non-écriture en cas de prévalidation invalide, de conflit d'intégrité au flush, ni d'échec de l'audit outbox.
+- Correction de couverture : ajout de trois tests dans `backend/tests/test_asset_csv_import_api.py` :
+  - confirmation refusée si la prévalidation contient des erreurs, sans écriture ni commit ;
+  - conflit d'intégrité pendant le flush : rollback et réponse HTTP 409 garantissant qu'aucun actif n'est importé ;
+  - échec d'enqueue de l'événement d'audit : rollback et absence de commit.
+- Aucun changement du comportement applicatif ni du schéma de base n'a été nécessaire : l'implémentation existante présente déjà un bloc transactionnel et un rollback explicite.
+- Commit de tests : `c7971ac35d75258758d09a9cc6e6a136fb9c4764`.
+- État CI au moment de cette note : workflow déclenché mais encore en attente. Ne pas considérer cette tranche validée avant examen des jobs du HEAD final.
+- Portée : ces tests unitaires mockés verrouillent les branches de gestion d'erreur ; ils ne remplacent pas encore un test d'import CSV concurrent sur PostgreSQL réel.
+
+### Prochaine tranche
+
+1. Vérifier la CI complète sur le HEAD contenant les tests d'atomicité CSV.
+2. Ajouter/renforcer la validation PostgreSQL d'import et de rollback si le pipeline d'intégration permet un test isolé sans pollution des données.
+3. Construire une matrice de tests HTTP authentifiés pour les routes Asset (lecture, mutation, export) et les permissions croisées Asset/Risk.
+4. Poursuivre les scénarios de cycle de vie et de concurrence.
