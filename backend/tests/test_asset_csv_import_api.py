@@ -6,7 +6,7 @@ import pytest
 from starlette.datastructures import UploadFile
 from fastapi import HTTPException
 
-from app.api.v1.endpoints.assets import preview_asset_csv_import
+from app.api.v1.endpoints.assets import confirm_asset_csv_import, preview_asset_csv_import
 
 
 @pytest.mark.asyncio
@@ -178,3 +178,43 @@ async def test_csv_preview_rejects_rows_with_extra_columns():
     assert response["errors"][0]["row"] == 2
     assert "dépasse" in response["errors"][0]["error"]
     db.execute.assert_not_awaited()
+
+
+@pytest.mark.asyncio
+async def test_csv_import_sets_retirement_marker_for_historical_retired_asset(monkeypatch):
+    from app.api.v1.endpoints import assets as assets_endpoint
+
+    monkeypatch.setattr(
+        assets_endpoint,
+        "preview_asset_csv_import",
+        AsyncMock(return_value={
+            "can_import": True,
+            "validated_rows": [{
+                "row": 2,
+                "data": {
+                    "reference": "AST-CSV-RETIRED",
+                    "name": "Ancien serveur",
+                    "lifecycle_status": "Décommissionné",
+                },
+            }],
+        }),
+    )
+    monkeypatch.setattr(assets_endpoint, "_ensure_application_exists", AsyncMock())
+    db = AsyncMock()
+    db.add_all = MagicMock()
+    audit = AsyncMock()
+    monkeypatch.setattr(assets_endpoint, "enqueue_audit_event", audit)
+
+    response = await confirm_asset_csv_import(
+        request=MagicMock(),
+        file=MagicMock(filename="assets.csv"),
+        db=db,
+        current_user=MagicMock(email="tester@example.test"),
+    )
+
+    imported_assets = db.add_all.call_args.args[0]
+    assert response["imported"] == 1
+    assert imported_assets[0].lifecycle_status == "Décommissionné"
+    assert imported_assets[0].retired_at is not None
+    db.flush.assert_awaited_once()
+    db.commit.assert_awaited_once()
