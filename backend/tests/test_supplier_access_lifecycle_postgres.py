@@ -572,3 +572,194 @@ async def test_supplier_access_http_jwt_uses_real_postgres_user_and_supplier(mon
             await cleanup.execute(delete(User).where(User.id == actor_id))
             await cleanup.commit()
         await engine.dispose()
+
+
+@pytest.mark.asyncio
+async def test_supplier_access_full_lifecycle_over_http_with_real_jwt_and_postgres(monkeypatch):
+    """Create, approve, revoke and terminate through HTTP using persisted JWT users."""
+    from fastapi import FastAPI
+    from fastapi.testclient import TestClient
+    from sqlalchemy.pool import NullPool
+
+    from app.api.v1.endpoints import suppliers as suppliers_endpoint
+    from app.core.config import settings
+    from app.core.database import get_db
+    from app.core.security import create_access_token
+
+    monkeypatch.setattr(
+        settings, "JWT_SECRET", "pgcc-postgres-lifecycle-jwt-secret-long-enough"
+    )
+    monkeypatch.setattr(settings, "JWT_ALGORITHM", "HS256")
+
+    engine = create_async_engine(DATABASE_URL, poolclass=NullPool)
+    sessions = async_sessionmaker(engine, expire_on_commit=False)
+    requester_id, approver_id = uuid4(), uuid4()
+    requester = User(
+        id=requester_id,
+        email=f"phase0-lifecycle-requester-{requester_id.hex}@example.invalid",
+        full_name="Phase 0 lifecycle requester",
+        role="admin",
+        password_hash="not-used",
+        must_change_password=False,
+        is_active=True,
+        mfa_enabled=True,
+        auth_version=1,
+    )
+    approver = User(
+        id=approver_id,
+        email=f"phase0-lifecycle-approver-{approver_id.hex}@example.invalid",
+        full_name="Phase 0 lifecycle approver",
+        role="admin",
+        password_hash="not-used",
+        must_change_password=False,
+        is_active=True,
+        mfa_enabled=True,
+        auth_version=1,
+    )
+    supplier = Supplier(
+        code=f"PH0-LIFE-{requester_id.hex[:10]}",
+        legal_name="Phase 0 HTTP supplier access lifecycle",
+        status="Approuvé",
+        criticality="Moyenne",
+        dependency_level="Moyenne",
+    )
+    asset = Asset(
+        reference=f"PH0-LIFE-{requester_id.hex[:10]}",
+        name="Phase 0 HTTP lifecycle asset",
+        asset_type="hardware",
+        lifecycle_status="Actif",
+    )
+    link = None
+    access_request_id = None
+    try:
+        async with sessions() as setup:
+            setup.add_all([requester, approver, supplier, asset])
+            await setup.commit()
+            await setup.refresh(supplier)
+            await setup.refresh(asset)
+            link = SupplierAssetLink(
+                supplier_id=supplier.id,
+                asset_id=asset.id,
+                relationship_type="Maintient",
+                access_level="Standard",
+                data_access=False,
+                status="Actif",
+                created_by_id=requester_id,
+            )
+            setup.add(link)
+            await setup.commit()
+            await setup.refresh(link)
+
+        app = FastAPI()
+        app.include_router(suppliers_endpoint.router, prefix="/api/v1")
+
+        async def override_db():
+            async with sessions() as db:
+                yield db
+
+        app.dependency_overrides[get_db] = override_db
+        requester_token = create_access_token(
+            subject=requester.email, role="admin", auth_version=1
+        )
+        approver_token = create_access_token(
+            subject=approver.email, role="admin", auth_version=1
+        )
+        requester_headers = {"Authorization": f"Bearer {requester_token}"}
+        approver_headers = {"Authorization": f"Bearer {approver_token}"}
+        supplier_id = str(supplier.id)
+        link_id = str(link.id)
+        today = date.today()
+
+        with TestClient(app) as client:
+            created = client.post(
+                f"/api/v1/suppliers/{supplier_id}/access-requests",
+                headers=requester_headers,
+                json={
+                    "supplier_asset_link_id": link_id,
+                    "access_level": "Standard",
+                    "data_access": False,
+                    "justification": "Maintenance ponctuelle autorisée",
+                    "scope": "Intervention sur le serveur",
+                    "start_date": today.isoformat(),
+                    "end_date": (today + timedelta(days=30)).isoformat(),
+                    "review_due_at": (today + timedelta(days=15)).isoformat(),
+                },
+            )
+            assert created.status_code == 201, created.text
+            access_request_id = created.json()["id"]
+            assert created.json()["status"] == "Demandé"
+
+            decided = client.post(
+                f"/api/v1/suppliers/{supplier_id}/access-requests/{access_request_id}/decision",
+                headers=approver_headers,
+                json={
+                    "decision": "Approuvé",
+                    "comment": "Autorisation validée après contrôle",
+                },
+            )
+            assert decided.status_code == 200, decided.text
+            assert decided.json()["status"] == "Approuvé"
+
+            revoked = client.post(
+                f"/api/v1/suppliers/{supplier_id}/access-requests/{access_request_id}/revoke",
+                headers=approver_headers,
+                json={"reason": "Fin du besoin opérationnel"},
+            )
+            assert revoked.status_code == 200, revoked.text
+            assert revoked.json()["status"] == "Révoqué"
+
+            terminated = client.post(
+                f"/api/v1/suppliers/{supplier_id}/assets/{link_id}/terminate",
+                headers=approver_headers,
+            )
+            assert terminated.status_code == 200, terminated.text
+            assert terminated.json()["status"] == "Terminé"
+
+        async with sessions() as verify:
+            persisted_request = await verify.get(
+                SupplierAccessRequest, access_request_id
+            )
+            persisted_link = await verify.get(SupplierAssetLink, link.id)
+            audit_actions = (
+                await verify.execute(
+                    select(AuditOutbox.payload["action"].astext).where(
+                        AuditOutbox.payload["resource_id"].astext.in_(
+                            [access_request_id, link_id]
+                        )
+                    )
+                )
+            ).scalars().all()
+            assert persisted_request.status == "Révoqué"
+            assert persisted_request.decided_by_id == approver_id
+            assert persisted_link.status == "Terminé"
+            assert "CREATE_SUPPLIER_ACCESS_REQUEST" in audit_actions
+            assert "REVOKE_SUPPLIER_ACCESS" in audit_actions
+            assert "TERMINATE_SUPPLIER_ASSET_LINK" in audit_actions
+    finally:
+        async with sessions() as cleanup:
+            resource_ids = [str(link.id)] if link is not None else []
+            if access_request_id is not None:
+                resource_ids.append(access_request_id)
+            if resource_ids:
+                await cleanup.execute(
+                    delete(AuditOutbox).where(
+                        AuditOutbox.payload["resource_id"].astext.in_(resource_ids)
+                    )
+                )
+            if access_request_id is not None:
+                await cleanup.execute(
+                    delete(SupplierAccessRequest).where(
+                        SupplierAccessRequest.id == access_request_id
+                    )
+                )
+            if link is not None:
+                await cleanup.execute(
+                    delete(SupplierAssetLink).where(SupplierAssetLink.id == link.id)
+                )
+            await cleanup.execute(delete(Asset).where(Asset.id == asset.id))
+            await cleanup.execute(delete(Supplier).where(Supplier.id == supplier.id))
+            await cleanup.execute(
+                delete(User).where(User.id.in_([requester_id, approver_id]))
+            )
+            await cleanup.commit()
+        await engine.dispose()
