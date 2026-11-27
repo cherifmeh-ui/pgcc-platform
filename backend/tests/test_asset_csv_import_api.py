@@ -218,3 +218,99 @@ async def test_csv_import_sets_retirement_marker_for_historical_retired_asset(mo
     assert imported_assets[0].retired_at is not None
     db.flush.assert_awaited_once()
     db.commit.assert_awaited_once()
+
+
+
+@pytest.mark.asyncio
+async def test_csv_import_refuses_confirmation_when_preview_contains_errors(monkeypatch):
+    from app.api.v1.endpoints import assets as assets_endpoint
+
+    preview = AsyncMock(return_value={
+        "can_import": False,
+        "errors": [{"row": 3, "error": "Référence déjà existante"}],
+        "validated_rows": [],
+    })
+    monkeypatch.setattr(assets_endpoint, "preview_asset_csv_import", preview)
+    db = AsyncMock()
+    db.add_all = MagicMock()
+
+    with pytest.raises(HTTPException) as exc:
+        await confirm_asset_csv_import(
+            request=MagicMock(),
+            file=MagicMock(filename="assets.csv"),
+            db=db,
+            current_user=MagicMock(email="tester@example.test"),
+        )
+
+    assert exc.value.status_code == 422
+    assert exc.value.detail["errors"][0]["row"] == 3
+    db.add_all.assert_not_called()
+    db.flush.assert_not_awaited()
+    db.commit.assert_not_awaited()
+    db.rollback.assert_not_awaited()
+
+
+@pytest.mark.asyncio
+async def test_csv_import_rolls_back_all_rows_on_database_integrity_conflict(monkeypatch):
+    from sqlalchemy.exc import IntegrityError
+    from app.api.v1.endpoints import assets as assets_endpoint
+
+    preview = AsyncMock(return_value={
+        "can_import": True,
+        "errors": [],
+        "validated_rows": [
+            {"row": 2, "data": {"reference": "AST-ATOMIC-1", "name": "Asset 1", "asset_type": "hardware"}},
+            {"row": 3, "data": {"reference": "AST-ATOMIC-2", "name": "Asset 2", "asset_type": "hardware"}},
+        ],
+    })
+    monkeypatch.setattr(assets_endpoint, "preview_asset_csv_import", preview)
+    db = AsyncMock()
+    db.add_all = MagicMock()
+    db.flush.side_effect = IntegrityError("insert assets", {}, Exception("unique violation"))
+
+    with pytest.raises(HTTPException) as exc:
+        await confirm_asset_csv_import(
+            request=MagicMock(),
+            file=MagicMock(filename="assets.csv"),
+            db=db,
+            current_user=MagicMock(email="tester@example.test"),
+        )
+
+    assert exc.value.status_code == 409
+    assert "Aucun actif n'a été importé" in exc.value.detail
+    assert len(db.add_all.call_args.args[0]) == 2
+    db.flush.assert_awaited_once()
+    db.rollback.assert_awaited_once()
+    db.commit.assert_not_awaited()
+
+
+@pytest.mark.asyncio
+async def test_csv_import_rolls_back_assets_when_audit_outbox_enqueue_fails(monkeypatch):
+    from app.api.v1.endpoints import assets as assets_endpoint
+
+    preview = AsyncMock(return_value={
+        "can_import": True,
+        "errors": [],
+        "validated_rows": [
+            {"row": 2, "data": {"reference": "AST-AUDIT-ROLLBACK", "name": "Asset audit", "asset_type": "hardware"}},
+        ],
+    })
+    audit = AsyncMock(side_effect=RuntimeError("simulated audit outbox failure"))
+    monkeypatch.setattr(assets_endpoint, "preview_asset_csv_import", preview)
+    monkeypatch.setattr(assets_endpoint, "enqueue_audit_event", audit)
+    db = AsyncMock()
+    db.add_all = MagicMock()
+
+    with pytest.raises(RuntimeError, match="simulated audit outbox failure"):
+        await confirm_asset_csv_import(
+            request=MagicMock(),
+            file=MagicMock(filename="assets.csv"),
+            db=db,
+            current_user=MagicMock(email="tester@example.test"),
+        )
+
+    db.add_all.assert_called_once()
+    db.flush.assert_awaited_once()
+    audit.assert_awaited_once()
+    db.rollback.assert_awaited_once()
+    db.commit.assert_not_awaited()
