@@ -660,3 +660,42 @@ revue, révocation, expiration et terminaison ; puis relier au moins un parcours
 de bout en bout aux fixtures PostgreSQL réelles. Les contrôles CSV
 transactionnels/concurrents, pagination et équivalence export restent au
 backlog. La Phase 0 demeure ouverte.
+
+
+## Complément — matrice HTTP/JWT et parcours PostgreSQL réel (27/11/2026)
+
+Deux niveaux de preuve supplémentaires ont été ajoutés :
+
+1. Dans `backend/tests/test_asset_http_authorization.py`, cinq tests HTTP
+   utilisent des JWT signés et couvrent le refus des rôles auditeur sur les
+   opérations de décision, revue, révocation, expiration et terminaison d'une
+   relation fournisseur-actif. Chaque refus vérifie qu'aucune requête métier,
+   écriture ou validation transactionnelle ne suit l'authentification.
+2. Dans `backend/tests/test_supplier_access_lifecycle_postgres.py`, le test
+   `test_supplier_access_http_jwt_uses_real_postgres_user_and_supplier`
+   traverse réellement FastAPI `TestClient`, la validation du JWT, la lecture
+   du compte en PostgreSQL et les requêtes fournisseur en PostgreSQL. Il
+   confirme qu'un auditeur peut lire les demandes d'accès et qu'une création
+   lui est refusée (HTTP 403), sans persister de demande.
+
+**Résultats CI sur le SHA `e6c5a6f094d2dde91ff783c018c14af3d8c14025`** —
+workflow Push `46013346513` : **5/5 jobs réussis**.
+- Backend : **542 passed, 56 skipped, 1 warning**.
+- PostgreSQL Integration : **55 passed, 1 warning** ; le nouveau parcours
+  HTTP/JWT PostgreSQL réel est inclus dans ce décompte.
+- Frontend : build réussi.
+- Compose Smoke : API/proxy, parser isolé, authentification, refus fail-closed
+  et verdicts ClamAV sain/EICAR réussis.
+- Production Runtime Smoke : migrations, démarrage, health, TLS/proxy,
+  isolation réseau et parcours parser réussis.
+
+Les warnings observés sont des dépréciations Starlette/TestClient
+(`anyio.abc.BlockingPortal`) et de l'environnement d'exécution ; aucun job
+n'a échoué.
+
+**Limite restante** : le parcours PostgreSQL réel couvre une lecture autorisée
+et une création refusée. Il ne couvre pas encore l'ensemble des mutations
+fournisseurs avec JWT et base réelle (décision, revue, révocation, expiration,
+terminaison). Cette extension, ainsi que les contrôles CSV transactionnels/
+concurrents, pagination et équivalence export, reste au backlog. La Phase 0
+demeure ouverte.
