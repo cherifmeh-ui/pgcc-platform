@@ -333,3 +333,23 @@ Phase 1 est **démarrée**, mais aucun sous-jalon fonctionnel n'est déclaré te
 1. Vérifier le workflow complet du commit `08837d2`, en particulier le nouveau test PostgreSQL concurrent à trois arêtes.
 2. Si la CI passe, poursuivre l'audit des permissions croisées Cartographie↔Risques et Cartographie↔Fournisseurs, puis les tests JWT E2E.
 3. Reprendre le chantier de volumétrie/performance (graphe, qualité, analyse d'impact) et la clarification des responsables d'actifs, sans migration destructive avant inventaire des modèles et données.
+
+
+### Résultats CI — concurrence des dépendances et revue RBAC intermodules
+
+- HEAD évalué : `a2ba214b89405c7f1a025a099b2c0866398c9c9d`.
+- Workflows Push `45976555066` et Pull Request `45976563403` : **5/5 jobs réussis chacun**.
+- Backend : **513 passed, 48 skipped, 1 warning**.
+- PostgreSQL Integration : **47 passed**. Le nouveau test `test_concurrent_three_edge_dependency_cycle_is_rejected` est inclus dans cette suite et a réussi. Il confirme que trois arêtes concurrentes A→B, B→C, C→A ne peuvent persister un cycle : deux relations sont créées et la troisième est rejetée.
+- Frontend, Compose Smoke et Production Runtime Smoke : jobs réussis dans les deux workflows.
+- Les messages PostgreSQL `ERROR` relevés dans les logs concernent des tests négatifs intentionnels (contraintes FK/UNIQUE/CHECK et journal append-only) ; la suite PostgreSQL se termine bien avec 47 tests réussis.
+- Revue RBAC intermodules : les rôles ayant accès à la lecture Cartographie et à la lecture des risques sont admin, executive et auditor ; Viewer peut lire les risques mais pas l'inventaire des actifs. La lecture des relations fournisseurs-actifs est limitée à admin/auditor. Les opérations de modification de liens Asset↔Risk et Asset↔Supplier sont réservées à admin, qui possède les permissions de modification des deux modules. Cette intersection est maintenant verrouillée par un test paramétré de matrice dans `backend/tests/test_assets_permissions.py`.
+- Commit de test de matrice RBAC : `9f7d3948e3c0b33e2aae008c9ef771c6ecbc8391`. **Validation CI de ce nouveau commit encore en attente** au moment de cette mise à jour.
+- PR #1 reste ouverte, Draft et non fusionnée ; `main` reste inchangée.
+
+### Suite de validation Cartographie
+
+1. Valider la nouvelle matrice RBAC sur le HEAD `9f7d394`.
+2. Compléter les tests HTTP d'accès aux routes croisées (risques et fournisseurs), notamment les refus avant accès DB.
+3. Passer aux tests JWT end-to-end et aux contrôles de volumétrie/performance du graphe, de la qualité d'inventaire et de l'analyse d'impact.
+4. Maintenir ouverte la décision métier sur les colonnes sensibles de l'export CSV et le modèle de rattachement des responsables d'actifs.
