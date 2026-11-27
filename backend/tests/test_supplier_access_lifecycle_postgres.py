@@ -478,7 +478,6 @@ async def test_supplier_access_http_jwt_uses_real_postgres_user_and_supplier(mon
     from fastapi.testclient import TestClient
     from sqlalchemy.pool import NullPool
 
-    from app.api.deps import get_current_user
     from app.api.v1.endpoints import suppliers as suppliers_endpoint
     from app.core.config import settings
     from app.core.database import get_db
