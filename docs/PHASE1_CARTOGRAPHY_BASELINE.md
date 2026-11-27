@@ -227,3 +227,12 @@ Phase 1 est **démarrée**, mais aucun sous-jalon fonctionnel n'est déclaré te
 - Le CSV actuel contient notamment hostname, IP, FQDN, numéro de série et informations d'exploitation.
 - Ces champs sont des données d'inventaire sensibles, mais nécessaires à certains usages d'audit technique. Les retirer sans validation métier réduirait la valeur opérationnelle de l'export ; les conserver ne doit pas être interprété comme une autorisation générale de diffusion.
 - Décision provisoire : ne pas modifier les colonnes dans cette tranche. Conserver le contrôle RBAC `assets:export`, la journalisation de chaque export et le traitement anti-formule. Ajouter comme gate métier une validation formelle des profils autorisés, des destinataires, du stockage et de la durée de conservation des fichiers exportés. Une éventuelle séparation entre export standard et export technique sensible doit être décidée avec les responsables métier/sécurité avant migration de permissions.
+
+
+### Correction CI — helper de filtres et tests SQL
+
+- Échec CI observé sur le commit `40c97afa3826ff1751a7605324a9dc40ffaa9af9` : 2 tests échouaient, 492 passaient et 43 étaient ignorés.
+- Cause 1 : le dialecte PostgreSQL SQLAlchemy échappe les caractères `%` dans les chaînes compilées avec `literal_binds`. Le prédicat exécuté utilisait bien le motif `%valeur%`; l'assertion de test attendait une représentation non échappée. Le test normalise désormais les doubles `%%` de la représentation compilée avant comparaison.
+- Cause 2 : le contrôle AST des endpoints considère les fonctions d'un module `endpoints` comme des routes candidates. Le helper de requête a donc été déplacé dans `app/services/asset_inventory.py`, puis importé par les deux endpoints. Cela sépare la construction des prédicats SQL de la couche HTTP et évite de fausser le contrôle d'autorisation.
+- Correctifs : `ffd22a6e2edac348f37ea7f785efe7760488c487` (service), `9b7f51fc8a8fb76f29bd295e418ac1dd101f5718` (endpoints), `8e129f68fb0449ec603e2f31562131b02c5d4d85` (tests).
+- Ces corrections ne modifient pas les règles de filtrage attendues. Le nouveau HEAD doit repasser les workflows complets avant validation de la tranche.
