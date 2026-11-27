@@ -702,3 +702,104 @@ async def test_asset_risk_link_is_preserved_as_history_after_retirement_and_new_
             await cleanup.commit()
         await engine.dispose()
 
+@pytest.mark.asyncio
+async def test_application_supports_multiple_assets_reassignment_and_restrictive_delete():
+    """One application may own many assets; referenced applications cannot be deleted."""
+    from sqlalchemy.exc import IntegrityError
+    from app.api.v1.endpoints.assets import AssetCreate, create_asset
+    from app.models.application import Application
+
+    engine = create_async_engine(DATABASE_URL, pool_size=3, max_overflow=0)
+    sessions = async_sessionmaker(engine, expire_on_commit=False)
+    application_a_id = uuid4()
+    application_b_id = uuid4()
+    asset_a_id = uuid4()
+    asset_b_id = uuid4()
+    user = MagicMock(email="phase1-application-cardinality@example.invalid")
+    try:
+        async with sessions() as setup:
+            setup.add_all([
+                Application(id=application_a_id, name=f"Phase1 app A {application_a_id.hex[:8]}"),
+                Application(id=application_b_id, name=f"Phase1 app B {application_b_id.hex[:8]}"),
+            ])
+            await setup.commit()
+
+        async with sessions() as db:
+            asset_a = await create_asset(
+                data=AssetCreate(
+                    reference=f"PH1-APP-A-{asset_a_id.hex[:8]}",
+                    name="First technical asset",
+                    asset_type="hardware",
+                    application_id=application_a_id,
+                ),
+                request=_request(),
+                db=db,
+                current_user=user,
+            )
+            asset_a_id = asset_a.id
+
+        async with sessions() as db:
+            asset_b = await create_asset(
+                data=AssetCreate(
+                    reference=f"PH1-APP-B-{asset_b_id.hex[:8]}",
+                    name="Second technical asset",
+                    asset_type="software",
+                    application_id=application_a_id,
+                ),
+                request=_request(),
+                db=db,
+                current_user=user,
+            )
+            asset_b_id = asset_b.id
+
+        async with sessions() as verify:
+            linked_ids = (
+                await verify.execute(
+                    select(Asset.id).where(Asset.application_id == application_a_id)
+                )
+            ).scalars().all()
+            assert set(linked_ids) == {asset_a_id, asset_b_id}
+
+        async with sessions() as db:
+            await update_asset(
+                asset_id=asset_b_id,
+                data=AssetUpdate(application_id=application_b_id),
+                request=_request(),
+                db=db,
+                current_user=user,
+            )
+
+        async with sessions() as verify:
+            asset_a = await verify.get(Asset, asset_a_id)
+            asset_b = await verify.get(Asset, asset_b_id)
+            assert asset_a.application_id == application_a_id
+            assert asset_b.application_id == application_b_id
+
+        for application_id in (application_a_id, application_b_id):
+            async with sessions() as db:
+                with pytest.raises(IntegrityError):
+                    await db.execute(
+                        delete(Application).where(Application.id == application_id)
+                    )
+                    await db.commit()
+                await db.rollback()
+
+    finally:
+        async with sessions() as cleanup:
+            asset_ids = [asset_a_id, asset_b_id]
+            await cleanup.execute(
+                delete(AuditOutbox).where(
+                    AuditOutbox.payload["resource_id"].astext.in_(
+                        [str(asset_id) for asset_id in asset_ids]
+                    )
+                )
+            )
+            await cleanup.execute(delete(Asset).where(Asset.id.in_(asset_ids)))
+            await cleanup.execute(
+                delete(Application).where(
+                    Application.id.in_([application_a_id, application_b_id])
+                )
+            )
+            await cleanup.commit()
+        await engine.dispose()
+
