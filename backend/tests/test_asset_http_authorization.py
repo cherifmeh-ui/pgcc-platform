@@ -8,11 +8,15 @@ from fastapi.testclient import TestClient
 from app.api.deps import get_current_user
 from app.core.database import get_db
 from app.api.v1.endpoints import assets as assets_endpoint
+from app.api.v1.endpoints import risks as risks_endpoint
+from app.api.v1.endpoints import suppliers as suppliers_endpoint
 
 
 def _client_for_role(role: str, db):
     app = FastAPI()
     app.include_router(assets_endpoint.router, prefix="/api/v1")
+    app.include_router(risks_endpoint.router, prefix="/api/v1")
+    app.include_router(suppliers_endpoint.router, prefix="/api/v1")
 
     async def override_current_user():
         return MagicMock(role=role, email=f"{role}@example.test")
@@ -94,3 +98,44 @@ def test_auditor_cannot_create_asset_over_http():
     assert response.status_code == 403
     db.execute.assert_not_awaited()
     db.commit.assert_not_awaited()
+
+
+
+def test_viewer_cannot_read_assets_linked_to_a_risk_over_http_without_database_query():
+    db = AsyncMock()
+    risk_id = "00000000-0000-0000-0000-000000000001"
+
+    with _client_for_role("viewer", db) as client:
+        response = client.get(f"/api/v1/risks/{risk_id}/assets")
+
+    assert response.status_code == 403
+    db.execute.assert_not_awaited()
+
+
+@pytest.mark.parametrize("role", ["executive", "viewer"])
+def test_roles_without_supplier_asset_scope_are_denied_over_http(role):
+    db = AsyncMock()
+    asset_id = "00000000-0000-0000-0000-000000000002"
+
+    with _client_for_role(role, db) as client:
+        response = client.get(f"/api/v1/suppliers/assets/{asset_id}/suppliers")
+
+    assert response.status_code == 403
+    db.execute.assert_not_awaited()
+
+
+def test_auditor_can_read_suppliers_linked_to_an_asset_over_http():
+    db = AsyncMock()
+    asset_result = MagicMock()
+    asset_result.scalar_one_or_none.return_value = "00000000-0000-0000-0000-000000000002"
+    links_result = MagicMock()
+    links_result.all.return_value = []
+    db.execute.side_effect = [asset_result, links_result]
+    asset_id = "00000000-0000-0000-0000-000000000002"
+
+    with _client_for_role("auditor", db) as client:
+        response = client.get(f"/api/v1/suppliers/assets/{asset_id}/suppliers")
+
+    assert response.status_code == 200
+    assert response.json() == []
+    assert db.execute.await_count == 2
