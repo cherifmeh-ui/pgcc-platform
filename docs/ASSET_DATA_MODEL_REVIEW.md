@@ -75,3 +75,16 @@ La suppression physique d'un risque est refusée tant qu'il possède des associa
 ## 9. Unicité des références — migration 0011
 
 Les références sont désormais débarrassées des espaces périphériques à l'entrée API et une unicité insensible à la casse est imposée en base par l'index unique fonctionnel `uq_assets_reference_ci`. La migration effectue un contrôle préalable des doublons historiques après `lower(btrim(reference))` et s'arrête avec les références concernées au lieu de modifier ou supprimer des données. En cas d'échec, corriger les doublons manuellement après arbitrage métier puis relancer la migration. Les références existantes ne sont pas automatiquement renommées.
+
+
+## 10. Revalidation Phase 0 — 27 novembre 2026
+
+Cette section supersède les points historiques dont le statut a évolué depuis la revue initiale.
+
+- La référence métier Asset dispose désormais d'une unicité normalisée en base via `uq_assets_reference_ci` (migration 0011) ; l'ancienne mention d'une unicité sensible à la casse n'est plus actuelle.
+- L'association Asset–Risk est en place, avec API de liaison/déliaison, permissions croisées `assets:update` et `risks:update`, audit et tests PostgreSQL. La FK `asset_risk_links.risk_id` est restrictive (migration 0010).
+- La suppression d'un risque est bloquée en présence d'actions correctives, de liens d'actifs ou de liens fournisseurs ; les actions historiques sont protégées par `ON DELETE RESTRICT` (migration 0031).
+- Les liens de dépendance Asset–Asset ont une unicité source/cible/type et des FK restrictives. Le test PostgreSQL `test_concurrent_opposing_dependency_edges_allow_only_one_direction` valide la sérialisation des créations de directions opposées.
+- Le test PostgreSQL `test_concurrent_asset_risk_link_and_risk_delete_are_serialized` valide les issues concurrentes possibles entre liaison actif-risque et suppression du risque.
+- Le workflow `45961991384` sur le commit de code `ed0e273` est vert 5/5 ; le job PostgreSQL rapporte 42 tests réussis, et les jobs Compose/Production runtime valident les scénarios runtime automatisés.
+- Aucune preuve CI ne remplace la revue métier de la sémantique des relations, la recette sur données représentatives ni la validation de production.
