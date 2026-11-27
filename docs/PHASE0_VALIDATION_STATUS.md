@@ -1287,3 +1287,13 @@ Cette section remplace les anciens états intermédiaires datés du 21 novembre 
 - Validation groupée des identifiants d'applications : une seule requête SQL pour l'ensemble du fichier, au lieu d'une requête par ligne.
 - Tests Backend ajoutés pour les limites de taille/lignes, les en-têtes ambigus, les colonnes supplémentaires et le traitement groupé.
 - Workflow 45886912425 sur le HEAD 4e61f518b20cc82f4a3e6a6b85f59afb0cba8076 : 4/4 jobs réussis ; les 41 tests PostgreSQL restent verts.
+
+### Validation du déploiement de production et revue RBAC/RAG — 27 novembre 2026
+
+- Correction du smoke test de production : le workflow inspecte désormais directement l'image frontend construite au lieu d'utiliser `docker compose images` avant le démarrage des conteneurs.
+- Workflow `45956563395` sur le HEAD exact `bab7b9563807b8e963d9258210b99b1ba86b2298` : **5/5 jobs réussis** (Backend, PostgreSQL, Frontend, Compose et production-runtime-smoke).
+- PR #1 vérifiée ouverte, en brouillon et non fusionnée ; la branche de travail reste `chore/phase0-stabilization`.
+- Revue RBAC : la matrice serveur demeure la source d'autorité ; les permissions des endpoints sont contrôlées par un test structurel qui refuse les modules/actions absents de la matrice. Les tests couvrent la normalisation des rôles, le refus des rôles/actions inconnus, l'exigence MFA pour les rôles privilégiés et les droits spécifiques de la Cartographie.
+- Revue ACL documentaire : les contrôles sont appliqués aux listes, aperçus, téléchargements et au contexte RAG. Les rôles privilégiés peuvent lire les classifications restreintes ; les lecteurs simples sont limités par classification, propriétaire et département. Le comportement actuel autorise explicitement le propriétaire d'un document restreint à le consulter : cette exception doit être confirmée dans la politique de classification et réévaluée lors d'une rétrogradation de rôle.
+- Limites restantes : la CI ne prouve pas une recette sur l'infrastructure réelle avec secrets/certificats de production ; la sauvegarde chiffrée avec WAL, la protection hors site/immutabilité, l'exercice de restauration et la mesure RPO/RTO en environnement cible restent à démontrer. La revue humaine des droits et l'acceptation formelle des risques résiduels restent requises.
+- **Décision : Phase 0 non clôturée.**
