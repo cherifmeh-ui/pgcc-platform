@@ -619,3 +619,44 @@ sur les routes fournisseurs.
 **Suite** : compléter la matrice HTTP/JWT rôles × permissions × opérations pour
 les routes fournisseurs, puis traiter les tests transactionnels/concurrence CSV,
 pagination et équivalence des exports. La Phase 0 demeure ouverte.
+
+
+## Complément — contrôle HTTP/JWT des permissions fournisseurs (27/11/2026)
+
+Le commit `a85f2dd764900e866218cb989e82b7fb74da7dcf` ajoute quatre scénarios HTTP
+dans `backend/tests/test_asset_http_authorization.py`, exécutés via FastAPI
+`TestClient` avec des access tokens JWT réellement signés et validés par
+`get_current_user` :
+
+- un auditeur authentifié peut consulter les demandes d'accès d'un fournisseur ;
+- les rôles `executive` et `viewer` sont refusés sur cette lecture, avant toute
+  requête métier ;
+- un auditeur ne peut pas créer une demande d'accès ;
+- une requête sans bearer token reçoit HTTP 401.
+
+Le contrôle utilise une base simulée pour isoler le chemin HTTP, la validation
+du JWT, l'état du compte et la dépendance RBAC. Il ne constitue donc pas encore
+un parcours HTTP/JWT adossé à PostgreSQL, ni une couverture exhaustive de
+chaque opération (décision, revue, révocation, expiration et terminaison).
+
+**Résultats CI sur le SHA exact `a85f2dd`** — workflow Push
+`46012310288` : **5/5 jobs réussis**.
+- Backend : **537 passed, 55 skipped, 1 warning**.
+- PostgreSQL Integration : **54 passed, 1 warning** ; migrations, contrôle de
+  dérive, chemin upgrade/downgrade et sauvegarde/restauration réussis.
+- Frontend : build réussi.
+- Compose Smoke : démarrage de la stack, API/proxy, parser isolé, authentification,
+  refus fail-closed et verdicts ClamAV sain/EICAR réussis.
+- Production Runtime Smoke : images durcies, migrations, démarrage, health,
+  TLS/proxy, isolation réseau et parcours parser réussis.
+
+Le warning backend est une dépréciation Starlette/TestClient
+(`anyio.abc.BlockingPortal`) ; il n'a pas fait échouer les tests. Les messages
+PostgreSQL `ERROR` du job correspondent aux tests négatifs intentionnels
+(constraints, FK et append-only), avec 54 tests réussis et aucun échec.
+
+**Prochaine tranche** : étendre la matrice HTTP/JWT aux opérations de décision,
+revue, révocation, expiration et terminaison ; puis relier au moins un parcours
+de bout en bout aux fixtures PostgreSQL réelles. Les contrôles CSV
+transactionnels/concurrents, pagination et équivalence export restent au
+backlog. La Phase 0 demeure ouverte.
