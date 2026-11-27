@@ -499,7 +499,6 @@ async def get_asset_dependency_graph(
 
 
 @router.get("/page")
-@router.get("/page")
 async def list_assets_page(
     q: str | None = Query(default=None, max_length=100),
     asset_type: AssetType | None = None,
