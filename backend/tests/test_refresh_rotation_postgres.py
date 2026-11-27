@@ -422,7 +422,7 @@ async def test_http_login_mfa_refresh_logout_lifecycle(monkeypatch):
     engine = create_async_engine(DATABASE_URL, poolclass=NullPool)
     sessions = async_sessionmaker(engine, expire_on_commit=False)
     user_id = uuid.uuid4()
-    email = f"phase1-auth-http-{user_id.hex}@example.invalid"
+    email = f"phase1-auth-http-{user_id.hex}@example.com"
     password = "Phase1-E2E-StrongPassword!2026"
     totp_secret = pyotp.random_base32()
     origin = "http://localhost:5173"
