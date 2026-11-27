@@ -5,7 +5,7 @@ from uuid import UUID
 import pytest
 from fastapi import HTTPException
 
-from app.api.v1.endpoints.assets import retire_asset, unlink_asset_from_risk
+from app.api.v1.endpoints.assets import AssetUpdate, retire_asset, unlink_asset_from_risk, update_asset
 
 
 ASSET_ID = UUID("00000000-0000-0000-0000-000000000001")
@@ -288,3 +288,44 @@ async def test_retire_asset_is_blocked_while_supplier_asset_link_is_active(monke
     audit.assert_not_awaited()
     db.flush.assert_not_awaited()
     db.commit.assert_not_awaited()
+
+@pytest.mark.asyncio
+@pytest.mark.parametrize(
+    ("open_access", "active_supplier_link", "expected_detail"),
+    [
+        (True, False, "autorisation d'accès fournisseur"),
+        (False, True, "relation fournisseur-actif"),
+    ],
+)
+async def test_asset_patch_cannot_bypass_supplier_retirement_guards(
+    monkeypatch, open_access, active_supplier_link, expected_detail
+):
+    asset = MagicMock(
+        id=ASSET_ID, reference="AST-PATCH-GUARD", lifecycle_status="Actif",
+        retired_at=None,
+    )
+    db = _db_for_asset(
+        asset,
+        open_access=open_access,
+        active_supplier_link=active_supplier_link,
+    )
+    audit = AsyncMock()
+    monkeypatch.setattr("app.api.v1.endpoints.assets.enqueue_audit_event", audit)
+
+    with pytest.raises(HTTPException) as exc:
+        await update_asset(
+            asset_id=ASSET_ID,
+            data=AssetUpdate(lifecycle_status="Décommissionné"),
+            request=MagicMock(),
+            db=db,
+            current_user=MagicMock(email="admin@example.test"),
+        )
+
+    assert exc.value.status_code == 409
+    assert expected_detail in exc.value.detail
+    assert asset.lifecycle_status == "Actif"
+    assert asset.retired_at is None
+    audit.assert_not_awaited()
+    db.flush.assert_not_awaited()
+    db.commit.assert_not_awaited()
+
