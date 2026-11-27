@@ -873,3 +873,36 @@ multi-critères, incluant l'exclusion des actifs retirés. Les prochains contrô
 restants portent notamment sur les collisions concurrentes hostname/numéro
 de série (selon la règle métier retenue) et sur la couverture des filtres
 combinés/limites de pagination. La Phase 0 reste ouverte.
+
+
+## Complément — pagination/export PostgreSQL et inclusion effective dans la CI (27/11/2026)
+
+Le test `test_asset_inventory_pagination_and_csv_export_use_identical_postgres_filters`
+a été isolé dans `backend/tests/test_asset_inventory_pagination_postgres.py`
+pour séparer les scénarios Cartographie des tests du cycle fournisseur.
+Il crée des actifs dans PostgreSQL, appelle les routes HTTP avec un JWT
+administrateur signé, puis compare les références des pages successives à
+celles de l'export CSV appliquant les mêmes filtres.
+
+Le test vérifie le total, le nombre de pages, le découpage, l'ordre stable,
+l'égalité des références exportées et l'exclusion des actifs hors périmètre.
+La CI PostgreSQL exécute désormais explicitement ce fichier dans
+`.github/workflows/backend-checks.yml`. La revue a détecté et corrigé son
+omission temporaire de la liste explicite après le déplacement du test :
+le fichier présent dans le dépôt n'était pas automatiquement exécuté par
+ce job.
+
+**Résultats CI sur le SHA `2c0fbc80aa9a8cb1593d8c19075909b89892dedb`** :
+- Workflow Push `46018133444` : **5/5 jobs réussis**.
+- Workflow Pull Request `46018143207` : **5/5 jobs réussis**.
+- Backend : **542 passed, 62 skipped, 1 warning**.
+- PostgreSQL Integration : **61 passed, 1 warning**.
+- Frontend : build réussi.
+- Compose Smoke : réussi.
+- Production Runtime Smoke : réussi.
+
+La couverture Cartographie validée inclut maintenant la concurrence de
+l'import CSV, le rollback complet d'un lot lorsqu'une ligne entre en conflit,
+ainsi que l'équivalence des filtres et de l'ordre entre pagination et export.
+Le contrôle ne démontre pas encore une recette avec les données et
+l'infrastructure réelles de production. La Phase 0 reste ouverte.
