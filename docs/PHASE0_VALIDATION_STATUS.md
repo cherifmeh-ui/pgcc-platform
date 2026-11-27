@@ -1307,7 +1307,16 @@ Cette section remplace les anciens états intermédiaires datés du 21 novembre 
 - Le test runtime production valide l'image de production, les migrations, le health check, TLS/proxy, l'isolation réseau, l'extraction et les parcours fail-closed.
 - Revue complémentaire du cycle de vie : les routes PATCH et DELETE appliquent le même garde-fou contre le retrait d'un actif ayant une demande d'accès fournisseur ouverte ou une relation fournisseur-actif active. Le test PostgreSQL de contournement par PATCH est couvert dans cette validation.
 - Une revue postérieure a ensuite identifié que la création API et l'import CSV pouvaient initialiser un actif en statut « Retiré » ou « Décommissionné » sans renseigner `retired_at`. La création API et la confirmation d'import CSV renseignent désormais automatiquement le marqueur de retrait ; des tests unitaires ciblés ont été ajoutés.
-- Les corrections de création/import sont présentes sur le HEAD actuel `a1d94d1646dde266b5533d22a128c83e51a6c3b0`. **La CI de ce nouveau HEAD est en attente/non observée** : le workflow vert `45957293290` ne valide que `c14ccb1`, pas ces derniers commits.
+- Les corrections de création/import sont présentes sur le HEAD de code `a1d94d1646dde266b5533d22a128c83e51a6c3b0`. Workflow `45957879528` sur ce SHA : **5/5 jobs réussis** (Backend, PostgreSQL integration, Frontend, Compose smoke et production-runtime-smoke). Backend : **460 passed, 43 skipped** ; PostgreSQL : **42 passed**. Le smoke Compose a également validé le démarrage de la stack, le parseur isolé, le refus fermé, ClamAV et le verdict EICAR. Le smoke runtime production a validé health, TLS/proxy, isolation réseau et parcours parser.
 - PR #1 reste ouverte, en Draft et non fusionnée. La Phase 0 reste ouverte.
 
 **Gates opérationnels toujours ouverts :** recette avec les vrais secrets et certificats, validation réseau/pare-feu et proxy sur l'environnement cible, supervision et alertes réelles, sauvegardes chiffrées avec WAL/PITR, protection hors site/immutabilité, exercice de restauration sur environnement cible avec RPO/RTO approuvés, revue humaine et acceptation formelle des risques résiduels.
+
+
+### Confirmation CI du correctif de création/import des actifs — 27 novembre 2026
+
+- Workflow `45957879528` terminé avec succès sur le HEAD de code exact `a1d94d1646dde266b5533d22a128c83e51a6c3b0`.
+- Résultat : **5/5 jobs réussis**. Backend : 460 tests réussis, 43 ignorés ; PostgreSQL : 42 tests réussis ; frontend, Compose smoke et production-runtime-smoke réussis.
+- Le correctif garantissant `retired_at` lors de la création API et de l'import CSV est donc couvert par la suite backend validée. La CI PostgreSQL confirme à nouveau migrations, dérive du schéma, chemin legacy upgrade/downgrade et sauvegarde/restauration.
+- HEAD documentaire courant : `8523d62fb5796f0a81814f6f2b0020f44c3b67c2` (mise à jour de ce relevé). Le workflow de code est rattaché à `a1d94d1` ; cette modification documentaire n'altère pas le code testé.
+- PR #1 reste ouverte, Draft et non fusionnée. La Phase 0 reste ouverte jusqu'aux gates opérationnels et à la revue humaine déjà listés.
