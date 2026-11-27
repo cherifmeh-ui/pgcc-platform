@@ -21,7 +21,6 @@ async def test_graph_returns_active_assets_and_relationships():
     relation_result = MagicMock()
     relation_result.scalars.return_value.all.return_value = [
         MagicMock(id=UUID("00000000-0000-0000-0000-000000000004"), source_asset_id=B, target_asset_id=A, relationship_type="depends_on", description="Application hébergée"),
-        MagicMock(id=UUID("00000000-0000-0000-0000-000000000005"), source_asset_id=B, target_asset_id=UUID("00000000-0000-0000-0000-000000000003"), relationship_type="connects_to", description=None),
     ]
     db.execute.side_effect = [asset_result, relation_result]
 
@@ -33,6 +32,10 @@ async def test_graph_returns_active_assets_and_relationships():
     assert result["edges"][0]["source"] == B
     assert result["edges"][0]["target"] == A
     assert db.execute.await_count == 2
+    relation_statement = str(db.execute.await_args_list[1].args[0]).lower()
+    assert "asset_relationships.source_asset_id in (select" in relation_statement
+    assert "asset_relationships.target_asset_id in (select" in relation_statement
+    assert "assets.retired_at is null" in relation_statement
 
 
 @pytest.mark.asyncio
