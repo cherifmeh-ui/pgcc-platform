@@ -19,13 +19,15 @@ Ce document définit les principaux objets métier et leurs relations. Il ne con
 ## 2. Domaines et entités
 
 ### Organisation
-**OrganizationUnit**
-- id, code, name, type, parent_id, manager_id, active
-- hiérarchie des directions, départements et unités.
+**OrganizationUnit — cible proposée, non implémentée**
+- id, code, name, type, parent_id, manager_id, active.
+- Hiérarchie des directions, départements et unités.
+- Aucun modèle/table OrganizationUnit n'est présent dans le schéma physique examiné au checkpoint Phase 1. Ne pas traiter cette entité comme disponible pour les FK ou les migrations actuelles.
 
-**User**
-- Entité existante : identité, statut, rôle(s), permissions et périmètre.
-- Les responsabilités métier peuvent référencer un utilisateur ou une unité organisationnelle.
+**User — entité physique existante**
+- Identité, statut, rôle, authentification et champ texte facultatif `department`.
+- Le champ `department` n'est pas une référence canonique à une unité organisationnelle et ne garantit ni code stable, ni hiérarchie, ni intégrité référentielle.
+- Les responsabilités métier ne doivent référencer un utilisateur ou une unité qu'après définition du référentiel source et d'une stratégie de reprise des données.
 
 ### GRC existant
 **Risk**
@@ -74,7 +76,7 @@ Ce document définit les principaux objets métier et leurs relations. Il ne con
 - Inventaire : discovery_source, source_reference, last_inventory_date, end_of_support_date.
 - Traçabilité physique actuelle : created_at, updated_at, retired_at ; les champs created_by/updated_by, business_value, purchase_date et deleted_at restent des éléments de cible non démontrés dans le modèle Asset actuel.
 
-Les champs techniques sont optionnels et conditionnels au type d'actif. Une application ou un processus n'a pas besoin de numéro de série ; un équipement peut en avoir. Toute évolution des responsabilités vers des clés étrangères doit être additive, précédée d'un inventaire des utilisateurs/unités et d'une stratégie de reprise des valeurs texte.
+Les champs techniques sont optionnels et conditionnels au type d'actif. Une application ou un processus n'a pas besoin de numéro de série ; un équipement peut en avoir. Toute évolution des responsabilités vers des clés étrangères doit être additive, précédée d'un inventaire des utilisateurs/unités et d'une stratégie de reprise des valeurs texte. À ce stade, `owner`, `custodian` et `direction` restent des attributs textuels physiques ; `User.department` est également textuel et ne constitue pas un référentiel d'unités. Aucune migration de responsabilité n'est autorisée tant qu'une source organisationnelle canonique et des correspondances fiables ne sont pas établies.
 
 **AssetRelationship**
 - Modèle physique actuel : id, source_asset_id, target_asset_id, relationship_type, description, criticality, created_at, created_by.
