@@ -956,3 +956,31 @@ la configuration de production ni une validation de restauration de sauvegarde.
 - confirmer la cohérence des filtres entre l'interface frontend et les
   paramètres API, au-delà de l'équivalence backend pagination/export.
 La Phase 0 reste ouverte.
+
+
+## Complément — validation des bornes de pagination HTTP (27/11/2026)
+
+Six cas HTTP supplémentaires vérifient que l'API `GET /api/v1/assets/page`
+rejette avant toute requête SQL :
+- `page=0` ;
+- `page_size=0` et `page_size=201` (maximum contractuel : 200) ;
+- une recherche de plus de 100 caractères ;
+- un propriétaire de plus de 150 caractères ;
+- une localisation de plus de 200 caractères.
+
+Chaque cas doit retourner HTTP 422 et le mock de session confirme qu'aucun
+appel `execute` n'est effectué. Ces tests complètent la couverture de
+pagination/export PostgreSQL, les contrôles RBAC et la stabilité du tri.
+
+**Résultats CI sur le SHA `78c241a4c85bb55ebfd883a4dc15b4d4fe099815`** :
+workflows Push `46019594990` et Pull Request `46019604715` terminés avec
+**5/5 jobs réussis chacun**.
+- Backend : **551 passed, 62 skipped, 1 warning**.
+- PostgreSQL Integration : **61 passed, 1 warning**.
+- Frontend build : réussi.
+- Compose Smoke : réussi.
+- Production Runtime Smoke : réussi.
+
+La validation CI prouve les contrôles automatisés dans les environnements
+décrits par les workflows ; elle ne remplace pas les essais utilisateurs sur
+l'environnement cible. La Phase 0 reste ouverte.
