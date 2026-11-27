@@ -5,7 +5,7 @@ from uuid import UUID
 import pytest
 from fastapi import HTTPException
 
-from app.api.v1.endpoints.assets import AssetUpdate, retire_asset, unlink_asset_from_risk, update_asset
+from app.api.v1.endpoints.assets import AssetCreate, AssetUpdate, create_asset, retire_asset, unlink_asset_from_risk, update_asset
 
 
 ASSET_ID = UUID("00000000-0000-0000-0000-000000000001")
@@ -329,3 +329,24 @@ async def test_asset_patch_cannot_bypass_supplier_retirement_guards(
     db.flush.assert_not_awaited()
     db.commit.assert_not_awaited()
 
+
+
+@pytest.mark.asyncio
+async def test_create_asset_sets_retirement_marker_for_retired_lifecycle(monkeypatch):
+    db = AsyncMock()
+    db.add = MagicMock()
+    audit = AsyncMock()
+    monkeypatch.setattr("app.api.v1.endpoints.assets.enqueue_audit_event", audit)
+
+    asset = await create_asset(
+        data=AssetCreate(reference="AST-CREATE-RETIRED", name="Ancien serveur", lifecycle_status="Retiré"),
+        request=MagicMock(),
+        db=db,
+        current_user=MagicMock(email="admin@example.test"),
+    )
+
+    assert asset.lifecycle_status == "Retiré"
+    assert asset.retired_at is not None
+    db.add.assert_called_once_with(asset)
+    db.flush.assert_awaited_once()
+    db.commit.assert_awaited_once()
