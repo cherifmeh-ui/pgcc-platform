@@ -242,3 +242,14 @@ Phase 1 est **démarrée**, mais aucun sous-jalon fonctionnel n'est déclaré te
 - Commits de correction supplémentaires : `4868e7823623eff326ea936714654a254ceda382` et `ad29b3646cd9dcbc2cd6b9b53c0951c67f9f33a6`.
 - Revue statique du HEAD : un seul décorateur et une seule fonction `list_assets_page`, deux appels au service partagé (pagination et export), aucun import résiduel de l'ancien helper dans les tests.
 - Les nouveaux workflows du HEAD sont en file d'attente GitHub Actions ; la validation reste ouverte.
+
+
+### Tranche cycle de vie — invariants métier et PostgreSQL
+
+- Lecture des tests PostgreSQL existants : le pipeline d'intégration sur le HEAD `29570c68925498f3a9e905f2e63b75d89fd02312` exécute les tests de cycle de vie et de relations ; le job PostgreSQL a terminé avec `42 passed`.
+- Les scénarios déjà couverts incluent retrait et audit atomiques, rollback si l'audit échoue, réactivation et rollback, blocage du retrait en présence d'autorisations/demandes fournisseur ou de relations fournisseur actives, concurrence création de relation fournisseur/retrait, et concurrence de deux arêtes de dépendance opposées.
+- Nouvelle couverture unitaire indépendante de PostgreSQL : `backend/tests/test_asset_lifecycle_rules.py`. Elle formalise la cohérence entre `lifecycle_status` et `retired_at`, la génération/préservation/effacement du marqueur, le caractère autoritatif de chacun des deux champs et l'éligibilité des deux extrémités d'une relation.
+- Commit : `e5f80b2ee19c8cc472bdc6652a46a736e902fcce`.
+- Revue du code : les opérations de retrait et de modification verrouillent la ligne Asset avec `FOR UPDATE`; la création de relations Asset↔Asset verrouille les deux actifs dans l'ordre déterministe; la création de liens fournisseur-actif verrouille aussi la ligne Asset. Ces verrous constituent le mécanisme de sérialisation partagé par les scénarios concurrents.
+- Limite : le scénario de concurrence fournisseur/retrait vérifie les états finaux mais ne constitue pas un test de charge ou de stress. La tranche ne revendique pas une validation sous forte contention.
+- Validation du nouveau test unitaire et du dernier HEAD : CI à attendre ; les 42 tests PostgreSQL mentionnés ci-dessus concernent le HEAD précédent, pas le commit de cette tranche.
