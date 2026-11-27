@@ -352,3 +352,99 @@ async def test_asset_relationship_history_survives_retirement_and_reactivation()
             )
             await cleanup.commit()
         await engine.dispose()
+
+
+@pytest.mark.asyncio
+async def test_concurrent_three_edge_dependency_cycle_is_rejected(monkeypatch):
+    """Concurrent edges forming a three-node cycle must serialize to a DAG."""
+    engine = create_async_engine(DATABASE_URL, pool_size=6, max_overflow=0)
+    sessions = async_sessionmaker(engine, expire_on_commit=False)
+    assets = [
+        Asset(
+            reference=f"REL-TRI-{index}-{uuid4().hex[:10]}",
+            name=f"Phase 1 concurrent cycle asset {index}",
+            asset_type="hardware",
+            lifecycle_status="Actif",
+        )
+        for index in range(3)
+    ]
+    monkeypatch.setattr("app.api.v1.endpoints.assets.log_action", AsyncMock())
+    asset_ids = []
+    relationship_ids = []
+    try:
+        async with sessions() as setup:
+            setup.add_all(assets)
+            await setup.commit()
+            for asset in assets:
+                await setup.refresh(asset)
+                asset_ids.append(asset.id)
+
+        candidate_edges = [
+            (asset_ids[0], asset_ids[1]),
+            (asset_ids[1], asset_ids[2]),
+            (asset_ids[2], asset_ids[0]),
+        ]
+
+        async def create_edge(source_id, target_id):
+            async with sessions() as db:
+                try:
+                    relationship = await create_asset_relationship(
+                        asset_id=source_id,
+                        data=RelationshipCreate(
+                            target_asset_id=target_id,
+                            relationship_type="depends_on",
+                        ),
+                        request=_request(),
+                        db=db,
+                        current_user=MagicMock(email="phase1-cycle@example.invalid"),
+                    )
+                    return (201, relationship.id)
+                except HTTPException as exc:
+                    return (exc.status_code, None)
+
+        outcomes = await asyncio.gather(
+            *(create_edge(source_id, target_id) for source_id, target_id in candidate_edges)
+        )
+        assert sorted(code for code, _ in outcomes) == [201, 201, 422]
+        relationship_ids.extend(
+            relationship_id for code, relationship_id in outcomes
+            if code == 201 and relationship_id is not None
+        )
+
+        async with sessions() as verify:
+            persisted = (
+                await verify.execute(
+                    select(AssetRelationship).where(
+                        AssetRelationship.relationship_type == "depends_on",
+                        AssetRelationship.source_asset_id.in_(asset_ids),
+                        AssetRelationship.target_asset_id.in_(asset_ids),
+                    )
+                )
+            ).scalars().all()
+            assert len(persisted) == 2
+            assert {
+                (edge.source_asset_id, edge.target_asset_id) for edge in persisted
+            } == {
+                edge for (code, relationship_id), edge in zip(outcomes, candidate_edges)
+                if code == 201
+            }
+    finally:
+        async with sessions() as cleanup:
+            await cleanup.execute(
+                delete(AuditOutbox).where(
+                    AuditOutbox.payload["resource_id"].astext.in_(
+                        [str(value) for value in relationship_ids]
+                    )
+                )
+            )
+            await cleanup.execute(
+                delete(AssetRelationship).where(
+                    or_(
+                        AssetRelationship.source_asset_id.in_(asset_ids),
+                        AssetRelationship.target_asset_id.in_(asset_ids),
+                    )
+                )
+            )
+            await cleanup.execute(delete(Asset).where(Asset.id.in_(asset_ids)))
+            await cleanup.commit()
+        await engine.dispose()
