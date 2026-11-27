@@ -146,10 +146,14 @@ def _jwt_client(db):
     from fastapi import FastAPI
     from app.api.deps import get_current_user
     from app.api.v1.endpoints import assets as assets_endpoint
+    from app.api.v1.endpoints import risks as risks_endpoint
+    from app.api.v1.endpoints import suppliers as suppliers_endpoint
     from app.core.database import get_db
 
     app = FastAPI()
     app.include_router(assets_endpoint.router, prefix="/api/v1")
+    app.include_router(risks_endpoint.router, prefix="/api/v1")
+    app.include_router(suppliers_endpoint.router, prefix="/api/v1")
 
     async def override_db():
         yield db
@@ -240,6 +244,89 @@ def test_real_jwt_role_claim_mismatch_is_rejected_before_asset_query(monkeypatch
     with _jwt_client(db) as client:
         response = client.get(
             "/api/v1/assets/graph",
+            headers={"Authorization": f"Bearer {token}"},
+        )
+
+    assert response.status_code == 403
+    db.execute.assert_awaited_once()
+
+
+
+def test_real_jwt_auditor_can_read_assets_linked_to_risk(monkeypatch):
+    from app.core.config import settings
+    from app.core.security import create_access_token
+
+    monkeypatch.setattr(settings, "JWT_SECRET", "pgcc-jwt-integration-secret-long-enough-for-tests")
+    monkeypatch.setattr(settings, "JWT_ALGORITHM", "HS256")
+    user = MagicMock(
+        email="jwt-risk-auditor@example.test", role="auditor",
+        is_active=True, must_change_password=False, mfa_enabled=False, auth_version=7,
+    )
+    risk_result = MagicMock()
+    risk_result.scalar_one_or_none.return_value = "00000000-0000-0000-0000-000000000010"
+    links_result = MagicMock()
+    links_result.all.return_value = []
+    db = AsyncMock()
+    db.execute.side_effect = [_jwt_user_result(user), risk_result, links_result]
+    token = create_access_token(subject=user.email, role="auditor", auth_version=7)
+
+    with _jwt_client(db) as client:
+        response = client.get(
+            "/api/v1/risks/00000000-0000-0000-0000-000000000010/assets",
+            headers={"Authorization": f"Bearer {token}"},
+        )
+
+    assert response.status_code == 200
+    assert response.json() == []
+    assert db.execute.await_count == 3
+
+
+def test_real_jwt_auditor_can_read_suppliers_linked_to_asset(monkeypatch):
+    from app.core.config import settings
+    from app.core.security import create_access_token
+
+    monkeypatch.setattr(settings, "JWT_SECRET", "pgcc-jwt-integration-secret-long-enough-for-tests")
+    monkeypatch.setattr(settings, "JWT_ALGORITHM", "HS256")
+    user = MagicMock(
+        email="jwt-supplier-auditor@example.test", role="auditor",
+        is_active=True, must_change_password=False, mfa_enabled=False, auth_version=8,
+    )
+    asset_result = MagicMock()
+    asset_result.scalar_one_or_none.return_value = "00000000-0000-0000-0000-000000000011"
+    links_result = MagicMock()
+    links_result.all.return_value = []
+    db = AsyncMock()
+    db.execute.side_effect = [_jwt_user_result(user), asset_result, links_result]
+    token = create_access_token(subject=user.email, role="auditor", auth_version=8)
+
+    with _jwt_client(db) as client:
+        response = client.get(
+            "/api/v1/suppliers/assets/00000000-0000-0000-0000-000000000011/suppliers",
+            headers={"Authorization": f"Bearer {token}"},
+        )
+
+    assert response.status_code == 200
+    assert response.json() == []
+    assert db.execute.await_count == 3
+
+
+def test_real_jwt_executive_cannot_read_suppliers_linked_to_asset(monkeypatch):
+    from app.core.config import settings
+    from app.core.security import create_access_token
+
+    monkeypatch.setattr(settings, "JWT_SECRET", "pgcc-jwt-integration-secret-long-enough-for-tests")
+    monkeypatch.setattr(settings, "JWT_ALGORITHM", "HS256")
+    user = MagicMock(
+        email="jwt-executive@example.test", role="executive",
+        is_active=True, must_change_password=False, mfa_enabled=False, auth_version=2,
+    )
+    db = AsyncMock()
+    db.execute.return_value = _jwt_user_result(user)
+    token = create_access_token(subject=user.email, role="executive", auth_version=2)
+
+    with _jwt_client(db) as client:
+        response = client.get(
+            "/api/v1/suppliers/assets/00000000-0000-0000-0000-000000000011/suppliers",
             headers={"Authorization": f"Bearer {token}"},
         )
 
