@@ -143,3 +143,23 @@ Cette présence fonctionnelle ne vaut pas encore validation complète de chaque 
 ## 6. État du jalon
 
 Phase 1 est **démarrée**, mais aucun sous-jalon fonctionnel n'est déclaré terminé sur la seule base de la présence de code. La première tranche est l'audit complet des contrats, des tests et des migrations, puis la correction des écarts confirmés.
+
+
+## 7. Journal d'exécution — 27 novembre 2026
+
+### Tranche RBAC — matrice Asset
+
+- HEAD précédent contrôlé : `824cd9b38f76bca200ee56cb701ff12b76bb6c57`.
+- Les deux workflows associés à ce HEAD sont terminés : 5/5 jobs réussis chacun (backend, frontend, PostgreSQL integration, Compose smoke et production runtime smoke).
+- Constat : le test `test_assets_permissions.py` vérifiait quelques permissions via `role_has_permission`, mais ne vérifiait pas directement la dépendance FastAPI `require_permission` pour la matrice complète des rôles et actions.
+- Correction : ajout d'un test paramétré appelant la dépendance réellement utilisée par les routes. Il couvre Admin, Executive, Auditor, Viewer et rôle inconnu, pour read/create/update/delete/export (22 combinaisons).
+- Résultat attendu : les refus sont vérifiés au niveau de la dépendance FastAPI (HTTP 403), les accès autorisés retournent l'utilisateur courant.
+- Limite : ce test vérifie la dépendance de sécurité, pas encore le parcours HTTP complet avec JWT, base PostgreSQL et routes montées. Une matrice d'intégration HTTP reste à réaliser.
+- Commit : `549cf20a135862ae95c40a96306053f003b7f639` — `test(cartography): enforce asset API permission matrix`.
+- Au moment de ce checkpoint, aucun workflow n'était encore publié pour ce nouveau SHA ; la validation CI de ce commit reste donc en attente.
+
+### Prochaine tranche
+
+1. Compléter les tests HTTP authentifiés des routes Asset, en couvrant au minimum lecture, mutation et export par rôle.
+2. Revoir les routes de relation Asset↔Risk et les permissions croisées avec le module Risques.
+3. Continuer la matrice cycle de vie et intégrité PostgreSQL avant toute évolution du schéma.
