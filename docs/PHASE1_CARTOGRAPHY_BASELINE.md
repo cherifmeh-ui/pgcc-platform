@@ -311,3 +311,25 @@ Phase 1 est **démarrée**, mais aucun sous-jalon fonctionnel n'est déclaré te
 2. Étendre les scénarios CSV à la confirmation PostgreSQL et à la concurrence d'import si l'architecture du pipeline le permet.
 3. Poursuivre la matrice des relations Asset↔Asset, y compris cycles, réactivation, relations historiques et contention concurrente.
 4. Terminer l'audit de cohérence des routes et permissions Cartographie avant de déclarer un jalon Phase 1 achevé.
+
+
+### Tranche relations Asset↔Asset — validation CI et concurrence de cycle à trois nœuds
+
+- HEAD de code précédent contrôlé : `6988442f642a4677b7e532bdd2641ffc0b623a80`.
+- Workflow Push `45975764226`, associé au SHA exact : **5/5 jobs terminés avec succès**.
+  - Backend : `513 passed, 47 skipped, 1 warning` ; compilation Python réussie.
+  - PostgreSQL Integration : **46 passed** ; migrations, contrôle de drift, chemin upgrade/downgrade et sauvegarde/restauration exécutés avant les tests.
+  - Frontend : build réussi.
+  - Compose Smoke : parser isolé, authentification/fail-closed et ClamAV réel vérifiés ; fichier sain accepté et EICAR détecté.
+  - Production Runtime Smoke : santé, TLS/proxy/isolation réseau, parser, authentification/fail-closed et ClamAV réel vérifiés ; fichier sain accepté et EICAR détecté.
+- La revue du code confirme que les créations de relations `depends_on` acquièrent un verrou consultatif transactionnel PostgreSQL commun (`pg_advisory_xact_lock(736291, 1)`) avant la vérification de cycle. Les deux actifs sont ensuite verrouillés dans l'ordre déterministe de leur identifiant. Un test PostgreSQL antérieur vérifie déjà deux arêtes opposées concurrentes ; le test de cycle de vie Asset↔Asset vérifie la conservation des liens au retrait puis la création après réactivation.
+- Nouvelle couverture ajoutée dans `backend/tests/test_asset_relationships_postgres.py` : trois créations concurrentes A→B, B→C et C→A doivent aboutir à exactement deux relations acceptées et une relation rejetée HTTP 422 ; le graphe persistant reste donc acyclique. Le test vérifie les arêtes persistées et nettoie les événements d'audit ainsi que les données créées.
+- Commit de test : `08837d2440fdc08f5674e31fd58045705b90fd6d`.
+- **Statut de cette nouvelle couverture : en attente d'exécution CI sur le nouveau HEAD.** Les 46 tests PostgreSQL et les 513 tests backend ci-dessus valident le HEAD précédent, pas encore le commit `08837d2`.
+- La PR #1 reste ouverte, Draft et non fusionnée ; la branche `main` n'est pas modifiée.
+
+### Prochaine tranche
+
+1. Vérifier le workflow complet du commit `08837d2`, en particulier le nouveau test PostgreSQL concurrent à trois arêtes.
+2. Si la CI passe, poursuivre l'audit des permissions croisées Cartographie↔Risques et Cartographie↔Fournisseurs, puis les tests JWT E2E.
+3. Reprendre le chantier de volumétrie/performance (graphe, qualité, analyse d'impact) et la clarification des responsables d'actifs, sans migration destructive avant inventaire des modèles et données.
