@@ -803,3 +803,90 @@ async def test_application_supports_multiple_assets_reassignment_and_restrictive
             await cleanup.commit()
         await engine.dispose()
 
+@pytest.mark.asyncio
+async def test_asset_reactivation_preserves_application_and_historical_risk_link():
+    from app.models.application import Application
+    from app.models.asset import AssetRiskLink
+    from app.models.risk import Risk
+
+    engine = create_async_engine(DATABASE_URL, pool_size=3, max_overflow=0)
+    sessions = async_sessionmaker(engine, expire_on_commit=False)
+    application_id = uuid4()
+    asset_id = uuid4()
+    risk_id = uuid4()
+    asset_reference = f"PH1-REACTIVATE-APP-{asset_id.hex[:8]}"
+    risk_reference = f"PH1-REACTIVATE-RISK-{risk_id.hex[:8]}"
+    try:
+        async with sessions() as setup:
+            setup.add_all([
+                Application(id=application_id, name=f"Reactivation app {application_id.hex[:8]}"),
+                Risk(
+                    id=risk_id,
+                    ref=risk_reference,
+                    title="Historical risk association during asset reactivation",
+                    impact=3,
+                    likelihood=3,
+                    risk_level=9,
+                    status="Ouvert",
+                ),
+                Asset(
+                    id=asset_id,
+                    reference=asset_reference,
+                    name="Retired asset with application and risk history",
+                    asset_type="hardware",
+                    application_id=application_id,
+                    lifecycle_status="Retiré",
+                    retired_at=datetime(2026, 1, 1, tzinfo=timezone.utc),
+                ),
+            ])
+            await setup.flush()
+            setup.add(AssetRiskLink(
+                asset_id=asset_id,
+                risk_id=risk_id,
+                relationship_context="Historique conservé pendant le retrait",
+            ))
+            await setup.commit()
+
+        async with sessions() as db:
+            await update_asset(
+                asset_id=asset_id,
+                data=AssetUpdate(lifecycle_status="Actif"),
+                request=_request(),
+                db=db,
+                current_user=MagicMock(email="phase1-reactivation@example.invalid"),
+            )
+
+        async with sessions() as verify:
+            persisted = await verify.get(Asset, asset_id)
+            links = (
+                await verify.execute(
+                    select(AssetRiskLink).where(AssetRiskLink.asset_id == asset_id)
+                )
+            ).scalars().all()
+            events = (
+                await verify.execute(
+                    select(AuditOutbox).where(
+                        AuditOutbox.payload["resource_id"].astext == str(asset_id),
+                        AuditOutbox.payload["action"].astext == "REACTIVATE",
+                    )
+                )
+            ).scalars().all()
+            assert persisted.lifecycle_status == "Actif"
+            assert persisted.retired_at is None
+            assert persisted.application_id == application_id
+            assert len(links) == 1
+            assert links[0].risk_id == risk_id
+            assert len(events) == 1
+    finally:
+        async with sessions() as cleanup:
+            await cleanup.execute(
+                delete(AuditOutbox).where(
+                    AuditOutbox.payload["resource_id"].astext == str(asset_id)
+                )
+            )
+            await cleanup.execute(delete(AssetRiskLink).where(AssetRiskLink.asset_id == asset_id))
+            await cleanup.execute(delete(Asset).where(Asset.id == asset_id))
+            await cleanup.execute(delete(Risk).where(Risk.id == risk_id))
+            await cleanup.execute(delete(Application).where(Application.id == application_id))
+            await cleanup.commit()
+        await engine.dispose()
