@@ -1,6 +1,6 @@
 # Phase 0 — Runbook de validation des migrations PostgreSQL
 
-**Statut:** exécution CI attestée pour une base neuve PostgreSQL 16.16 jusqu'à Alembic head 0024; les scénarios d'upgrade legacy, downgrade et restauration restent à exécuter.
+**Statut au 27/11/2026 :** la validation CI actuelle couvre la tête Alembic `0031_risk_action_restrict`, la base neuve, un upgrade hérité représentatif, le contrôle de dérive, un downgrade/upgrade ciblé et un dump/restore sur base jetable. Les sections historiques ci-dessous sont conservées comme journal de preuves datées ; elles ne décrivent pas toutes l'état courant. L'exercice de restauration sur infrastructure cible, WAL/PITR, RPO/RTO et sauvegardes chiffrées/offsite restent à exécuter.
 
 ## 1. Conditions de sécurité
 
@@ -74,7 +74,7 @@ Le downgrade de `0001_initial` est volontairement interdit car il pourrait suppr
 
 La stratégie de récupération privilégiée en environnement réel est backup + restauration contrôlée, pas un downgrade improvisé.
 
-## 6. Evidence à consigner
+## 6. Evidence historique à consigner (état au 24/11/2026, supersédé par les preuves plus récentes ci-dessous)
 
 | Champ | Valeur |
 |---|---|
@@ -148,3 +148,12 @@ Les sections historiques ci-dessus décrivent les états observés à leurs date
 - Le scénario backup/restore est un test CI automatisé avec base jetable et dump restauré dans une base de test. Il ne constitue pas un exercice de restauration sur l'infrastructure cible ni une preuve de sauvegarde offsite/immutable.
 - La tête Alembic effective doit être confirmée par `alembic heads` sur le commit testé avant toute exécution opérationnelle. Ne pas reprendre les références historiques `0024_audit_outbox` comme tête actuelle : les migrations `0025` à `0031` existent désormais.
 - Restent à réaliser et consigner avec responsables : sauvegardes chiffrées et WAL/PITR, rétention et immutabilité/offsite, restauration sur environnement cible, mesures RPO/RTO, supervision/alertes et validation humaine de la procédure.
+
+
+## État courant et limites opérationnelles — 27 novembre 2026
+
+- Tête Alembic confirmée dans la CI sur le HEAD applicatif `1e93f80e3a31da782f2eac1865797ec25063dc88` : `0031_risk_action_restrict`.
+- Workflow `45962418271` : 5/5 jobs réussis ; PostgreSQL 42 tests passés ; migration neuve, upgrade hérité représentatif, contrôle de dérive, downgrade/upgrade ciblé et dump/restore sur base jetable.
+- Le temps de restauration CI affiché est de 0 seconde après arrondi à la seconde ; cette mesure n'est pas une estimation RTO exploitable.
+- L'environnement CI utilise des données et secrets éphémères. Il ne démontre ni la protection des sauvegardes réelles, ni le transfert offsite, ni l'immutabilité, ni la continuité du WAL/PITR.
+- Avant la mise en production : identifier la sauvegarde chiffrée de référence, confirmer rétention et clés, restaurer sur un environnement isolé représentatif, mesurer le RPO/RTO, vérifier l'intégrité applicative et faire approuver le procès-verbal par les responsables DBA, exploitation et sécurité.
