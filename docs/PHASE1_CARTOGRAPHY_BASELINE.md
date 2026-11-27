@@ -466,3 +466,28 @@ Phase 1 est **démarrée**, mais aucun sous-jalon fonctionnel n'est déclaré te
 2. Auditer les règles d'orientation et les cas limites de l'analyse d'impact ; obtenir des mesures `EXPLAIN (ANALYZE, BUFFERS)` sur PostgreSQL représentatif.
 3. Finaliser les tests d'import/export et la décision de classification des champs exportables.
 4. Terminer la recette frontend et la matrice de couverture route × rôle × opération.
+
+
+### Tranche analyse d'impact — frontières du cycle de vie
+
+- Tests ajoutés dans `backend/tests/test_asset_graph_api.py` :
+  - une analyse d'impact dont l'actif source est retiré retourne HTTP 404 avant toute lecture du graphe ;
+  - la requête des relations `depends_on` filtre les deux extrémités sur `retired_at IS NULL` et exclut les états `Retiré` et `Décommissionné`.
+- Premier passage CI : 1 assertion de test incorrecte, car les valeurs de statut sont des paramètres SQLAlchemy liés et non du texte SQL littéral. Correction du test pour examiner les valeurs liées compilées ; aucun changement de code applicatif nécessaire.
+- Commit de correction et de couverture : `be02ef103bbf506664665c49dac0ee27593d70ef`.
+- Validation sur ce HEAD :
+  - Push `45983071899` : 5/5 jobs réussis.
+  - PR `45983079134` : 5/5 jobs réussis.
+  - Backend : `531 passed, 50 skipped, 1 warning`.
+  - PostgreSQL integration : succès.
+  - Frontend, Compose smoke et Production runtime smoke : succès.
+- Aucun index supplémentaire n'est ajouté à ce stade. Les relations disposent déjà d'index sur les colonnes source et cible ainsi que d'une contrainte unique composite. Une décision d'indexation supplémentaire doit être fondée sur un plan `EXPLAIN (ANALYZE, BUFFERS)` obtenu sur une volumétrie représentative, pas sur une supposition.
+- Limite restante : les workflows valident le comportement et les migrations, mais ils ne remplacent pas une campagne de profilage sur un inventaire volumineux représentatif. Aucun temps de réponse ni gain de performance n'est revendiqué.
+
+### Priorités restantes avant clôture de la Phase 1
+
+1. Compléter la matrice des scénarios de cycle de vie et de concurrence entre Actifs, Applications, Risques et Fournisseurs.
+2. Obtenir un jeu de données PostgreSQL représentatif et documenter les plans `EXPLAIN (ANALYZE, BUFFERS)` des requêtes d'impact, de graphe, de pagination et de qualité.
+3. Revoir les cas limites de l'agrégation des risques et des expositions fournisseurs dans l'analyse d'impact.
+4. Terminer la revue de bout en bout du frontend Cartographie et la matrice route × rôle × opération.
+5. Consolider les critères de sortie et les preuves de non-régression dans la recette Phase 1.
