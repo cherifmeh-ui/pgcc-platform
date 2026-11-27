@@ -738,3 +738,40 @@ désormais couvertes de bout en bout. Les opérations de revue périodique et
 d'expiration restent à ajouter à ce parcours PostgreSQL HTTP/JWT ; les tests
 HTTP de refus RBAC de l'auditeur existent déjà pour ces deux opérations.
 La Phase 0 reste ouverte.
+
+
+## Complément — revue périodique et expiration HTTP/JWT/PostgreSQL (27/11/2026)
+
+Le test `test_supplier_review_and_expiration_over_http_with_real_jwt_and_postgres`
+ajoute deux opérations au parcours de bout en bout, sur des utilisateurs et
+des enregistrements réellement persistés :
+
+- un administrateur distinct du demandeur et de l'approbateur réalise une
+  revue périodique via HTTP ; le test vérifie la réponse, l'identité du
+  réviseur, la mise à jour de la prochaine date de revue et l'événement
+  `REVIEW_SUPPLIER_ACCESS` ;
+- un administrateur expire via HTTP une autorisation approuvée dont la date
+  de fin est dépassée ; le test vérifie le statut `Expiré` persisté et
+  l'événement `EXPIRE_SUPPLIER_ACCESS`.
+
+Les opérations sont exécutées par `TestClient` avec de vrais JWT signés,
+validés par `get_current_user`, et des sessions SQLAlchemy reliées à
+PostgreSQL. Les opérations de revue et d'expiration ne reposent pas sur des
+fonctions d'endpoint appelées directement.
+
+**Résultats CI sur le SHA `395ac06ed1f32b1d11b777278f4b10a7dfdb1649`** —
+workflow Push `46014328276` : **5/5 jobs réussis**.
+- Backend : **542 passed, 58 skipped, 1 warning**.
+- PostgreSQL Integration : **57 passed, 1 warning**.
+- Frontend : build réussi.
+- Compose Smoke : réussi.
+- Production Runtime Smoke : réussi.
+
+Le cycle HTTP/JWT/PostgreSQL des autorisations fournisseurs couvre maintenant
+création, approbation par un tiers, revue périodique, révocation, expiration
+et terminaison de la relation fournisseur-actif. Les refus RBAC de l'auditeur
+sur les opérations de mutation sont également couverts en HTTP.
+
+Les contrôles de concurrence/import CSV, pagination et équivalence export
+restent au backlog. La Phase 0 demeure ouverte tant que les contrôles restants
+ne sont pas vérifiés et documentés.
