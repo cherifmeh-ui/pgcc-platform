@@ -90,7 +90,6 @@ async def test_asset_inventory_pagination_matches_filtered_csv_export_over_http(
     from fastapi.testclient import TestClient
     from sqlalchemy.pool import NullPool
 
-    from app.api.deps import get_current_user
     from app.api.v1.endpoints import assets as assets_endpoint
     from app.core.config import settings
     from app.core.database import get_db
