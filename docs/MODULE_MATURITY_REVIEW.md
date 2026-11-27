@@ -778,3 +778,37 @@ Les constats historiques des sections initiales ci-dessus décrivent le code obs
 ### Statut global
 
 La maturité automatisée du socle s'est nettement améliorée, mais **Phase 0 reste ouverte**. Restent notamment : revue humaine exhaustive de la PR #1 (219 fichiers modifiés), exercice de restauration chiffrée/offsite avec WAL/PITR sur l'environnement cible, RPO/RTO mesurés et approuvés, validation des vrais secrets/certificats, revue de la topologie proxy/réseau, supervision/alertes et acceptation formelle des risques résiduels. Les phases fonctionnelles suivantes ne sont pas considérées comme démarrées dans ce jalon.
+
+
+## Revue de maturité actualisée — 27 novembre 2026
+
+Les tests ciblés les plus récents ajoutent des preuves d'exécution réelle
+pour les modules Fournisseurs et Cartographie :
+
+- **Fournisseurs / TPRM** : le cycle de vie des autorisations est exercé par
+  HTTP avec JWT et PostgreSQL : création, approbation par un administrateur
+  distinct, revue périodique, révocation, expiration et terminaison du lien.
+  Les identités, états et événements d'audit sont relus après commit.
+  Les tests HTTP vérifient aussi le refus des opérations de mutation par
+  l'auditeur et l'absence d'écriture après refus RBAC.
+- **Import CSV des actifs** : tests PostgreSQL d'import concurrent, de conflit
+  entre prévalidation et insertion, et de rollback intégral d'un lot
+  multi-lignes. La contrainte unique PostgreSQL reste la dernière défense
+  contre les références concurrentes. Le workflow PostgreSQL inclut
+  explicitement le fichier `test_asset_csv_import_postgres.py`.
+- **Inventaire** : un parcours HTTP/JWT avec PostgreSQL compare les pages
+  successives à l'export CSV pour des filtres multicritères et vérifie la
+  stabilité de l'ordre et l'exclusion des actifs retirés.
+- **Preuve CI** : workflow `46016290040` sur le code testé
+  `e40286a02b3799793133732fa75d9721aa59a0d9`, **5/5 jobs réussis** ;
+  Backend **542 passed / 61 skipped**, PostgreSQL **60 passed**, Frontend,
+  Compose Smoke et Production Runtime Smoke réussis.
+
+Cette maturité est démontrée par la CI sur base jetable et secrets/certificats
+éphémères. Elle ne valide pas encore les règles d'unicité globale des
+hostnames/numéros de série (à confirmer par la règle métier), la recette
+d'exploitation réelle, les sauvegardes WAL/PITR hors site, les RPO/RTO, la
+supervision, la revue humaine complète ni l'acceptation des risques résiduels.
+
+**Statut : Phase 0 reste ouverte.** Aucun passage aux phases fonctionnelles
+suivantes n'est déclaré par cette mise à jour.
