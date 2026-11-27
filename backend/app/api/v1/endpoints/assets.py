@@ -498,46 +498,25 @@ async def get_asset_dependency_graph(
 
 
 @router.get("/page")
-async def list_assets_page(
-    q: str | None = Query(default=None, max_length=100),
+def _build_asset_inventory_filters(
+    *,
+    q: str | None = None,
     asset_type: AssetType | None = None,
     criticality: Level | None = None,
     lifecycle_status: Lifecycle | None = None,
-    direction: str | None = Query(default=None, max_length=100),
-    owner: str | None = Query(default=None, max_length=150),
-    classification: str | None = Query(default=None, max_length=100),
-    location: str | None = Query(default=None, max_length=200),
+    direction: str | None = None,
+    owner: str | None = None,
+    classification: str | None = None,
+    location: str | None = None,
     include_retired: bool = False,
-    page: int = Query(default=1, ge=1),
-    page_size: int = Query(default=25, ge=1, le=200),
-    db: AsyncSession = Depends(get_db),
-    current_user: User = require_permission("assets", "read"),
 ):
-    """Return a stable, count-bearing page of inventory records."""
-    filters = []
-    if not include_retired:
-        filters.extend(_active_asset_filter())
-    if q and q.strip():
-        pattern = f"%{q.strip()}%"
-        filters.append(
-            Asset.name.ilike(pattern) | Asset.reference.ilike(pattern)
-            | Asset.hostname.ilike(pattern) | Asset.fqdn.ilike(pattern)
-        )
-    if asset_type:
-        filters.append(Asset.asset_type == asset_type)
-    if criticality:
-        filters.append(Asset.criticality == criticality)
-    if lifecycle_status:
-        filters.append(Asset.lifecycle_status == lifecycle_status)
-    if direction and direction.strip():
-        filters.append(Asset.direction.ilike(direction.strip()))
-    if owner and owner.strip():
-        filters.append(Asset.owner.ilike(f"%{owner.strip()}%"))
-    if classification and classification.strip():
-        filters.append(Asset.classification == classification)
-    if location and location.strip():
-        filters.append(Asset.location.ilike(f"%{location.strip()}%"))
-
+    """Build canonical filters shared by inventory listing and CSV export."""
+    filters = _build_asset_inventory_filters(
+        q=q, asset_type=asset_type, criticality=criticality,
+        lifecycle_status=lifecycle_status, direction=direction, owner=owner,
+        classification=classification, location=location,
+        include_retired=include_retired,
+    )
     total_result = await db.execute(select(func.count(Asset.id)).where(*filters))
     total = total_result.scalar_one()
     stmt = (
@@ -582,30 +561,12 @@ async def export_assets_csv(
     current_user: User = require_permission("assets", "export"),
 ):
     """Export the filtered inventory as UTF-8 CSV with spreadsheet formula protection."""
-    filters = []
-    if not include_retired:
-        filters.extend(_active_asset_filter())
-    if q and q.strip():
-        pattern = f"%{q.strip()}%"
-        filters.append(
-            Asset.name.ilike(pattern) | Asset.reference.ilike(pattern)
-            | Asset.hostname.ilike(pattern) | Asset.fqdn.ilike(pattern)
-        )
-    if asset_type:
-        filters.append(Asset.asset_type == asset_type)
-    if criticality:
-        filters.append(Asset.criticality == criticality)
-    if lifecycle_status:
-        filters.append(Asset.lifecycle_status == lifecycle_status)
-    if direction and direction.strip():
-        filters.append(Asset.direction.ilike(direction.strip()))
-    if owner and owner.strip():
-        filters.append(Asset.owner.ilike(f"%{owner.strip()}%"))
-    if classification and classification.strip():
-        filters.append(Asset.classification == classification)
-    if location and location.strip():
-        filters.append(Asset.location.ilike(f"%{location.strip()}%"))
-
+    filters = _build_asset_inventory_filters(
+        q=q, asset_type=asset_type, criticality=criticality,
+        lifecycle_status=lifecycle_status, direction=direction, owner=owner,
+        classification=classification, location=location,
+        include_retired=include_retired,
+    )
     result = await db.execute(
         select(Asset).where(*filters).order_by(Asset.name.asc(), Asset.reference.asc(), Asset.id.asc())
     )
