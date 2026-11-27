@@ -511,3 +511,36 @@ Phase 1 est **démarrée**, mais aucun sous-jalon fonctionnel n'est déclaré te
 3. Finaliser la matrice route × rôle × opération pour les endpoints Asset, Risk et Supplier, en incluant refus avant toute lecture métier.
 4. Terminer les essais d'import CSV transactionnels/concurrents et l'équivalence pagination/export.
 5. Maintenir le profilage PostgreSQL représentatif comme gate séparé : aucun `EXPLAIN (ANALYZE, BUFFERS)` représentatif n'est encore disponible.
+
+
+
+### Tranche intégrité — demande d'accès fournisseur et terminaison du lien
+
+- Commit de test : `bcde1afefe6f3dfce44ddbb1095379c2a3778f18` — `test(cartography): tighten supplier access concurrency fixture`.
+- Le test PostgreSQL `test_supplier_access_request_creation_and_link_termination_are_serialized` exécute simultanément la création d'une demande d'accès et la terminaison du lien fournisseur↔actif concerné.
+- Deux résultats cohérents sont acceptés :
+  - la demande est créée (HTTP 201), puis la terminaison est refusée (HTTP 409) car une demande ouverte existe ;
+  - la terminaison réussit (HTTP 200), puis la demande est refusée (HTTP 404), car le lien n'est plus accessible comme relation active.
+- Après les deux transactions, le test relit PostgreSQL et vérifie l'invariant persistant : un lien marqué `Terminé` ne possède aucune demande dans les états ouverts `Demandé`, `Approuvé` ou `Suspendu`.
+- Workflows Push `45991739766` et Pull Request `45991747213` : **5/5 jobs réussis chacun**.
+- Backend : **531 passed, 52 skipped, 1 warning**. PostgreSQL Integration : **51 passed, 1 warning**. Frontend, Compose Smoke et Production Runtime Smoke : succès.
+- Les messages PostgreSQL `ERROR` présents dans les logs sont les violations attendues par des tests négatifs (contraintes/FK, append-only, unicité) ; le job s'est terminé avec succès. Ils ne constituent pas des échecs de la suite.
+- Aucun changement applicatif ni migration de schéma dans cette tranche : ajout d'un test d'intégration de concurrence.
+- Limite : ce scénario contrôle des interleavings entre deux opérations concurrentes ; il ne constitue pas un test de charge prolongé ni une mesure de performance.
+
+### Revue du cycle de vie des liens fournisseur — décision de périmètre
+
+- Le modèle `SupplierAssetLink` limite les statuts à `Actif`, `Suspendu` et `Terminé`, et impose une unicité sur `(supplier_id, asset_id, relationship_type)`.
+- Les routes observées permettent la création d'un lien et sa terminaison. Aucun endpoint de réactivation ou de modification du statut d'un lien terminé n'a été identifié dans le routeur actuel.
+- La création d'un nouveau lien de même fournisseur, actif et type de relation après terminaison est empêchée par la contrainte d'unicité : il ne faut donc pas présenter la recréation comme une réactivation prise en charge.
+- Décision : ne pas ajouter de route de réactivation ni modifier la contrainte d'unicité sans règle métier validée. Une éventuelle évolution devra définir si la réactivation réutilise l'identifiant historique ou crée une nouvelle version, comment elle traite les demandes d'accès anciennes (révoquées/expirées/refusées), et comment l'audit conserve la chronologie. Une demande d'accès ouverte doit continuer à bloquer la terminaison.
+- Les associations Asset↔Risk historiques sont conservées lors du retrait/réactivation de l'actif ; cela ne doit pas être transposé automatiquement aux liens fournisseur, dont la relation et les autorisations d'accès ont un cycle de vie distinct.
+- Aucun changement de schéma ni de comportement n'est effectué sur la base de cette revue statique.
+
+### Prochaine tranche d'intégrité
+
+1. Tester explicitement la conservation et la lecture des demandes d'accès historiques après terminaison d'un lien, en distinguant demandes révoquées, expirées et refusées.
+2. Compléter les tests de décision, révocation, expiration et revue d'accès pour s'assurer qu'aucune transition ne réouvre implicitement un droit après terminaison du lien.
+3. Poursuivre la matrice route × rôle × opération sur les endpoints Asset, Risk et Supplier.
+4. Terminer les essais d'import CSV transactionnels/concurrents et l'équivalence pagination/export.
+5. Maintenir le profilage PostgreSQL représentatif comme gate séparé : aucun `EXPLAIN (ANALYZE, BUFFERS)` représentatif n'est encore disponible.
