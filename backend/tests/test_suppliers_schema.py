@@ -427,3 +427,63 @@ def test_supplier_asset_link_rejects_retired_marker_even_if_lifecycle_is_inconsi
     assert not _asset_allows_supplier_access("Retiré", None)
     assert not _asset_allows_supplier_access("Décommissionné", None)
     assert _asset_allows_supplier_access("Actif", None)
+
+
+@pytest.mark.asyncio
+async def test_supplier_access_review_cannot_maintain_authorization_after_link_termination():
+    from datetime import timedelta
+    from fastapi import HTTPException
+    from app.api.v1.endpoints.suppliers import (
+        SupplierAccessReviewCreate,
+        review_supplier_access,
+    )
+
+    supplier_id = __import__("uuid").UUID("00000000-0000-0000-0000-000000000110")
+    access_request_id = __import__("uuid").UUID("00000000-0000-0000-0000-000000000111")
+    requester_id = __import__("uuid").UUID("00000000-0000-0000-0000-000000000112")
+    approver_id = __import__("uuid").UUID("00000000-0000-0000-0000-000000000113")
+    reviewer_id = __import__("uuid").UUID("00000000-0000-0000-0000-000000000114")
+    today = date.today()
+    access_request = MagicMock(
+        id=access_request_id,
+        supplier_id=supplier_id,
+        supplier_asset_link_id=__import__("uuid").UUID("00000000-0000-0000-0000-000000000115"),
+        asset_id=__import__("uuid").UUID("00000000-0000-0000-0000-000000000116"),
+        status="Approuvé",
+        start_date=today - timedelta(days=1),
+        end_date=today + timedelta(days=30),
+        requested_by_id=requester_id,
+        decided_by_id=approver_id,
+        access_level="Standard",
+        data_access=False,
+        review_due_at=today + timedelta(days=10),
+    )
+    request_result = MagicMock()
+    request_result.scalar_one_or_none.return_value = access_request
+    supplier = MagicMock(status="Approuvé", archived_at=None)
+    supplier_result = MagicMock()
+    supplier_result.scalar_one_or_none.return_value = supplier
+    terminated_link_result = MagicMock()
+    terminated_link_result.scalar_one_or_none.return_value = None
+    db = AsyncMock()
+    db.execute.side_effect = [request_result, supplier_result, terminated_link_result]
+
+    with pytest.raises(HTTPException) as exc:
+        await review_supplier_access(
+            supplier_id=supplier_id,
+            access_request_id=access_request_id,
+            data=SupplierAccessReviewCreate(
+                outcome="Maintenue",
+                comment="Accès toujours nécessaire",
+                next_review_at=today + timedelta(days=15),
+            ),
+            request=MagicMock(),
+            db=db,
+            current_user=MagicMock(id=reviewer_id, email="reviewer@example.test"),
+        )
+
+    assert exc.value.status_code == 409
+    assert "relation à l’actif" in exc.value.detail
+    assert db.execute.await_count == 3
+    db.add.assert_not_called()
+    db.commit.assert_not_awaited()
