@@ -906,3 +906,53 @@ l'import CSV, le rollback complet d'un lot lorsqu'une ligne entre en conflit,
 ainsi que l'équivalence des filtres et de l'ordre entre pagination et export.
 Le contrôle ne démontre pas encore une recette avec les données et
 l'infrastructure réelles de production. La Phase 0 reste ouverte.
+
+
+## Complément — inventaire paginé, export CSV et atomicité des imports (27/11/2026)
+
+### Pagination / export
+Le test PostgreSQL HTTP `test_asset_inventory_pagination_and_csv_export_use_identical_postgres_filters`
+vérifie sur une base migrée que :
+- les deux pages successives couvrent exactement les trois actifs du jeu de
+  données, sans doublon ni omission ;
+- le total et le nombre de pages sont cohérents ;
+- les mêmes filtres (recherche, type, direction, propriétaire, exclusion des
+  actifs retirés) donnent le même ensemble et le même ordre dans la pagination
+  et dans le CSV exporté.
+
+Le contrôle RBAC HTTP du nouvel endpoint `/api/v1/assets/page` a également
+été étendu : les rôles `auditor` et `executive` peuvent consulter une page
+d'inventaire, tandis que `viewer` reçoit HTTP 403 avant toute requête SQL.
+
+### Import CSV — concurrence et rollback
+Les tests PostgreSQL HTTP couvrent désormais deux scénarios distincts :
+- deux imports simultanés de la même référence, prévalidés avant concurrence :
+  une réponse HTTP 201, une réponse HTTP 409, un seul actif persistant et un
+  seul événement d'audit ;
+- import multi-lignes dont la seconde référence est créée par une transaction
+  concurrente après prévalidation : la confirmation retourne HTTP 409, la
+  première ligne du lot est également annulée, l'actif concurrent reste intact
+  et aucun événement d'import n'est enregistré.
+
+Ces scénarios confirment l'atomicité du lot au niveau PostgreSQL et le rôle
+des contraintes d'unicité comme protection finale contre les courses.
+
+**Résultats CI sur le SHA `731e3940883784c25a470cf02000b992908d05ad`** :
+les workflows Push `46018578677` et Pull Request `46018571336` sont
+terminés avec **5/5 jobs réussis chacun**.
+- Backend : **545 passed, 62 skipped, 1 warning**.
+- PostgreSQL Integration : **61 passed, 1 warning**.
+- Frontend build, Compose Smoke et Production Runtime Smoke : réussis.
+
+Les tests PostgreSQL sont exécutés contre une base dédiée migrée par le
+workflow. Les tests backend unitaires/API mockés ne doivent pas être confondus
+avec ces tests d'intégration. Le résultat ne remplace pas une revue humaine de
+la configuration de production ni une validation de restauration de sauvegarde.
+
+### Prochaines vérifications
+- étendre les scénarios de concurrence aux collisions hostname et numéro de
+  série, si ces champs sont effectivement couverts par des contraintes uniques ;
+- tester les limites hautes de pagination et les filtres combinés ;
+- confirmer la cohérence des filtres entre l'interface frontend et les
+  paramètres API, au-delà de l'équivalence backend pagination/export.
+La Phase 0 reste ouverte.
