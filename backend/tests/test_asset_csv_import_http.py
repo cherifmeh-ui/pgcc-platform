@@ -107,7 +107,7 @@ def test_csv_preview_rejects_more_than_five_thousand_data_rows_before_database_a
         )
 
     assert response.status_code == 413
-    assert "5 000 lignes" in response.json()["detail"]
+    assert "5000 lignes" in response.json()["detail"]
     db.execute.assert_not_awaited()
 
 
