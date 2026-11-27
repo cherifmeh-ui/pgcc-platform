@@ -1416,3 +1416,31 @@ en Draft et non fusionnée ; `main` est inchangée.
 **Décision : Phase 0 reste ouverte.** Les preuves automatisées progressent,
 mais elles ne remplacent pas les gates d'exploitation, la recette réelle et
 l'approbation humaine.
+
+
+## Actualisation — validation PostgreSQL Cartographie et CI complète (27/11/2026)
+
+- Code testé : `2c0fbc80aa9a8cb1593d8c19075909b89892dedb`.
+- Workflow Push `46018133444` : **5/5 jobs réussis**.
+- Workflow Pull Request `46018143207` : **5/5 jobs réussis**.
+- Backend : **542 passed, 62 skipped, 1 warning**.
+- PostgreSQL Integration : **61 passed, 1 warning**.
+- Frontend, Compose Smoke et Production Runtime Smoke : réussis.
+- Les scénarios Cartographie incluent la concurrence d'import CSV sur référence
+  unique, le rollback de toutes les lignes d'un lot après conflit concurrent,
+  et la comparaison des pages HTTP avec l'export CSV sous les mêmes filtres.
+- Le test de pagination/export a été déplacé dans
+  `backend/tests/test_asset_inventory_pagination_postgres.py` et ajouté à
+  la liste explicite des tests du job PostgreSQL. La vérification CI a confirmé
+  qu'il est bien exécuté (61 tests PostgreSQL réussis).
+
+Le commit documentaire `be740c08bccd60ddec32968e7173820ff1e1952b`
+enregistre également les résultats détaillés dans
+`docs/PHASE1_CARTOGRAPHY_BASELINE.md`.
+
+**Décision inchangée : Phase 0 non clôturée.** Les validations automatisées
+CI ne remplacent pas la recette avec les vrais secrets/certificats, DNS,
+reverse proxy, règles réseau et supervision de l'environnement cible,
+l'exercice de restauration chiffrée/WAL/PITR avec RPO/RTO approuvés,
+la revue humaine exhaustive de la PR #1 et l'acceptation formelle des risques
+résiduels.
