@@ -15,7 +15,7 @@ from sqlalchemy.ext.asyncio import async_sessionmaker, create_async_engine
 from app.models.action_item import ActionItem  # register Risk.actions mapper target
 from app.models.asset import Asset
 from app.models.audit_outbox import AuditOutbox
-from app.models.supplier import Supplier, SupplierAccessRequest, SupplierAssetLink
+from app.models.supplier import Supplier, SupplierAccessRequest, SupplierAccessReview, SupplierAssetLink
 from app.models.user import User
 from app.api.v1.endpoints.suppliers import (
     SupplierAccessRequestCreate,
@@ -760,6 +760,264 @@ async def test_supplier_access_full_lifecycle_over_http_with_real_jwt_and_postgr
             await cleanup.execute(delete(Supplier).where(Supplier.id == supplier.id))
             await cleanup.execute(
                 delete(User).where(User.id.in_([requester_id, approver_id]))
+            )
+            await cleanup.commit()
+        await engine.dispose()
+
+
+@pytest.mark.asyncio
+async def test_supplier_review_and_expiration_over_http_with_real_jwt_and_postgres(monkeypatch):
+    """Exercise periodic review and expiry routes with persisted users and records."""
+    from fastapi import FastAPI
+    from fastapi.testclient import TestClient
+    from sqlalchemy.pool import NullPool
+
+    from app.api.v1.endpoints import suppliers as suppliers_endpoint
+    from app.core.config import settings
+    from app.core.database import get_db
+    from app.core.security import create_access_token
+
+    monkeypatch.setattr(
+        settings, "JWT_SECRET", "pgcc-postgres-review-expiry-jwt-secret-long"
+    )
+    monkeypatch.setattr(settings, "JWT_ALGORITHM", "HS256")
+
+    engine = create_async_engine(DATABASE_URL, poolclass=NullPool)
+    sessions = async_sessionmaker(engine, expire_on_commit=False)
+    requester_id, approver_id, operator_id = uuid4(), uuid4(), uuid4()
+    requester = User(
+        id=requester_id,
+        email=f"phase0-review-requester-{requester_id.hex}@example.invalid",
+        full_name="Phase 0 review requester",
+        role="admin",
+        password_hash="not-used",
+        must_change_password=False,
+        is_active=True,
+        mfa_enabled=True,
+        auth_version=1,
+    )
+    approver = User(
+        id=approver_id,
+        email=f"phase0-review-approver-{approver_id.hex}@example.invalid",
+        full_name="Phase 0 review approver",
+        role="admin",
+        password_hash="not-used",
+        must_change_password=False,
+        is_active=True,
+        mfa_enabled=True,
+        auth_version=1,
+    )
+    operator = User(
+        id=operator_id,
+        email=f"phase0-review-operator-{operator_id.hex}@example.invalid",
+        full_name="Phase 0 review and expiry operator",
+        role="admin",
+        password_hash="not-used",
+        must_change_password=False,
+        is_active=True,
+        mfa_enabled=True,
+        auth_version=1,
+    )
+    review_supplier = Supplier(
+        code=f"PH0-REV-{operator_id.hex[:10]}",
+        legal_name="Phase 0 periodic review supplier",
+        status="Approuvé",
+        criticality="Moyenne",
+        dependency_level="Moyenne",
+    )
+    review_asset = Asset(
+        reference=f"PH0-REV-{operator_id.hex[:10]}",
+        name="Phase 0 periodic review asset",
+        asset_type="hardware",
+        lifecycle_status="Actif",
+    )
+    expiry_supplier = Supplier(
+        code=f"PH0-EXP-{operator_id.hex[:10]}",
+        legal_name="Phase 0 expiration supplier",
+        status="Approuvé",
+        criticality="Moyenne",
+        dependency_level="Moyenne",
+    )
+    expiry_asset = Asset(
+        reference=f"PH0-EXP-{operator_id.hex[:10]}",
+        name="Phase 0 expiration asset",
+        asset_type="hardware",
+        lifecycle_status="Actif",
+    )
+    review_link = expiry_link = None
+    review_request_id = expiry_request_id = review_id = None
+    try:
+        async with sessions() as setup:
+            setup.add_all([
+                requester, approver, operator,
+                review_supplier, review_asset, expiry_supplier, expiry_asset,
+            ])
+            await setup.commit()
+            for item in (review_supplier, review_asset, expiry_supplier, expiry_asset):
+                await setup.refresh(item)
+
+            today = date.today()
+            review_link = SupplierAssetLink(
+                supplier_id=review_supplier.id,
+                asset_id=review_asset.id,
+                relationship_type="Maintient",
+                access_level="Standard",
+                data_access=False,
+                status="Actif",
+                created_by_id=requester_id,
+            )
+            expiry_link = SupplierAssetLink(
+                supplier_id=expiry_supplier.id,
+                asset_id=expiry_asset.id,
+                relationship_type="Maintient",
+                access_level="Standard",
+                data_access=False,
+                status="Actif",
+                created_by_id=requester_id,
+            )
+            setup.add_all([review_link, expiry_link])
+            await setup.flush()
+            review_request = SupplierAccessRequest(
+                supplier_id=review_supplier.id,
+                supplier_asset_link_id=review_link.id,
+                asset_id=review_asset.id,
+                access_level="Standard",
+                data_access=False,
+                justification="Maintenance périodique autorisée",
+                scope="Maintenance du serveur",
+                start_date=today - timedelta(days=5),
+                end_date=today + timedelta(days=30),
+                review_due_at=today + timedelta(days=10),
+                status="Approuvé",
+                requested_by_id=requester_id,
+                decided_by_id=approver_id,
+                decided_at=datetime.now(timezone.utc),
+                decision_comment="Approbation initiale",
+            )
+            expiry_request = SupplierAccessRequest(
+                supplier_id=expiry_supplier.id,
+                supplier_asset_link_id=expiry_link.id,
+                asset_id=expiry_asset.id,
+                access_level="Standard",
+                data_access=False,
+                justification="Accès temporaire arrivé à échéance",
+                scope="Maintenance du serveur",
+                start_date=today - timedelta(days=30),
+                end_date=today - timedelta(days=1),
+                review_due_at=today - timedelta(days=1),
+                status="Approuvé",
+                requested_by_id=requester_id,
+                decided_by_id=approver_id,
+                decided_at=datetime.now(timezone.utc),
+                decision_comment="Approbation initiale",
+            )
+            setup.add_all([review_request, expiry_request])
+            await setup.commit()
+            await setup.refresh(review_request)
+            await setup.refresh(expiry_request)
+            review_request_id = str(review_request.id)
+            expiry_request_id = str(expiry_request.id)
+
+        app = FastAPI()
+        app.include_router(suppliers_endpoint.router, prefix="/api/v1")
+
+        async def override_db():
+            async with sessions() as db:
+                yield db
+
+        app.dependency_overrides[get_db] = override_db
+        operator_token = create_access_token(
+            subject=operator.email, role="admin", auth_version=1
+        )
+        headers = {"Authorization": f"Bearer {operator_token}"}
+        review_supplier_id = str(review_supplier.id)
+        expiry_supplier_id = str(expiry_supplier.id)
+
+        with TestClient(app) as client:
+            reviewed = client.post(
+                f"/api/v1/suppliers/{review_supplier_id}/access-requests/{review_request_id}/reviews",
+                headers=headers,
+                json={
+                    "outcome": "Maintenue",
+                    "comment": "Accès toujours justifié et contrôlé",
+                    "next_review_at": (date.today() + timedelta(days=7)).isoformat(),
+                },
+            )
+            assert reviewed.status_code == 201, reviewed.text
+            review_id = reviewed.json()["id"]
+            assert reviewed.json()["outcome"] == "Maintenue"
+
+            expired = client.post(
+                f"/api/v1/suppliers/{expiry_supplier_id}/access-requests/{expiry_request_id}/expire",
+                headers=headers,
+            )
+            assert expired.status_code == 200, expired.text
+            assert expired.json()["status"] == "Expiré"
+
+        async with sessions() as verify:
+            persisted_review = await verify.get(SupplierAccessReview, review_id)
+            persisted_review_request = await verify.get(
+                SupplierAccessRequest, review_request_id
+            )
+            persisted_expiry_request = await verify.get(
+                SupplierAccessRequest, expiry_request_id
+            )
+            audit_actions = (
+                await verify.execute(
+                    select(AuditOutbox.payload["action"].astext).where(
+                        AuditOutbox.payload["resource_id"].astext.in_(
+                            [review_id, expiry_request_id]
+                        )
+                    )
+                )
+            ).scalars().all()
+            assert persisted_review.outcome == "Maintenue"
+            assert persisted_review.reviewed_by_id == operator_id
+            assert persisted_review_request.review_due_at == date.today() + timedelta(days=7)
+            assert persisted_expiry_request.status == "Expiré"
+            assert "REVIEW_SUPPLIER_ACCESS" in audit_actions
+            assert "EXPIRE_SUPPLIER_ACCESS" in audit_actions
+    finally:
+        async with sessions() as cleanup:
+            resource_ids = [
+                item for item in (review_id, expiry_request_id) if item is not None
+            ]
+            if resource_ids:
+                await cleanup.execute(
+                    delete(AuditOutbox).where(
+                        AuditOutbox.payload["resource_id"].astext.in_(resource_ids)
+                    )
+                )
+            if review_id is not None:
+                await cleanup.execute(
+                    delete(SupplierAccessReview).where(
+                        SupplierAccessReview.id == review_id
+                    )
+                )
+            for request_id in (review_request_id, expiry_request_id):
+                if request_id is not None:
+                    await cleanup.execute(
+                        delete(SupplierAccessRequest).where(
+                            SupplierAccessRequest.id == request_id
+                        )
+                    )
+            for link in (review_link, expiry_link):
+                if link is not None:
+                    await cleanup.execute(
+                        delete(SupplierAssetLink).where(SupplierAssetLink.id == link.id)
+                    )
+            await cleanup.execute(
+                delete(Asset).where(Asset.id.in_([review_asset.id, expiry_asset.id]))
+            )
+            await cleanup.execute(
+                delete(Supplier).where(
+                    Supplier.id.in_([review_supplier.id, expiry_supplier.id])
+                )
+            )
+            await cleanup.execute(
+                delete(User).where(
+                    User.id.in_([requester_id, approver_id, operator_id])
+                )
             )
             await cleanup.commit()
         await engine.dispose()
