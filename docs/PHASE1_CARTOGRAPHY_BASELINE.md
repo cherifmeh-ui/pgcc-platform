@@ -422,3 +422,12 @@ Phase 1 est **démarrée**, mais aucun sous-jalon fonctionnel n'est déclaré te
 1. Vérifier les workflows Push et PR du commit JWT intermodules.
 2. Examiner les tests existants de rotation et révocation pour identifier les étapes manquantes du parcours login/MFA/cookie/refresh/logout.
 3. Ajouter un test de parcours HTTP complet réutilisant les fixtures existantes, sans réimplémenter le système d'authentification dans les tests.
+
+
+#### Résultat CI — JWT intermodules
+
+- Commit code `17d63c0b561d8d30c2d10a1e262957b88a14ff43` : workflows Push `45980193926` et PR `45980205024` terminés avec succès, chacun 5/5 jobs.
+- Backend : `529 passed, 49 skipped, 1 warning`.
+- PostgreSQL integration : `48 passed`, migrations et contrôle backup/restore réussis.
+- Frontend, Compose smoke et Production runtime smoke : succès sur les deux workflows.
+- La tranche JWT Risques/Fournisseurs est donc validée par CI. Le test d'authentification HTTP complet ajouté ensuite est suivi séparément.
