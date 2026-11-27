@@ -646,6 +646,35 @@ async def review_supplier_access(
     if current_user.id in (access_request.requested_by_id, access_request.decided_by_id):
         raise HTTPException(status_code=403, detail="Le demandeur et l'approbateur initial ne peuvent pas réaliser la revue périodique")
     if data.outcome != "Révoquée":
+        supplier_result = await db.execute(
+            select(Supplier).where(
+                Supplier.id == supplier_id,
+                Supplier.archived_at.is_(None),
+            ).with_for_update()
+        )
+        supplier = supplier_result.scalar_one_or_none()
+        link_result = await db.execute(
+            select(SupplierAssetLink).where(
+                SupplierAssetLink.id == access_request.supplier_asset_link_id,
+                SupplierAssetLink.supplier_id == supplier_id,
+                SupplierAssetLink.status == "Actif",
+            ).with_for_update()
+        )
+        link = link_result.scalar_one_or_none()
+        if supplier is None or supplier.status not in ("Approuvé", "Approuvé sous conditions") or link is None:
+            raise HTTPException(
+                status_code=409,
+                detail="Une autorisation ne peut être maintenue ou réduite si le fournisseur ou la relation à l’actif n’est plus éligible",
+            )
+        asset_result = await db.execute(
+            select(Asset).where(Asset.id == access_request.asset_id).with_for_update()
+        )
+        asset = asset_result.scalar_one_or_none()
+        if asset is None or not _asset_allows_supplier_access(asset.lifecycle_status, asset.retired_at):
+            raise HTTPException(
+                status_code=409,
+                detail="Une autorisation ne peut être maintenue ou réduite si l’actif n’est plus éligible",
+            )
         if data.next_review_at is None or not today <= data.next_review_at <= access_request.end_date:
             raise HTTPException(status_code=422, detail="La prochaine revue doit être comprise entre aujourd'hui et la fin de l'autorisation")
     previous_level, previous_data = access_request.access_level, access_request.data_access
