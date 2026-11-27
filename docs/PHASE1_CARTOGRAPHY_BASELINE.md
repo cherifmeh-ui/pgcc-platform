@@ -808,3 +808,38 @@ prochains contrôles restent l'import de plusieurs lignes avec rollback
 intégral après conflit, les doublons concurrents sur hostname/numéro de série
 et la cohérence pagination/export sur les mêmes filtres. La Phase 0 reste
 ouverte.
+
+
+## Complément — exécution CI des tests CSV et rollback multi-lignes (27/11/2026)
+
+Le contrôle précédent a révélé que le workflow PostgreSQL utilisait une liste
+explicite de fichiers : le nouveau fichier de tests CSV n'était pas exécuté.
+Le workflow `.github/workflows/backend-checks.yml` a donc été corrigé pour
+inclure explicitement `backend/tests/test_asset_csv_import_postgres.py`.
+Les deux tests CSV sont maintenant réellement exécutés dans le job PostgreSQL.
+
+Dans ce fichier dédié :
+
+- `test_asset_csv_concurrent_http_import_is_atomic_with_real_postgres`
+  synchronise deux imports HTTP après prévalidation : une réponse 201, une
+  réponse 409, un seul actif et un seul événement d'audit ;
+- `test_asset_csv_multirow_conflict_rolls_back_every_insert` injecte une
+  insertion concurrente après la prévalidation mais avant le flush. Le
+  conflit sur la seconde ligne renvoie HTTP 409 ; la première ligne du lot
+  est absente après rollback, l'actif concurrent est conservé et aucun
+  événement d'import n'est créé.
+
+**Résultats CI sur le SHA `7e285d97f8bfbfc19e1e0e6b9c209a4c666370b7`** —
+workflow Push `46015748067` : **5/5 jobs réussis**.
+- Backend : **542 passed, 60 skipped, 1 warning**.
+- PostgreSQL Integration : **59 passed, 1 warning** ; les deux tests CSV
+  apparaissent maintenant dans l'exécution effective.
+- Frontend : build réussi.
+- Compose Smoke : réussi.
+- Production Runtime Smoke : réussi.
+
+Le contrôle établit maintenant l'atomicité d'un import multi-lignes face à
+un conflit concurrent et confirme que la CI exécute bien le fichier de tests.
+Restent à vérifier les collisions concurrentes sur hostname/numéro de série
+(si ces attributs doivent être uniques au niveau global), ainsi que la
+cohérence pagination/export sur les mêmes filtres. La Phase 0 reste ouverte.
