@@ -1444,3 +1444,22 @@ reverse proxy, règles réseau et supervision de l'environnement cible,
 l'exercice de restauration chiffrée/WAL/PITR avec RPO/RTO approuvés,
 la revue humaine exhaustive de la PR #1 et l'acceptation formelle des risques
 résiduels.
+
+
+## Validation checkpoint actualisé — 27 novembre 2026 (inventaire et import CSV)
+
+- Code testé : `78c241a4c85bb55ebfd883a4dc15b4d4fe099815`.
+- Workflows Push `46019594990` et Pull Request `46019604715` : **5/5 jobs réussis chacun**.
+- Backend : **551 passed, 62 skipped, 1 warning**.
+- PostgreSQL Integration : **61 passed, 1 warning**.
+- Frontend build, Compose Smoke et Production Runtime Smoke : réussis.
+- La couverture API d'inventaire inclut les droits HTTP de pagination, les bornes de paramètres (page, page_size, q, owner, location) avec refus HTTP 422 sans requête SQL, ainsi que l'équivalence PostgreSQL entre pages successives et export CSV pour des filtres multicritères.
+- Les tests PostgreSQL d'import CSV démontrent le refus d'une référence dupliquée en concurrence (une seule insertion et un seul événement d'audit) et le rollback intégral d'un lot multi-lignes lorsqu'une contrainte unique est violée après prévalidation.
+- La documentation de référence Cartographie a été actualisée dans le commit `c98a2bb1c4215d9bd72c8a1b1c15a66c63bc2651`, puis les bornes de pagination dans `6bc0f72f43af7250c41ea3d5596f3890b07e401c`. Le présent checkpoint est une actualisation documentaire postérieure.
+
+### État de livraison
+
+- Branche de travail : `chore/phase0-stabilization`.
+- PR #1 : ouverte, Draft, non fusionnée ; sa tête correspond au commit documentaire courant après ce checkpoint.
+- Branche `main` inchangée à `91d47a8fe29b391245449b99b55e651fa444ccb8`.
+- La Phase 0 reste ouverte. Les gates opérationnels et humains déjà recensés — secrets/certificats/DNS/proxy/réseau réels, supervision, sauvegardes chiffrées avec WAL/PITR, protection hors site/immutabilité, exercice de restauration RPO/RTO sur l'environnement cible, revue humaine exhaustive et acceptation des risques résiduels — ne sont pas remplacés par les succès CI.
