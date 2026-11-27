@@ -511,6 +511,49 @@ def _build_asset_inventory_filters(
     include_retired: bool = False,
 ):
     """Build canonical filters shared by inventory listing and CSV export."""
+    filters = []
+    if not include_retired:
+        filters.extend(_active_asset_filter())
+    if q and q.strip():
+        pattern = f"%{q.strip()}%"
+        filters.append(
+            Asset.name.ilike(pattern) | Asset.reference.ilike(pattern)
+            | Asset.hostname.ilike(pattern) | Asset.fqdn.ilike(pattern)
+        )
+    if asset_type:
+        filters.append(Asset.asset_type == asset_type)
+    if criticality:
+        filters.append(Asset.criticality == criticality)
+    if lifecycle_status:
+        filters.append(Asset.lifecycle_status == lifecycle_status)
+    if direction and direction.strip():
+        filters.append(Asset.direction.ilike(direction.strip()))
+    if owner and owner.strip():
+        filters.append(Asset.owner.ilike(f"%{owner.strip()}%"))
+    if classification and classification.strip():
+        filters.append(Asset.classification == classification)
+    if location and location.strip():
+        filters.append(Asset.location.ilike(f"%{location.strip()}%"))
+    return filters
+
+
+@router.get("/page")
+async def list_assets_page(
+    q: str | None = Query(default=None, max_length=100),
+    asset_type: AssetType | None = None,
+    criticality: Level | None = None,
+    lifecycle_status: Lifecycle | None = None,
+    direction: str | None = Query(default=None, max_length=100),
+    owner: str | None = Query(default=None, max_length=150),
+    classification: str | None = Query(default=None, max_length=100),
+    location: str | None = Query(default=None, max_length=200),
+    include_retired: bool = False,
+    page: int = Query(default=1, ge=1),
+    page_size: int = Query(default=25, ge=1, le=200),
+    db: AsyncSession = Depends(get_db),
+    current_user: User = require_permission("assets", "read"),
+):
+    """Return a stable, count-bearing page of inventory records."""
     filters = _build_asset_inventory_filters(
         q=q, asset_type=asset_type, criticality=criticality,
         lifecycle_status=lifecycle_status, direction=direction, owner=owner,
