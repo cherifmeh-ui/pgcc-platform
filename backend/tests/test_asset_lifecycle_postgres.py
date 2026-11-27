@@ -890,3 +890,108 @@ async def test_asset_reactivation_preserves_application_and_historical_risk_link
             await cleanup.execute(delete(Application).where(Application.id == application_id))
             await cleanup.commit()
         await engine.dispose()
+
+
+@pytest.mark.asyncio
+async def test_asset_risk_link_creation_and_retirement_are_serialized():
+    """A concurrent risk link cannot be committed after the asset is retired."""
+    from app.api.v1.endpoints.assets import AssetRiskLinkCreate, link_asset_to_risk
+    from app.models.asset import AssetRiskLink
+    from app.models.risk import Risk
+
+    engine = create_async_engine(DATABASE_URL, pool_size=4, max_overflow=0)
+    sessions = async_sessionmaker(engine, expire_on_commit=False)
+    asset_id = uuid4()
+    risk_id = uuid4()
+    asset = Asset(
+        id=asset_id,
+        reference=f"PH1-RISK-RACE-ASSET-{asset_id.hex[:8]}",
+        name="Asset risk-link retirement race",
+        asset_type="hardware",
+        lifecycle_status="Actif",
+        retired_at=None,
+    )
+    risk = Risk(
+        id=risk_id,
+        ref=f"PH1-RISK-RACE-{risk_id.hex[:8]}",
+        title="Risk link versus asset retirement",
+        impact=3,
+        likelihood=3,
+        risk_level=9,
+        status="Ouvert",
+    )
+    user = MagicMock(role="admin", email="phase1-risk-race@example.invalid")
+    try:
+        async with sessions() as setup:
+            setup.add_all([asset, risk])
+            await setup.commit()
+
+        async def create_risk_link():
+            async with sessions() as db:
+                try:
+                    await link_asset_to_risk(
+                        asset_id=asset_id,
+                        data=AssetRiskLinkCreate(
+                            risk_id=risk_id,
+                            relationship_context="Concurrent lifecycle serialization test",
+                        ),
+                        request=_request(),
+                        db=db,
+                        current_user=user,
+                    )
+                    return 201
+                except HTTPException as exc:
+                    return exc.status_code
+
+        async def retire():
+            async with sessions() as db:
+                try:
+                    await retire_asset(
+                        asset_id=asset_id,
+                        request=_request(),
+                        db=db,
+                        current_user=user,
+                    )
+                    return 204
+                except HTTPException as exc:
+                    return exc.status_code
+
+        link_status, retirement_status = await asyncio.gather(
+            create_risk_link(), retire()
+        )
+        assert link_status in (201, 409)
+        assert retirement_status == 204
+
+        async with sessions() as verify:
+            persisted_asset = await verify.get(Asset, asset_id)
+            persisted_links = (
+                await verify.execute(
+                    select(AssetRiskLink).where(
+                        AssetRiskLink.asset_id == asset_id,
+                        AssetRiskLink.risk_id == risk_id,
+                    )
+                )
+            ).scalars().all()
+            assert persisted_asset.lifecycle_status == "Retiré"
+            assert persisted_asset.retired_at is not None
+            assert len(persisted_links) == (1 if link_status == 201 else 0)
+    finally:
+        async with sessions() as cleanup:
+            link_ids = (
+                await cleanup.execute(
+                    select(AssetRiskLink.id).where(AssetRiskLink.asset_id == asset_id)
+                )
+            ).scalars().all()
+            audit_resource_ids = [str(asset_id), *[str(link_id) for link_id in link_ids]]
+            await cleanup.execute(
+                delete(AuditOutbox).where(
+                    AuditOutbox.payload["resource_id"].astext.in_(audit_resource_ids)
+                )
+            )
+            await cleanup.execute(
+                delete(AssetRiskLink).where(AssetRiskLink.asset_id == asset_id)
+            )
+            await cleanup.execute(delete(Asset).where(Asset.id == asset_id))
+            await cleanup.execute(delete(Risk).where(Risk.id == risk_id))
+            await cleanup.commit()
+        await engine.dispose()
