@@ -253,3 +253,19 @@ Phase 1 est **démarrée**, mais aucun sous-jalon fonctionnel n'est déclaré te
 - Revue du code : les opérations de retrait et de modification verrouillent la ligne Asset avec `FOR UPDATE`; la création de relations Asset↔Asset verrouille les deux actifs dans l'ordre déterministe; la création de liens fournisseur-actif verrouille aussi la ligne Asset. Ces verrous constituent le mécanisme de sérialisation partagé par les scénarios concurrents.
 - Limite : le scénario de concurrence fournisseur/retrait vérifie les états finaux mais ne constitue pas un test de charge ou de stress. La tranche ne revendique pas une validation sous forte contention.
 - Validation du nouveau test unitaire et du dernier HEAD : CI à attendre ; les 42 tests PostgreSQL mentionnés ci-dessus concernent le HEAD précédent, pas le commit de cette tranche.
+
+### Tranche cycle de vie Asset↔Risk — conservation de l'historique
+
+- Revue du code : la création d'un lien Asset↔Risk verrouille la ligne Asset (SELECT ... FOR UPDATE) et refuse un actif retiré/décommissionné ; le retrait verrouille également l'actif. La suppression d'un risque est déjà protégée lorsqu'un lien Asset↔Risk existe.
+- Décision métier retenue pour les tests : un lien vers un risque existant constitue une trace historique et ne doit pas être effacé automatiquement au retrait de l'actif. Le retrait d'un actif ne doit donc pas être bloqué par le seul lien Asset↔Risk ; en revanche, aucune nouvelle association ne doit être créée après le retrait.
+- Test PostgreSQL ajouté dans backend/tests/test_asset_lifecycle_postgres.py : création d'un lien, retrait de l'actif, vérification de la conservation du lien, tentative de nouvelle association rejetée en HTTP 409, puis vérification qu'aucun doublon n'a été créé.
+- Nettoyage du test : suppression explicite de l'événement d'audit lié, du lien, de l'actif et du risque afin de ne pas laisser de données dans la base d'intégration.
+- Commit de test : c6cb952797444b88029da8183b21e30c5cdb4081.
+- **État de validation au moment de cette note :** test ajouté au dépôt ; exécution PostgreSQL CI sur ce nouveau HEAD à vérifier. Aucun résultat de test local n'est revendiqué.
+
+### Prochaine tranche
+
+1. Vérifier la CI complète sur le HEAD contenant le test PostgreSQL Asset↔Risk.
+2. Compléter la matrice PostgreSQL Application↔Asset (cardinalité 1:N, réaffectation et FK restrictive).
+3. Revoir les chemins de réactivation d'un actif et les associations historiques, puis actualiser le statut des gates Phase 1.
+
