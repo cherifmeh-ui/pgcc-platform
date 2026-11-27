@@ -259,6 +259,43 @@ async def _ensure_application_exists(application_id: UUID | None, db: AsyncSessi
         raise HTTPException(status_code=422, detail="Application associée introuvable")
 
 
+async def _ensure_asset_retirement_allowed(db: AsyncSession, asset_id: UUID) -> None:
+    """Refuse retirement while supplier access requests or active supplier links remain."""
+    open_access_result = await db.execute(
+        select(SupplierAccessRequest.id)
+        .where(
+            SupplierAccessRequest.asset_id == asset_id,
+            SupplierAccessRequest.status.in_(("Demandé", "Approuvé", "Suspendu")),
+        )
+        .limit(1)
+    )
+    if open_access_result.scalar_one_or_none() is not None:
+        raise HTTPException(
+            status_code=409,
+            detail=(
+                "Retrait impossible : une demande ou autorisation d'accès fournisseur "
+                "est encore ouverte. Refusez, révoquez ou clôturez-la d'abord."
+            ),
+        )
+
+    active_supplier_link_result = await db.execute(
+        select(SupplierAssetLink.id)
+        .where(
+            SupplierAssetLink.asset_id == asset_id,
+            SupplierAssetLink.status == "Actif",
+        )
+        .limit(1)
+    )
+    if active_supplier_link_result.scalar_one_or_none() is not None:
+        raise HTTPException(
+            status_code=409,
+            detail=(
+                "Retrait impossible : une relation fournisseur-actif est encore active. "
+                "Terminez cette relation avant de retirer l'actif."
+            ),
+        )
+
+
 @router.get("/import/template")
 async def download_asset_csv_template(
     current_user: User = require_permission("assets", "read"),
@@ -707,6 +744,8 @@ async def update_asset(
     values = data.model_dump(exclude_unset=True)
     if "application_id" in values:
         await _ensure_application_exists(values.get("application_id"), db)
+    if values.get("lifecycle_status") in {"Retiré", "Décommissionné"}:
+        await _ensure_asset_retirement_allowed(db, asset.id)
 
     was_retired = _asset_is_retired(asset.lifecycle_status, asset.retired_at)
     reactivated = False
@@ -753,39 +792,7 @@ async def retire_asset(
     if asset is None:
         raise HTTPException(status_code=404, detail="Actif introuvable")
 
-    open_access_result = await db.execute(
-        select(SupplierAccessRequest.id)
-        .where(
-            SupplierAccessRequest.asset_id == asset.id,
-            SupplierAccessRequest.status.in_(("Demandé", "Approuvé", "Suspendu")),
-        )
-        .limit(1)
-    )
-    if open_access_result.scalar_one_or_none() is not None:
-        raise HTTPException(
-            status_code=409,
-            detail=(
-                "Retrait impossible : une demande ou autorisation d'accès fournisseur "
-                "est encore ouverte. Refusez, révoquez ou clôturez-la d'abord."
-            ),
-        )
-
-    active_supplier_link_result = await db.execute(
-        select(SupplierAssetLink.id)
-        .where(
-            SupplierAssetLink.asset_id == asset.id,
-            SupplierAssetLink.status == "Actif",
-        )
-        .limit(1)
-    )
-    if active_supplier_link_result.scalar_one_or_none() is not None:
-        raise HTTPException(
-            status_code=409,
-            detail=(
-                "Retrait impossible : une relation fournisseur-actif est encore active. "
-                "Terminez cette relation avant de retirer l'actif."
-            ),
-        )
+    await _ensure_asset_retirement_allowed(db, asset.id)
 
     if asset.lifecycle_status not in {"Retiré", "Décommissionné"} or asset.retired_at is None:
         if asset.retired_at is None:
