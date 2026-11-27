@@ -1,0 +1,96 @@
+"""HTTP-level authorization tests for the asset inventory routes."""
+from unittest.mock import AsyncMock, MagicMock
+
+import pytest
+from fastapi import FastAPI
+from fastapi.testclient import TestClient
+
+from app.api.deps import get_current_user
+from app.core.database import get_db
+from app.api.v1.endpoints import assets as assets_endpoint
+
+
+def _client_for_role(role: str, db):
+    app = FastAPI()
+    app.include_router(assets_endpoint.router, prefix="/api/v1")
+
+    async def override_current_user():
+        return MagicMock(role=role, email=f"{role}@example.test")
+
+    async def override_db():
+        yield db
+
+    app.dependency_overrides[get_current_user] = override_current_user
+    app.dependency_overrides[get_db] = override_db
+    return TestClient(app)
+
+
+def _empty_result():
+    result = MagicMock()
+    result.scalars.return_value.all.return_value = []
+    return result
+
+
+def test_viewer_is_denied_asset_graph_over_http_without_database_query():
+    db = AsyncMock()
+    with _client_for_role("viewer", db) as client:
+        response = client.get("/api/v1/assets/graph")
+
+    assert response.status_code == 403
+    db.execute.assert_not_awaited()
+
+
+def test_auditor_can_read_asset_graph_over_http():
+    db = AsyncMock()
+    db.execute.side_effect = [_empty_result(), _empty_result()]
+
+    with _client_for_role("auditor", db) as client:
+        response = client.get("/api/v1/assets/graph")
+
+    assert response.status_code == 200
+    assert response.json() == {
+        "nodes": [], "edges": [], "node_count": 0, "edge_count": 0,
+    }
+    assert db.execute.await_count == 2
+
+
+def test_auditor_can_export_assets_over_http(monkeypatch):
+    db = AsyncMock()
+    db.execute.return_value = _empty_result()
+    audit = AsyncMock()
+    monkeypatch.setattr(assets_endpoint, "log_action", audit)
+
+    with _client_for_role("auditor", db) as client:
+        response = client.get("/api/v1/assets/export.csv")
+
+    assert response.status_code == 200
+    assert response.headers["content-type"].startswith("text/csv")
+    assert response.text.startswith("\ufeffreference,name,asset_type")
+    audit.assert_awaited_once()
+    assert audit.await_args.kwargs["action"] == "EXPORT"
+
+
+@pytest.mark.parametrize("role", ["executive", "viewer"])
+def test_non_export_roles_are_denied_export_over_http(role):
+    db = AsyncMock()
+    with _client_for_role(role, db) as client:
+        response = client.get("/api/v1/assets/export.csv")
+
+    assert response.status_code == 403
+    db.execute.assert_not_awaited()
+
+
+def test_auditor_cannot_create_asset_over_http():
+    db = AsyncMock()
+    payload = {
+        "reference": "AST-HTTP-001",
+        "name": "Asset test",
+        "asset_type": "hardware",
+    }
+
+    with _client_for_role("auditor", db) as client:
+        response = client.post("/api/v1/assets/", json=payload)
+
+    assert response.status_code == 403
+    db.execute.assert_not_awaited()
+    db.commit.assert_not_awaited()
