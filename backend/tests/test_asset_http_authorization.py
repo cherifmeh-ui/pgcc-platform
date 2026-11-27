@@ -139,3 +139,109 @@ def test_auditor_can_read_suppliers_linked_to_an_asset_over_http():
     assert response.status_code == 200
     assert response.json() == []
     assert db.execute.await_count == 2
+
+
+
+def _jwt_client(db):
+    from fastapi import FastAPI
+    from app.api.deps import get_current_user
+    from app.api.v1.endpoints import assets as assets_endpoint
+    from app.core.database import get_db
+
+    app = FastAPI()
+    app.include_router(assets_endpoint.router, prefix="/api/v1")
+
+    async def override_db():
+        yield db
+
+    app.dependency_overrides[get_db] = override_db
+    return TestClient(app)
+
+
+def _jwt_user_result(user):
+    result = MagicMock()
+    result.scalar_one_or_none.return_value = user
+    return result
+
+
+def test_real_jwt_access_token_authorizes_asset_graph_and_checks_database_state(monkeypatch):
+    from app.core.config import settings
+    from app.core.security import create_access_token
+
+    monkeypatch.setattr(settings, "JWT_SECRET", "pgcc-jwt-integration-secret-long-enough-for-tests")
+    monkeypatch.setattr(settings, "JWT_ALGORITHM", "HS256")
+    user = MagicMock(
+        id="jwt-user-id", email="jwt-auditor@example.test", role="auditor",
+        is_active=True, must_change_password=False, mfa_enabled=False, auth_version=3,
+    )
+    db = AsyncMock()
+    db.execute.side_effect = [
+        _jwt_user_result(user),
+        _empty_result(),
+        _empty_result(),
+    ]
+    token = create_access_token(
+        subject=user.email, role="auditor", auth_version=3
+    )
+
+    with _jwt_client(db) as client:
+        response = client.get(
+            "/api/v1/assets/graph",
+            headers={"Authorization": f"Bearer {token}"},
+        )
+
+    assert response.status_code == 200
+    assert response.json()["node_count"] == 0
+    assert db.execute.await_count == 3
+
+
+def test_real_jwt_with_stale_auth_version_is_rejected_before_asset_query(monkeypatch):
+    from app.core.config import settings
+    from app.core.security import create_access_token
+
+    monkeypatch.setattr(settings, "JWT_SECRET", "pgcc-jwt-integration-secret-long-enough-for-tests")
+    monkeypatch.setattr(settings, "JWT_ALGORITHM", "HS256")
+    user = MagicMock(
+        email="stale-jwt@example.test", role="auditor",
+        is_active=True, must_change_password=False, mfa_enabled=False, auth_version=4,
+    )
+    db = AsyncMock()
+    db.execute.return_value = _jwt_user_result(user)
+    token = create_access_token(
+        subject=user.email, role="auditor", auth_version=3
+    )
+
+    with _jwt_client(db) as client:
+        response = client.get(
+            "/api/v1/assets/graph",
+            headers={"Authorization": f"Bearer {token}"},
+        )
+
+    assert response.status_code == 401
+    db.execute.assert_awaited_once()
+
+
+def test_real_jwt_role_claim_mismatch_is_rejected_before_asset_query(monkeypatch):
+    from app.core.config import settings
+    from app.core.security import create_access_token
+
+    monkeypatch.setattr(settings, "JWT_SECRET", "pgcc-jwt-integration-secret-long-enough-for-tests")
+    monkeypatch.setattr(settings, "JWT_ALGORITHM", "HS256")
+    user = MagicMock(
+        email="role-change@example.test", role="auditor",
+        is_active=True, must_change_password=False, mfa_enabled=False, auth_version=1,
+    )
+    db = AsyncMock()
+    db.execute.return_value = _jwt_user_result(user)
+    token = create_access_token(
+        subject=user.email, role="executive", auth_version=1
+    )
+
+    with _jwt_client(db) as client:
+        response = client.get(
+            "/api/v1/assets/graph",
+            headers={"Authorization": f"Bearer {token}"},
+        )
+
+    assert response.status_code == 403
+    db.execute.assert_awaited_once()
