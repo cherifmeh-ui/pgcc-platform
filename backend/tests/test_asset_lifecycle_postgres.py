@@ -1135,3 +1135,165 @@ async def test_supplier_access_request_creation_and_link_termination_are_seriali
             await cleanup.execute(delete(User).where(User.id == user_id))
             await cleanup.commit()
         await engine.dispose()
+
+
+@pytest.mark.asyncio
+async def test_terminated_supplier_link_preserves_closed_access_request_history():
+    """Terminating a link keeps refused, revoked and expired requests queryable."""
+    engine = create_async_engine(DATABASE_URL, pool_size=3, max_overflow=0)
+    sessions = async_sessionmaker(engine, expire_on_commit=False)
+    user_id, supplier_id, asset_id, link_id = uuid4(), uuid4(), uuid4(), uuid4()
+    user = User(
+        id=user_id,
+        email=f"phase1-link-history-{user_id.hex}@example.com",
+        full_name="Phase 1 supplier link history",
+        role="admin",
+        password_hash="not-used",
+        must_change_password=False,
+        is_active=True,
+        mfa_enabled=True,
+    )
+    supplier = Supplier(
+        id=supplier_id,
+        code=f"PH1-LINK-HISTORY-{user_id.hex[:8]}",
+        legal_name="Phase 1 supplier link history",
+        status="Approuvé",
+        criticality="Moyenne",
+        dependency_level="Moyenne",
+    )
+    asset = Asset(
+        id=asset_id,
+        reference=f"PH1-LINK-HISTORY-{asset_id.hex[:8]}",
+        name="Supplier link history asset",
+        asset_type="hardware",
+        lifecycle_status="Actif",
+        retired_at=None,
+    )
+    link = SupplierAssetLink(
+        id=link_id,
+        supplier_id=supplier_id,
+        asset_id=asset_id,
+        relationship_type="Maintient",
+        access_level="Standard",
+        data_access=False,
+        status="Actif",
+        created_by_id=user_id,
+    )
+    today = datetime.now(timezone.utc).date()
+    request_ids = [uuid4(), uuid4(), uuid4()]
+    historical_requests = [
+        SupplierAccessRequest(
+            id=request_ids[0],
+            supplier_id=supplier_id,
+            supplier_asset_link_id=link_id,
+            asset_id=asset_id,
+            access_level="Standard",
+            data_access=False,
+            justification="Demande historique refusée pour test de conservation",
+            scope="Intervention limitée",
+            start_date=today - timedelta(days=30),
+            end_date=today - timedelta(days=1),
+            review_due_at=today - timedelta(days=15),
+            status="Refusé",
+            requested_by_id=user_id,
+            decided_by_id=user_id,
+            decided_at=datetime.now(timezone.utc),
+            decision_comment="Refusée lors de la revue fournisseur",
+        ),
+        SupplierAccessRequest(
+            id=request_ids[1],
+            supplier_id=supplier_id,
+            supplier_asset_link_id=link_id,
+            asset_id=asset_id,
+            access_level="Standard",
+            data_access=False,
+            justification="Autorisation historique révoquée pour test de conservation",
+            scope="Intervention limitée",
+            start_date=today - timedelta(days=30),
+            end_date=today - timedelta(days=1),
+            review_due_at=today - timedelta(days=15),
+            status="Révoqué",
+            requested_by_id=user_id,
+            decided_by_id=user_id,
+            decided_at=datetime.now(timezone.utc),
+            decision_comment="Accès initialement approuvé",
+            revoked_by_id=user_id,
+            revoked_at=datetime.now(timezone.utc),
+            revocation_reason="Fin anticipée de l'intervention",
+        ),
+        SupplierAccessRequest(
+            id=request_ids[2],
+            supplier_id=supplier_id,
+            supplier_asset_link_id=link_id,
+            asset_id=asset_id,
+            access_level="Standard",
+            data_access=False,
+            justification="Autorisation historique expirée pour test de conservation",
+            scope="Intervention limitée",
+            start_date=today - timedelta(days=30),
+            end_date=today - timedelta(days=1),
+            review_due_at=today - timedelta(days=15),
+            status="Expiré",
+            requested_by_id=user_id,
+            decided_by_id=user_id,
+            decided_at=datetime.now(timezone.utc),
+            decision_comment="Accès arrivé à échéance",
+        ),
+    ]
+    try:
+        async with sessions() as setup:
+            setup.add(user)
+            await setup.flush()
+            setup.add_all([supplier, asset])
+            await setup.flush()
+            setup.add(link)
+            await setup.flush()
+            setup.add_all(historical_requests)
+            await setup.commit()
+
+        async with sessions() as db:
+            result = await terminate_supplier_asset_link(
+                supplier_id=supplier_id,
+                link_id=link_id,
+                request=_request(),
+                db=db,
+                current_user=MagicMock(email=user.email),
+            )
+            assert result.status == "Terminé"
+
+        async with sessions() as verify:
+            persisted_link = await verify.get(SupplierAssetLink, link_id)
+            persisted_requests = (
+                await verify.execute(
+                    select(SupplierAccessRequest)
+                    .where(SupplierAccessRequest.supplier_asset_link_id == link_id)
+                    .order_by(SupplierAccessRequest.status)
+                )
+            ).scalars().all()
+            assert persisted_link.status == "Terminé"
+            assert {item.status for item in persisted_requests} == {
+                "Refusé", "Révoqué", "Expiré"
+            }
+            assert {item.id for item in persisted_requests} == set(request_ids)
+            assert len(persisted_requests) == 3
+    finally:
+        async with sessions() as cleanup:
+            audit_ids = [str(link_id), *[str(item) for item in request_ids]]
+            await cleanup.execute(
+                delete(AuditOutbox).where(
+                    AuditOutbox.payload["resource_id"].astext.in_(audit_ids)
+                )
+            )
+            await cleanup.execute(
+                delete(SupplierAccessRequest).where(
+                    SupplierAccessRequest.supplier_asset_link_id == link_id
+                )
+            )
+            await cleanup.execute(
+                delete(SupplierAssetLink).where(SupplierAssetLink.id == link_id)
+            )
+            await cleanup.execute(delete(Asset).where(Asset.id == asset_id))
+            await cleanup.execute(delete(Supplier).where(Supplier.id == supplier_id))
+            await cleanup.execute(delete(User).where(User.id == user_id))
+            await cleanup.commit()
+        await engine.dispose()
