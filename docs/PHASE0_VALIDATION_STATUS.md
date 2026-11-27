@@ -1366,3 +1366,53 @@ Cette section remplace les anciens états intermédiaires datés du 21 novembre 
 - Les seuils de rate limiting et la liste des réseaux proxy de confiance doivent être confirmés par l'exploitant réseau/sécurité ; les valeurs actuelles sont des valeurs de code, pas une politique opérationnelle approuvée.
 - La PR #1 comprend 219 fichiers modifiés et environ 27 136 additions / 1 046 suppressions par rapport à sa base déclarée. Une revue humaine exhaustive et l'approbation avant merge restent nécessaires.
 - **Décision : Phase 0 non clôturée.** La CI sur ce HEAD est verte, mais les critères opérationnels, la revue humaine et l'acceptation des risques résiduels ne sont pas encore satisfaits.
+
+
+## Validation checkpoint actualisé — 27 novembre 2026 (code testé : e40286a)
+
+Les contrôles automatisés suivants ont été ajoutés et exécutés sur PostgreSQL
+réel, via les routes HTTP FastAPI et des JWT signés :
+
+- **Fournisseurs / RBAC** : lecture autorisée pour l'auditeur, refus HTTP 403
+  des opérations de mutation, et parcours PostgreSQL complet avec création,
+  approbation par un autre administrateur, revue périodique, révocation,
+  expiration et terminaison. Les états et événements de l'outbox d'audit
+  sont vérifiés après persistance.
+- **Import CSV** : deux requêtes concurrentes passent la prévalidation puis
+  tentent la même référence ; une seule insertion est conservée et l'autre
+  retourne HTTP 409. Un second test provoque un conflit sur la deuxième ligne
+  d'un lot et vérifie le rollback de la première ligne, sans événement
+  d'import partiel.
+- **Pagination / export** : les routes HTTP partagent les mêmes filtres
+  multicritères ; les pages successives et l'export CSV retournent les mêmes
+  références dans le même ordre, avec exclusion des actifs retirés.
+- **Workflow CI** : le fichier `test_asset_csv_import_postgres.py` a été
+  ajouté explicitement à la commande PostgreSQL, qui utilise une liste de
+  fichiers nominative.
+
+Résultats du workflow Push `46016290040` sur le SHA de code
+`e40286a02b3799793133732fa75d9721aa59a0d9` : **5/5 jobs réussis**.
+- Backend : **542 passed, 61 skipped, 1 warning**.
+- PostgreSQL Integration : **60 passed, 1 warning**.
+- Frontend : build réussi.
+- Compose Smoke : réussi.
+- Production Runtime Smoke : réussi.
+
+La branche reste `chore/phase0-stabilization`. La PR #1 demeure ouverte,
+en Draft et non fusionnée ; `main` est inchangée.
+
+### Gates toujours ouverts — Phase 0 non clôturée
+
+- Recette sur l'environnement cible avec les vrais secrets, certificats, DNS,
+  reverse proxy, règles réseau et supervision.
+- Sauvegarde chiffrée avec WAL/PITR, protection hors site/immutabilité et
+  exercice de restauration sur l'environnement cible avec RPO/RTO mesurés et
+  approuvés.
+- Confirmation opérationnelle des seuils de rate limiting et des CIDR proxy
+  de confiance.
+- Revue humaine exhaustive de la PR #1 et approbation des changements.
+- Acceptation formelle des risques résiduels par les responsables concernés.
+
+**Décision : Phase 0 reste ouverte.** Les preuves automatisées progressent,
+mais elles ne remplacent pas les gates d'exploitation, la recette réelle et
+l'approbation humaine.
