@@ -984,3 +984,54 @@ workflows Push `46019594990` et Pull Request `46019604715` terminés avec
 La validation CI prouve les contrôles automatisés dans les environnements
 décrits par les workflows ; elle ne remplace pas les essais utilisateurs sur
 l'environnement cible. La Phase 0 reste ouverte.
+
+
+## Complément — contrôles HTTP des entrées CSV (27/11/2026)
+
+Le fichier `backend/tests/test_asset_csv_import_http.py` ajoute sept
+cas HTTP sur la route de prévisualisation de l'import CSV :
+
+- rejet d'une extension non CSV (HTTP 415) ;
+- rejet d'un fichier dépassant 1 Mio (HTTP 413) ;
+- rejet d'un contenu qui n'est pas en UTF-8 valide (HTTP 400) ;
+- rejet d'en-têtes dupliqués après normalisation des espaces (HTTP 422) ;
+- rejet de plus de 5 000 lignes de données (HTTP 413) ;
+- détection des doublons hostname sans distinction de casse ;
+- détection des doublons de numéro de série sans distinction de casse.
+
+Pour les contrôles de rejet précoces, les tests vérifient qu'aucune requête
+SQL n'est déclenchée. Les deux tests de doublons vérifient que la prévisualisation
+signale les erreurs et ne permet pas la confirmation de l'import.
+
+**Limite de portée :** ces nouveaux tests utilisent une session DB mockée.
+Ils valident le contrat HTTP, la validation des entrées et le comportement de
+prévisualisation, mais ne prouvent pas les contraintes concurrentes réelles
+sur hostname/numéro de série dans PostgreSQL. Les tests PostgreSQL d'atomicité
+et de concurrence déjà recensés restent distincts.
+
+**Résultats CI sur le SHA `f26f573e09a2789ee1eb9033dc6b736b6783ec8e`** :
+
+- Workflow Push `46020812384` : **5/5 jobs réussis**.
+- Backend : **558 passed, 62 skipped, 1 warning**.
+- PostgreSQL Integration : **61 passed, 1 warning**.
+- Frontend build : réussi.
+- Compose Smoke : réussi.
+- Production Runtime Smoke : réussi.
+
+Le commit précédent `a0314ad` a correctement fait échouer le backend sur
+une assertion de test qui attendait un séparateur dans le libellé de la limite
+de lignes, alors que l'API retourne `5000`. L'assertion a été corrigée dans
+`f26f573`, puis le workflow Push sur ce nouveau SHA a réussi. Cette correction
+n'a pas modifié le comportement applicatif.
+
+### Suite de la validation CSV
+
+- Ajouter une validation PostgreSQL HTTP des collisions concurrentes de
+  hostname et numéro de série, uniquement selon les contraintes réellement
+  définies dans le schéma.
+- Vérifier les cas CSV limites (BOM UTF-8, lignes vides, champs avec
+  séparateurs/guillemets, fins de ligne CRLF) et leur cohérence preview/confirm.
+- Contrôler que les erreurs de validation ne divulguent aucune donnée
+  technique ou personnelle d'un actif préexistant.
+
+La Phase 0 reste ouverte.
