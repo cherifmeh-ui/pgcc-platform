@@ -21,6 +21,7 @@ from app.api.v1.endpoints.suppliers import (
     SupplierAccessRequestCreate,
     SupplierAccessRevocation,
     create_supplier_access_request,
+    expire_supplier_access_request,
     revoke_supplier_access_request,
     terminate_supplier_asset_link,
 )
@@ -293,6 +294,153 @@ async def test_approved_access_blocks_link_termination_until_revocation():
             assert persisted_request.status == "Révoqué"
             assert persisted_link.status == "Terminé"
             assert "REVOKE_SUPPLIER_ACCESS" in audit_actions
+            assert "TERMINATE_SUPPLIER_ASSET_LINK" in audit_actions
+    finally:
+        async with sessions() as cleanup:
+            if access_request is not None:
+                await cleanup.execute(
+                    delete(AuditOutbox).where(
+                        AuditOutbox.payload["resource_id"].astext == str(access_request.id)
+                    )
+                )
+                await cleanup.execute(
+                    delete(SupplierAccessRequest).where(
+                        SupplierAccessRequest.id == access_request.id
+                    )
+                )
+            if link is not None:
+                await cleanup.execute(
+                    delete(AuditOutbox).where(
+                        AuditOutbox.payload["resource_id"].astext == str(link.id)
+                    )
+                )
+                await cleanup.execute(
+                    delete(SupplierAssetLink).where(SupplierAssetLink.id == link.id)
+                )
+            await cleanup.execute(delete(Asset).where(Asset.id == asset.id))
+            await cleanup.execute(delete(Supplier).where(Supplier.id == supplier.id))
+            await cleanup.execute(delete(User).where(User.id == actor_id))
+            await cleanup.commit()
+        await engine.dispose()
+
+@pytest.mark.asyncio
+async def test_expired_approved_access_can_be_expired_before_link_termination():
+    """An approved but elapsed authorization must be explicitly expired before link closure."""
+    engine = create_async_engine(DATABASE_URL, pool_size=3, max_overflow=0)
+    sessions = async_sessionmaker(engine, expire_on_commit=False)
+    actor_id = uuid4()
+    actor = User(
+        id=actor_id,
+        email=f"phase0-expire-{actor_id.hex}@example.com",
+        full_name="Phase 0 supplier access expiration test",
+        role="admin",
+        password_hash="not-used",
+        must_change_password=False,
+        is_active=True,
+        mfa_enabled=True,
+    )
+    supplier = Supplier(
+        code=f"PH0-EX-{actor_id.hex[:10]}",
+        legal_name="Phase 0 expired access lifecycle",
+        status="Approuvé",
+        criticality="Moyenne",
+        dependency_level="Moyenne",
+    )
+    asset = Asset(
+        reference=f"PH0-EX-{actor_id.hex[:10]}",
+        name="Phase 0 expiration asset",
+        asset_type="hardware",
+        lifecycle_status="Actif",
+    )
+    link = None
+    access_request = None
+    try:
+        async with sessions() as setup:
+            setup.add(actor)
+            await setup.flush()
+            setup.add_all([supplier, asset])
+            await setup.flush()
+            link = SupplierAssetLink(
+                supplier_id=supplier.id,
+                asset_id=asset.id,
+                relationship_type="Maintient",
+                access_level="Standard",
+                data_access=False,
+                status="Actif",
+                created_by_id=actor_id,
+            )
+            setup.add(link)
+            await setup.flush()
+            yesterday = date.today() - timedelta(days=1)
+            access_request = SupplierAccessRequest(
+                supplier_id=supplier.id,
+                supplier_asset_link_id=link.id,
+                asset_id=asset.id,
+                access_level="Standard",
+                data_access=False,
+                justification="Accès de maintenance temporaire",
+                scope="Maintenance du serveur",
+                start_date=yesterday - timedelta(days=30),
+                end_date=yesterday,
+                review_due_at=yesterday,
+                status="Approuvé",
+                requested_by_id=actor_id,
+                decided_by_id=actor_id,
+                decided_at=datetime.now(timezone.utc),
+                decision_comment="Approbation initiale de test",
+            )
+            setup.add(access_request)
+            await setup.commit()
+            await setup.refresh(link)
+            await setup.refresh(access_request)
+
+        async with sessions() as db:
+            with pytest.raises(HTTPException) as blocked:
+                await terminate_supplier_asset_link(
+                    supplier_id=supplier.id,
+                    link_id=link.id,
+                    request=_request(),
+                    db=db,
+                    current_user=MagicMock(id=actor_id, email=actor.email),
+                )
+            assert blocked.value.status_code == 409
+            await db.rollback()
+
+        async with sessions() as db:
+            expired = await expire_supplier_access_request(
+                supplier_id=supplier.id,
+                access_request_id=access_request.id,
+                request=_request(),
+                db=db,
+                current_user=MagicMock(id=actor_id, email=actor.email),
+            )
+            assert expired.status == "Expiré"
+
+        async with sessions() as db:
+            terminated = await terminate_supplier_asset_link(
+                supplier_id=supplier.id,
+                link_id=link.id,
+                request=_request(),
+                db=db,
+                current_user=MagicMock(id=actor_id, email=actor.email),
+            )
+            assert terminated.status == "Terminé"
+
+        async with sessions() as verify:
+            persisted_request = await verify.get(SupplierAccessRequest, access_request.id)
+            persisted_link = await verify.get(SupplierAssetLink, link.id)
+            audit_actions = (
+                await verify.execute(
+                    select(AuditOutbox.payload["action"].astext).where(
+                        AuditOutbox.payload["resource_id"].astext.in_(
+                            [str(access_request.id), str(link.id)]
+                        )
+                    )
+                )
+            ).scalars().all()
+            assert persisted_request.status == "Expiré"
+            assert persisted_link.status == "Terminé"
+            assert "EXPIRE_SUPPLIER_ACCESS" in audit_actions
             assert "TERMINATE_SUPPLIER_ASSET_LINK" in audit_actions
     finally:
         async with sessions() as cleanup:
