@@ -269,3 +269,24 @@ Phase 1 est **démarrée**, mais aucun sous-jalon fonctionnel n'est déclaré te
 2. Compléter la matrice PostgreSQL Application↔Asset (cardinalité 1:N, réaffectation et FK restrictive).
 3. Revoir les chemins de réactivation d'un actif et les associations historiques, puis actualiser le statut des gates Phase 1.
 
+### Validation CI — cycle de vie Asset↔Risk
+
+- HEAD validé : `de7e8d996040b6a581d437df0b7a01bf82b66bd1`.
+- Workflows push `45970471909` et pull_request `45970480134` : cinq jobs réussis chacun (Backend, PostgreSQL Integration, Frontend, Compose Smoke, Production Runtime Smoke).
+- Logs PostgreSQL du workflow push : **43 tests réussis** sur la suite d'intégration PostgreSQL ciblée, incluant `test_asset_lifecycle_postgres.py`. Les erreurs SQL attendues dans certains tests négatifs (unicité, FK restrictive, append-only et contraintes CHECK) ne sont pas des échecs du job ; le job s'est terminé avec succès.
+- Le test Asset↔Risk ajouté dans la tranche précédente est donc exécuté avec succès sur PostgreSQL 16 CI.
+
+### Tranche PostgreSQL Application↔Asset — cardinalité 1:N
+
+- Le modèle `Asset.application_id` référence `applications.id` avec `ON DELETE RESTRICT`, sans unicité sur `application_id`. La migration `0008_asset_app_cardinality` retire l'ancienne contrainte 1:1 et son downgrade refuse de réintroduire l'unicité si des doublons existent.
+- Test PostgreSQL ajouté dans `backend/tests/test_asset_lifecycle_postgres.py` : création de deux actifs rattachés à une même application, réaffectation du second actif à une autre application, puis vérification que la suppression de chacune des applications référencées est refusée par la FK restrictive.
+- Le test nettoie les événements d'audit des actifs, les actifs et les applications dans cet ordre.
+- Commit du test : `70f4c4c371c1f6ff61da6f14e5f00d6435aa68ec`.
+- **Validation de cette nouvelle tranche en attente** : les workflows doivent être observés sur le HEAD qui contient ce test. Aucun résultat local n'est revendiqué.
+
+### Prochaine tranche
+
+1. Vérifier les deux exécutions CI (push et PR) sur le nouveau HEAD et lire le résultat PostgreSQL.
+2. Examiner la cohérence de l'affectation `application_id` lors de l'import CSV et des mises à jour partielles.
+3. Poursuivre la revue des dépendances et de la réactivation des actifs, puis mettre à jour le registre de maturité Cartographie.
+
