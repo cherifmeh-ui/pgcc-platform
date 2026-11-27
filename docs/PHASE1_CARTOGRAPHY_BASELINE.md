@@ -589,3 +589,33 @@ Phase 1 est **démarrée**, mais aucun sous-jalon fonctionnel n'est déclaré te
 3. Construire la matrice HTTP JWT route × rôle × opération pour les endpoints Supplier (demande, décision, revue, révocation, expiration, gestion des liens).
 4. Reprendre les contrôles CSV transactionnels/concurrents et l'équivalence pagination/export.
 5. Obtenir des plans `EXPLAIN (ANALYZE, BUFFERS)` sur une volumétrie représentative avant toute décision d'indexation.
+
+## Complément — expiration d'une autorisation fournisseur (27/11/2026)
+
+Le commit `a0f272cd771fc490739b328226a7ee102de4add9` ajoute le test PostgreSQL
+`test_expired_approved_access_can_be_expired_before_link_termination`.
+
+Le scénario vérifie qu'un lien fournisseur ne peut pas être terminé tant qu'une
+autorisation approuvée et arrivée à échéance n'a pas été explicitement expirée.
+L'endpoint d'expiration applique les contrôles de statut et de date, verrouille
+la demande avec `SELECT ... FOR UPDATE`, puis écrit l'événement
+`EXPIRE_SUPPLIER_ACCESS` dans l'outbox dans la même transaction. Après expiration,
+la terminaison du lien est autorisée et son événement d'audit est vérifié.
+
+**Résultats CI observés sur le SHA exact** :
+- Workflow Push `46007313446` : 5/5 jobs réussis.
+- Backend : `532 passed, 55 skipped, 1 warning`.
+- PostgreSQL Integration : `54 passed, 1 warning`.
+- Frontend, Compose Smoke et Production Runtime Smoke : succès.
+
+Les messages PostgreSQL `ERROR` visibles dans le journal d'intégration proviennent
+de tests négatifs intentionnels (contraintes d'intégrité, append-only et clés
+étrangères) ; le job se termine avec 54 tests réussis et aucun échec.
+
+Cette validation est une intégration PostgreSQL appelant les fonctions d'endpoint
+dans le contexte de test ; elle ne remplace pas une matrice HTTP/JWT complète
+sur les routes fournisseurs.
+
+**Suite** : compléter la matrice HTTP/JWT rôles × permissions × opérations pour
+les routes fournisseurs, puis traiter les tests transactionnels/concurrence CSV,
+pagination et équivalence des exports. La Phase 0 demeure ouverte.
