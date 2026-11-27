@@ -1297,3 +1297,17 @@ Cette section remplace les anciens états intermédiaires datés du 21 novembre 
 - Revue ACL documentaire : les contrôles sont appliqués aux listes, aperçus, téléchargements et au contexte RAG. Les rôles privilégiés peuvent lire les classifications restreintes ; les lecteurs simples sont limités par classification, propriétaire et département. Le comportement actuel autorise explicitement le propriétaire d'un document restreint à le consulter : cette exception doit être confirmée dans la politique de classification et réévaluée lors d'une rétrogradation de rôle.
 - Limites restantes : la CI ne prouve pas une recette sur l'infrastructure réelle avec secrets/certificats de production ; la sauvegarde chiffrée avec WAL, la protection hors site/immutabilité, l'exercice de restauration et la mesure RPO/RTO en environnement cible restent à démontrer. La revue humaine des droits et l'acceptation formelle des risques résiduels restent requises.
 - **Décision : Phase 0 non clôturée.**
+
+### Validation complète CI et correction du cycle de vie des actifs — 27 novembre 2026
+
+- HEAD validé : `c14ccb1ede37151ca8099b7c962e8585c0655d98`.
+- Workflow `45957293290` terminé avec **5/5 jobs réussis** : Backend, PostgreSQL integration, Frontend, Compose smoke et production-runtime-smoke.
+- PostgreSQL : **42 tests réussis** en 5,67 s. Les migrations, le contrôle de dérive, les scénarios upgrade/downgrade et la sauvegarde/restauration CI ont été exécutés. Les erreurs PostgreSQL affichées dans les logs correspondent à des tests négatifs attendus (unicité, append-only, FK RESTRICT et contraintes de risques).
+- Compose smoke : profil complet exécuté, parseur isolé, authentification et refus fermé, ClamAV avec signatures fraîches, fichier sain accepté et fichier EICAR détecté.
+- Le test runtime production valide l'image de production, les migrations, le health check, TLS/proxy, l'isolation réseau, l'extraction et les parcours fail-closed.
+- Revue complémentaire du cycle de vie : les routes PATCH et DELETE appliquent le même garde-fou contre le retrait d'un actif ayant une demande d'accès fournisseur ouverte ou une relation fournisseur-actif active. Le test PostgreSQL de contournement par PATCH est couvert dans cette validation.
+- Une revue postérieure a ensuite identifié que la création API et l'import CSV pouvaient initialiser un actif en statut « Retiré » ou « Décommissionné » sans renseigner `retired_at`. La création API et la confirmation d'import CSV renseignent désormais automatiquement le marqueur de retrait ; des tests unitaires ciblés ont été ajoutés.
+- Les corrections de création/import sont présentes sur le HEAD actuel `a1d94d1646dde266b5533d22a128c83e51a6c3b0`. **La CI de ce nouveau HEAD est en attente/non observée** : le workflow vert `45957293290` ne valide que `c14ccb1`, pas ces derniers commits.
+- PR #1 reste ouverte, en Draft et non fusionnée. La Phase 0 reste ouverte.
+
+**Gates opérationnels toujours ouverts :** recette avec les vrais secrets et certificats, validation réseau/pare-feu et proxy sur l'environnement cible, supervision et alertes réelles, sauvegardes chiffrées avec WAL/PITR, protection hors site/immutabilité, exercice de restauration sur environnement cible avec RPO/RTO approuvés, revue humaine et acceptation formelle des risques résiduels.
