@@ -332,3 +332,116 @@ def test_real_jwt_executive_cannot_read_suppliers_linked_to_asset(monkeypatch):
 
     assert response.status_code == 403
     db.execute.assert_awaited_once()
+
+
+def _real_jwt_headers(monkeypatch, *, email: str, role: str, auth_version: int = 1):
+    from app.core.config import settings
+    from app.core.security import create_access_token
+
+    monkeypatch.setattr(settings, "JWT_SECRET", "pgcc-jwt-integration-secret-long-enough-for-tests")
+    monkeypatch.setattr(settings, "JWT_ALGORITHM", "HS256")
+    token = create_access_token(
+        subject=email, role=role, auth_version=auth_version
+    )
+    return {"Authorization": f"Bearer {token}"}
+
+
+def test_supplier_access_requests_are_readable_by_auditor_with_real_jwt(monkeypatch):
+    supplier_id = "00000000-0000-0000-0000-000000000021"
+    user = MagicMock(
+        email="supplier-auditor@example.test", role="auditor",
+        is_active=True, must_change_password=False, mfa_enabled=False, auth_version=1,
+    )
+    supplier_result = MagicMock()
+    supplier_result.scalar_one_or_none.return_value = supplier_id
+    requests_result = MagicMock()
+    requests_result.scalars.return_value.all.return_value = []
+    db = AsyncMock()
+    db.execute.side_effect = [_jwt_user_result(user), supplier_result, requests_result]
+    headers = _real_jwt_headers(
+        monkeypatch, email=user.email, role="auditor", auth_version=1
+    )
+
+    with _jwt_client(db) as client:
+        response = client.get(
+            f"/api/v1/suppliers/{supplier_id}/access-requests",
+            headers=headers,
+        )
+
+    assert response.status_code == 200
+    assert response.json() == []
+    assert db.execute.await_count == 3
+
+
+@pytest.mark.parametrize("role", ["executive", "viewer"])
+def test_supplier_access_requests_are_denied_to_roles_without_scope_with_real_jwt(
+    monkeypatch, role
+):
+    supplier_id = "00000000-0000-0000-0000-000000000022"
+    email = f"{role}-supplier@example.test"
+    user = MagicMock(
+        email=email, role=role, is_active=True,
+        must_change_password=False, mfa_enabled=False, auth_version=2,
+    )
+    db = AsyncMock()
+    db.execute.return_value = _jwt_user_result(user)
+    headers = _real_jwt_headers(
+        monkeypatch, email=email, role=role, auth_version=2
+    )
+
+    with _jwt_client(db) as client:
+        response = client.get(
+            f"/api/v1/suppliers/{supplier_id}/access-requests",
+            headers=headers,
+        )
+
+    assert response.status_code == 403
+    db.execute.assert_awaited_once()
+
+
+def test_auditor_cannot_create_supplier_access_request_over_http_with_real_jwt(
+    monkeypatch,
+):
+    supplier_id = "00000000-0000-0000-0000-000000000023"
+    email = "auditor-no-write@example.test"
+    user = MagicMock(
+        email=email, role="auditor", is_active=True,
+        must_change_password=False, mfa_enabled=False, auth_version=3,
+    )
+    db = AsyncMock()
+    db.execute.return_value = _jwt_user_result(user)
+    headers = _real_jwt_headers(
+        monkeypatch, email=email, role="auditor", auth_version=3
+    )
+    payload = {
+        "supplier_asset_link_id": "00000000-0000-0000-0000-000000000024",
+        "access_level": "Standard",
+        "data_access": False,
+        "justification": "Intervention technique planifiée",
+        "scope": "Maintenance applicative",
+        "start_date": "2026-12-01",
+        "end_date": "2026-12-31",
+        "review_due_at": "2026-12-15",
+    }
+
+    with _jwt_client(db) as client:
+        response = client.post(
+            f"/api/v1/suppliers/{supplier_id}/access-requests",
+            json=payload,
+            headers=headers,
+        )
+
+    assert response.status_code == 403
+    db.execute.assert_awaited_once()
+    db.commit.assert_not_awaited()
+
+
+def test_supplier_access_requests_require_authentication_over_http():
+    db = AsyncMock()
+    supplier_id = "00000000-0000-0000-0000-000000000025"
+
+    with _jwt_client(db) as client:
+        response = client.get(f"/api/v1/suppliers/{supplier_id}/access-requests")
+
+    assert response.status_code == 401
+    db.execute.assert_not_awaited()
