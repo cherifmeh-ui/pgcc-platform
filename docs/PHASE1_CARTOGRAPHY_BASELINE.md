@@ -236,3 +236,9 @@ Phase 1 est **démarrée**, mais aucun sous-jalon fonctionnel n'est déclaré te
 - Cause 2 : le contrôle AST des endpoints considère les fonctions d'un module `endpoints` comme des routes candidates. Le helper de requête a donc été déplacé dans `app/services/asset_inventory.py`, puis importé par les deux endpoints. Cela sépare la construction des prédicats SQL de la couche HTTP et évite de fausser le contrôle d'autorisation.
 - Correctifs : `ffd22a6e2edac348f37ea7f785efe7760488c487` (service), `9b7f51fc8a8fb76f29bd295e418ac1dd101f5718` (endpoints), `8e129f68fb0449ec603e2f31562131b02c5d4d85` (tests).
 - Ces corrections ne modifient pas les règles de filtrage attendues. Le nouveau HEAD doit repasser les workflows complets avant validation de la tranche.
+
+
+- Revue complémentaire avant relance CI : suppression d'un décorateur `GET /page` dupliqué introduit lors de l'extraction, et correction du second test `include_retired` pour importer le helper depuis le service dédié.
+- Commits de correction supplémentaires : `4868e7823623eff326ea936714654a254ceda382` et `ad29b3646cd9dcbc2cd6b9b53c0951c67f9f33a6`.
+- Revue statique du HEAD : un seul décorateur et une seule fonction `list_assets_page`, deux appels au service partagé (pagination et export), aucun import résiduel de l'ancien helper dans les tests.
+- Les nouveaux workflows du HEAD sont en file d'attente GitHub Actions ; la validation reste ouverte.
