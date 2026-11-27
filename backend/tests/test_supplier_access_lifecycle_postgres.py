@@ -469,3 +469,107 @@ async def test_expired_approved_access_can_be_expired_before_link_termination():
             await cleanup.execute(delete(User).where(User.id == actor_id))
             await cleanup.commit()
         await engine.dispose()
+
+
+@pytest.mark.asyncio
+async def test_supplier_access_http_jwt_uses_real_postgres_user_and_supplier(monkeypatch):
+    """Exercise the real HTTP/JWT dependency chain against migrated PostgreSQL."""
+    from fastapi import FastAPI
+    from fastapi.testclient import TestClient
+    from sqlalchemy.pool import NullPool
+
+    from app.api.deps import get_current_user
+    from app.api.v1.endpoints import suppliers as suppliers_endpoint
+    from app.core.config import settings
+    from app.core.database import get_db
+    from app.core.security import create_access_token
+
+    monkeypatch.setattr(
+        settings, "JWT_SECRET", "pgcc-postgres-http-jwt-secret-long-enough"
+    )
+    monkeypatch.setattr(settings, "JWT_ALGORITHM", "HS256")
+
+    engine = create_async_engine(DATABASE_URL, poolclass=NullPool)
+    sessions = async_sessionmaker(engine, expire_on_commit=False)
+    actor_id = uuid4()
+    actor_email = f"phase0-http-jwt-{actor_id.hex}@example.invalid"
+    actor = User(
+        id=actor_id,
+        email=actor_email,
+        full_name="Phase 0 HTTP JWT PostgreSQL auditor",
+        role="auditor",
+        password_hash="not-used",
+        must_change_password=False,
+        is_active=True,
+        mfa_enabled=False,
+        auth_version=7,
+    )
+    supplier = Supplier(
+        code=f"PH0-HTTP-{actor_id.hex[:10]}",
+        legal_name="Phase 0 HTTP JWT supplier",
+        status="Approuvé",
+        criticality="Moyenne",
+        dependency_level="Moyenne",
+    )
+
+    try:
+        async with sessions() as setup:
+            setup.add_all([actor, supplier])
+            await setup.commit()
+            await setup.refresh(supplier)
+
+        app = FastAPI()
+        app.include_router(suppliers_endpoint.router, prefix="/api/v1")
+
+        async def override_db():
+            async with sessions() as db:
+                yield db
+
+        app.dependency_overrides[get_db] = override_db
+        token = create_access_token(
+            subject=actor_email, role="auditor", auth_version=7
+        )
+        headers = {"Authorization": f"Bearer {token}"}
+        supplier_id = str(supplier.id)
+        with TestClient(app) as client:
+            read_response = client.get(
+                f"/api/v1/suppliers/{supplier_id}/access-requests",
+                headers=headers,
+            )
+            assert read_response.status_code == 200
+            assert read_response.json() == []
+
+            write_response = client.post(
+                f"/api/v1/suppliers/{supplier_id}/access-requests",
+                headers=headers,
+                json={
+                    "supplier_asset_link_id": str(uuid4()),
+                    "access_level": "Standard",
+                    "data_access": False,
+                    "justification": "Intervention technique planifiée",
+                    "scope": "Maintenance applicative",
+                    "start_date": date.today().isoformat(),
+                    "end_date": (date.today() + timedelta(days=30)).isoformat(),
+                    "review_due_at": (date.today() + timedelta(days=15)).isoformat(),
+                },
+            )
+            assert write_response.status_code == 403
+
+        async with sessions() as verify:
+            persisted = await verify.execute(
+                select(SupplierAccessRequest.id).where(
+                    SupplierAccessRequest.supplier_id == supplier.id
+                )
+            )
+            assert persisted.scalar_one_or_none() is None
+    finally:
+        async with sessions() as cleanup:
+            await cleanup.execute(
+                delete(SupplierAccessRequest).where(
+                    SupplierAccessRequest.supplier_id == supplier.id
+                )
+            )
+            await cleanup.execute(delete(Supplier).where(Supplier.id == supplier.id))
+            await cleanup.execute(delete(User).where(User.id == actor_id))
+            await cleanup.commit()
+        await engine.dispose()
