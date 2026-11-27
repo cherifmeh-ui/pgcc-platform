@@ -544,3 +544,27 @@ Phase 1 est **démarrée**, mais aucun sous-jalon fonctionnel n'est déclaré te
 3. Poursuivre la matrice route × rôle × opération sur les endpoints Asset, Risk et Supplier.
 4. Terminer les essais d'import CSV transactionnels/concurrents et l'équivalence pagination/export.
 5. Maintenir le profilage PostgreSQL représentatif comme gate séparé : aucun `EXPLAIN (ANALYZE, BUFFERS)` représentatif n'est encore disponible.
+
+
+### Tranche contrôle des revues d'accès fournisseur — éligibilité revalidée
+
+- Revue du parcours des demandes d'accès : création, décision, revue périodique, révocation, expiration et terminaison du lien fournisseur↔actif.
+- Défaut identifié : la revue périodique pouvait auparavant accepter une décision `Maintenue` ou `Réduite` sur une autorisation encore `Approuvé` sans revalider l'éligibilité actuelle du fournisseur, du lien et de l'actif.
+- Correction dans `review_supplier_access` : pour les issues `Maintenue` et `Réduite`, l'endpoint verrouille et recontrôle le fournisseur (non archivé et approuvé), le lien (actif et rattaché au fournisseur) et l'actif (non retiré/décommissionné, marqueur `retired_at` absent). En cas d'inéligibilité, la revue est refusée HTTP 409 avant toute modification ou insertion d'une revue.
+- La révocation `Révoquée` reste possible sans exiger que le lien soit encore actif : elle doit pouvoir fermer un droit devenu non éligible. Les règles de séparation des tâches et de validité temporelle restent appliquées.
+- Test ajouté : `test_supplier_access_review_cannot_maintain_authorization_after_link_termination`. Il vérifie le refus d'une revue `Maintenue` lorsque le lien actif est introuvable/terminé, et l'absence d'insertion, de commit ou de modification.
+- Commit applicatif : `521c54462dea4d21a60c4b4808c8aac9b4ec8592` — `fix(suppliers): revalidate access eligibility during reviews`.
+- Commit de test : `efdf7e567069d4616e2ebc033fdb03936cc2a974` — `test(suppliers): reject reviews on terminated asset links`.
+- Workflows Push `46003710011` et Pull Request `46003717916` du commit applicatif : **5/5 jobs réussis chacun**.
+- Workflows Push `46003735120` et Pull Request `46003742969` du commit de test : **5/5 jobs réussis chacun**.
+- Backend : **532 passed, 53 skipped, 1 warning**. PostgreSQL Integration : **52 passed, 1 warning**. Frontend, Compose Smoke et Production Runtime Smoke : succès sur les deux workflows du commit de test.
+- Aucun changement de schéma ou de migration. Le contrôle supplémentaire utilise les lignes existantes et leurs verrous transactionnels.
+- Limite : ce test est une validation unitaire de la branche de refus ; les tests PostgreSQL confirment la suite d'intégration existante, mais un parcours PostgreSQL HTTP complet de décision/revue/révocation/expiration reste à construire.
+
+### Prochaine tranche prioritaire
+
+1. Construire un parcours PostgreSQL HTTP couvrant demande → approbation → revue maintenue/réduite → révocation/expiration, avec séparation des rôles et traces d'audit.
+2. Ajouter un test PostgreSQL vérifiant que la terminaison du lien reste impossible tant qu'une autorisation approuvée/suspendue est ouverte, puis possible après révocation ou expiration.
+3. Compléter la matrice HTTP réelle JWT route × rôle × opération pour les endpoints de gestion des demandes d'accès fournisseur.
+4. Reprendre l'import CSV transactionnel/concurrent et l'équivalence pagination/export.
+5. Obtenir des plans `EXPLAIN (ANALYZE, BUFFERS)` sur une volumétrie représentative avant toute décision d'indexation.
