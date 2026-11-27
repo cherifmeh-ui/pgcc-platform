@@ -568,3 +568,24 @@ Phase 1 est **démarrée**, mais aucun sous-jalon fonctionnel n'est déclaré te
 3. Compléter la matrice HTTP réelle JWT route × rôle × opération pour les endpoints de gestion des demandes d'accès fournisseur.
 4. Reprendre l'import CSV transactionnel/concurrent et l'équivalence pagination/export.
 5. Obtenir des plans `EXPLAIN (ANALYZE, BUFFERS)` sur une volumétrie représentative avant toute décision d'indexation.
+
+
+### Tranche PostgreSQL — révocation avant terminaison du lien fournisseur
+
+- Test ajouté dans `backend/tests/test_supplier_access_lifecycle_postgres.py` : `test_approved_access_blocks_link_termination_until_revocation`.
+- Le test prépare un fournisseur approuvé, un actif actif, un lien actif et une demande d'accès déjà approuvée ; vérifie que la terminaison du lien retourne HTTP 409 ; appelle ensuite l'endpoint réel de révocation ; termine enfin le lien et relit l'état persistant ainsi que les événements d'audit.
+- Le premier workflow PostgreSQL a détecté une erreur de fixture : le statut `Approuvé` exige `decided_by_id` **et** `decided_at`, conformément à la contrainte `ck_supplier_access_requests_decision_trace`. La fixture a été corrigée en fournissant aussi la date et le commentaire de décision. Ce n'était pas un défaut du code applicatif ni une modification de schéma.
+- Commit du test corrigé : `c8300d3eb8cef7d2b7d9c32b074c2c4961b7ab28`.
+- Workflows Push `46004867979` et Pull Request `46004879203` : **5/5 jobs réussis chacun**.
+- Backend : **532 passed, 54 skipped, 1 warning**. PostgreSQL Integration : **53 passed, 1 warning**. Frontend, Compose Smoke et Production Runtime Smoke : succès.
+- Les messages PostgreSQL `ERROR` observés dans les logs d'intégration correspondent aux tests négatifs de contraintes, FK et append-only ; le job est terminé avec succès.
+- Les événements `REVOKE_SUPPLIER_ACCESS` et `TERMINATE_SUPPLIER_ASSET_LINK` sont vérifiés dans l'outbox. Le test ne prétend pas valider toute la matrice JWT/rôles ni l'expiration automatique.
+- Aucun changement applicatif, migration ou modification de schéma dans cette tranche : ajout de couverture d'intégration PostgreSQL.
+
+### Prochaine tranche prioritaire
+
+1. Couvrir l'expiration d'une autorisation réellement échue, puis la terminaison du lien, avec conservation de la trace d'audit.
+2. Étendre le parcours PostgreSQL aux décisions d'approbation et aux revues maintenue/réduite, avec des acteurs distincts lorsque les règles de séparation des tâches l'exigent.
+3. Construire la matrice HTTP JWT route × rôle × opération pour les endpoints Supplier (demande, décision, revue, révocation, expiration, gestion des liens).
+4. Reprendre les contrôles CSV transactionnels/concurrents et l'équivalence pagination/export.
+5. Obtenir des plans `EXPLAIN (ANALYZE, BUFFERS)` sur une volumétrie représentative avant toute décision d'indexation.
