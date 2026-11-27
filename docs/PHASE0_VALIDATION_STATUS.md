@@ -1339,3 +1339,27 @@ Cette section remplace les anciens états intermédiaires datés du 21 novembre 
 - Production runtime smoke : images durcies, migrations de production, démarrage backend/frontend, health/TLS/proxy/isolement et vérifications parser réussis.
 - Le commit documentaire `e442ba4ea805408e3c867b1e92ff15e30d1c8acb` a également un workflow terminé avec succès. La PR #1 reste ouverte, Draft et non fusionnée.
 - Limite de portée : ces preuves sont celles du pipeline GitHub CI avec environnements et secrets éphémères. Elles ne remplacent pas une restauration sur l'infrastructure cible, ni la mesure de RPO/RTO, la validation des sauvegardes offsite/immutables, la supervision et l'acceptation des risques par les responsables.
+
+
+## Validation checkpoint — 27 novembre 2026 (HEAD 1e93f80)
+
+- Branche contrôlée : `chore/phase0-stabilization`.
+- HEAD exact : `1e93f80e3a31da782f2eac1865797ec25063dc88`.
+- PR #1 : ouverte, Draft, non fusionnée ; la branche cible `main` n'a pas été modifiée.
+- Workflow GitHub Actions `45962418271`, déclenché sur ce SHA exact : **5/5 jobs réussis**.
+  - Backend : **460 passed, 43 skipped**.
+  - PostgreSQL integration : **42 passed**.
+  - Frontend : build réussi.
+  - Compose smoke : configuration et profil durci validés ; parser isolé, authentification, refus fail-closed à l'indisponibilité, ClamAV sain et détection EICAR validés.
+  - Production runtime smoke : images de production, migrations, démarrage des services, health checks, TLS/proxy et isolation réseau validés avec secrets et certificat éphémères.
+- Les tests PostgreSQL incluent les scénarios de concurrence du rate limiting distribué (25 tentatives concurrentes depuis une IP et 12 IP distinctes sur un même compte), ainsi que les tests de cycle de vie administrateur.
+- Le test paramétré `test_each_security_mutation_invalidates_existing_access_and_refresh_sessions` couvre les anciennes sessions après changement de rôle, désactivation, reset MFA et révocation explicite.
+- Les avertissements de dépréciation Node.js 20 des actions GitHub apparaissent dans les logs de fin de jobs ; ils n'ont pas fait échouer les jobs. Ils devront être traités dans une tâche de maintenance CI, sans confondre cet avertissement d'outillage avec un défaut applicatif.
+
+### Limites et critères non levés
+
+- Les tests CI ne démontrent pas la restauration d'une sauvegarde chiffrée/offsite/WAL sur l'infrastructure cible, ni des mesures RPO/RTO approuvées.
+- La recette avec les vrais secrets, certificats, DNS, reverse proxy, règles réseau et supervision de l'environnement cible reste à faire.
+- Les seuils de rate limiting et la liste des réseaux proxy de confiance doivent être confirmés par l'exploitant réseau/sécurité ; les valeurs actuelles sont des valeurs de code, pas une politique opérationnelle approuvée.
+- La PR #1 comprend 219 fichiers modifiés et environ 27 136 additions / 1 046 suppressions par rapport à sa base déclarée. Une revue humaine exhaustive et l'approbation avant merge restent nécessaires.
+- **Décision : Phase 0 non clôturée.** La CI sur ce HEAD est verte, mais les critères opérationnels, la revue humaine et l'acceptation des risques résiduels ne sont pas encore satisfaits.
