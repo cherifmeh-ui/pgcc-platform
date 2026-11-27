@@ -1320,3 +1320,11 @@ Cette section remplace les anciens états intermédiaires datés du 21 novembre 
 - Le correctif garantissant `retired_at` lors de la création API et de l'import CSV est donc couvert par la suite backend validée. La CI PostgreSQL confirme à nouveau migrations, dérive du schéma, chemin legacy upgrade/downgrade et sauvegarde/restauration.
 - HEAD documentaire courant : `8523d62fb5796f0a81814f6f2b0020f44c3b67c2` (mise à jour de ce relevé). Le workflow de code est rattaché à `a1d94d1` ; cette modification documentaire n'altère pas le code testé.
 - PR #1 reste ouverte, Draft et non fusionnée. La Phase 0 reste ouverte jusqu'aux gates opérationnels et à la revue humaine déjà listés.
+
+
+### 27 novembre 2026 — nettoyage de l'avertissement de fixture DOCX
+
+- Le workflow `45958578283` sur le HEAD `a77606cdcf8e7adf20177a2d7b111945c19db2cb` a terminé avec succès : Backend, PostgreSQL integration, Frontend, Compose smoke et Production runtime smoke (**5/5 jobs**). Le backend rapporte **460 tests réussis et 43 ignorés**.
+- Les logs backend ne contiennent plus l'avertissement `coroutine was never awaited` précédemment observé dans le test de collision de référence des risques. Le seul avertissement pytest restant provient du test DOCX qui crée intentionnellement une entrée ZIP dupliquée.
+- Le test `test_docx_archive_rejects_duplicate_entries` capture désormais explicitement ce `UserWarning` attendu avec `pytest.warns`, afin de conserver le scénario de sécurité sans polluer le résumé de test.
+- Ce changement est un nettoyage de test uniquement ; son exécution doit être confirmée par un workflow sur le nouveau HEAD avant de conclure à un résumé sans avertissement.
