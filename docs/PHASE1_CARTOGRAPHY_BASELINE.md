@@ -185,3 +185,27 @@ Phase 1 est **démarrée**, mais aucun sous-jalon fonctionnel n'est déclaré te
 2. Ajouter/renforcer la validation PostgreSQL d'import et de rollback si le pipeline d'intégration permet un test isolé sans pollution des données.
 3. Construire une matrice de tests HTTP authentifiés pour les routes Asset (lecture, mutation, export) et les permissions croisées Asset/Risk.
 4. Poursuivre les scénarios de cycle de vie et de concurrence.
+
+
+### Tranche RBAC HTTP — routes Cartographie réellement exposées
+
+- HEAD précédent contrôlé : `a8e2d69953512ee9862f18b980ba0f65810b90a0`.
+- Les deux workflows associés à ce HEAD sont désormais terminés avec succès, chacun avec 5/5 jobs réussis : backend, frontend, PostgreSQL integration, Compose smoke et production runtime smoke.
+- Le job backend a exécuté `486 passed, 43 skipped`. Le job PostgreSQL d'une exécution a exécuté `42 passed`, avec upgrade/downgrade des migrations et sauvegarde/restauration vérifiés.
+- Constat : la matrice de permission testait directement la dépendance `require_permission`, mais pas les réponses HTTP des routes montées.
+- Correction de couverture : ajout de `backend/tests/test_asset_http_authorization.py`, qui monte le routeur Asset dans une application FastAPI isolée et vérifie :
+  - Viewer refusé sur le graphe, sans requête métier ;
+  - Auditor autorisé sur le graphe ;
+  - Auditor autorisé à exporter le CSV et événement d'audit déclenché ;
+  - Executive et Viewer refusés sur l'export ;
+  - Auditor refusé sur la création d'actif, sans écriture.
+- Les tests injectent un utilisateur de test via la surcharge de dépendance `get_current_user` : ils valident le chemin HTTP et la politique RBAC des routes, mais ne constituent pas un test JWT réel bout en bout. L'authentification JWT, la cohérence du rôle et `auth_version` restent couvertes par les tests d'authentification dédiés.
+- Commit : `4673d9d2c84bb21a1476012ce8d1bfe59ec4ba1f`.
+- CI de ce commit : workflow Push déclenché ; résultat complet encore en attente au moment de la rédaction.
+
+### Prochaine tranche
+
+1. Vérifier les cinq jobs CI du commit HTTP RBAC.
+2. Ajouter des tests HTTP authentifiés avec JWT si les fixtures d'intégration existantes permettent de réutiliser proprement le cycle de vie DB/test ; ne pas dupliquer un faux système d'authentification.
+3. Auditer les filtres communs pagination/export, notamment la cohérence des champs et la protection des attributs sensibles dans les exports.
+4. Compléter la matrice de cycle de vie et de concurrence PostgreSQL.
