@@ -377,3 +377,27 @@ Phase 1 est **démarrée**, mais aucun sous-jalon fonctionnel n'est déclaré te
 3. Examiner les permissions et les accès DB sur les autres routes Asset↔Risk et Asset↔Supplier, puis couvrir les refus et succès par rôle.
 4. Poursuivre l'inventaire des modèles User/organisation avant toute évolution du rattachement owner/custodian/direction.
 5. Garder ouvertes les décisions métier relatives à la confidentialité des exports CSV et à la validation des responsables d'actifs.
+
+
+### Tranche JWT réel sur routes Cartographie — validation CI complète
+
+- HEAD de code validé : `4c8f49b20710bc4ee8e0a612b40129d600617eca`.
+- Workflows Push `45978806087` et Pull Request `45978815233` : **5/5 jobs réussis chacun**.
+- Backend : **526 passed, 49 skipped, 1 warning** sur les deux workflows.
+- PostgreSQL Integration : **48 passed** sur les deux workflows.
+- Frontend, Compose Smoke et Production Runtime Smoke : succès sur les deux workflows.
+- Trois tests HTTP supplémentaires utilisent la signature JWT réelle (HS256 de test) et la dépendance `get_current_user` réelle, sans override de l'authentification :
+  - JWT d'auditeur valide : accès autorisé au graphe Cartographie.
+  - `auth_version` périmé : refus HTTP 401 après la seule lecture de l'utilisateur, sans requête métier Cartographie.
+  - rôle du JWT différent du rôle courant en base : refus HTTP 403 avant toute requête métier.
+- Ces tests complètent, sans les remplacer, les tests d'authentification, de rotation et de révocation des sessions déjà présents. Ils ne simulent pas encore un parcours navigateur complet login → MFA → cookies → refresh → accès à la route.
+- Commit : `4c8f49b20710bc4ee8e0a612b40129d600617eca`.
+- Aucune migration de schéma n'a été introduite dans cette tranche.
+- PR #1 reste ouverte, Draft et non fusionnée ; `main` reste inchangée.
+
+### Prochaine tranche
+
+1. Couvrir le cycle HTTP complet login/MFA/refresh/logout avec cookies réels et session PostgreSQL, en réutilisant les tests de rotation/révocation déjà existants.
+2. Étendre les tests JWT aux routes Risques↔Cartographie et Fournisseurs↔Cartographie, y compris les rôles Executive, Auditor et Viewer.
+3. Profiler les requêtes de l'analyse d'impact et obtenir des plans `EXPLAIN (ANALYZE, BUFFERS)` sur un volume représentatif avant toute décision d'index.
+4. Reprendre l'analyse des modèles d'organisation et de responsabilité des actifs, sans migration destructive.
