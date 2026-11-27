@@ -12,12 +12,13 @@ from sqlalchemy.ext.asyncio import async_sessionmaker, create_async_engine
 from unittest.mock import AsyncMock, MagicMock
 
 from app.api.v1.endpoints.assets import (
-    AssetRiskLinkCreate, RelationshipCreate, create_asset_relationship,
-    link_asset_to_risk,
+    AssetRiskLinkCreate, AssetUpdate, RelationshipCreate, create_asset_relationship,
+    link_asset_to_risk, retire_asset, update_asset,
 )
 from app.models.action_item import ActionItem  # register Risk.actions mapper target before ORM use
 from app.api.v1.endpoints.risks import delete_risk
 from app.models.asset import Asset, AssetRelationship, AssetRiskLink
+from app.models.audit_outbox import AuditOutbox
 from app.models.risk import Risk
 
 DATABASE_URL = os.getenv("PGCC_INTEGRATION_DATABASE_URL")
@@ -202,5 +203,152 @@ async def test_concurrent_asset_risk_link_and_risk_delete_are_serialized(monkeyp
             ))
             await cleanup.execute(delete(Risk).where(Risk.id == risk.id))
             await cleanup.execute(delete(Asset).where(Asset.id == asset.id))
+            await cleanup.commit()
+        await engine.dispose()
+
+@pytest.mark.asyncio
+async def test_asset_relationship_history_survives_retirement_and_reactivation():
+    """Retirement preserves existing edges; reactivation allows new edges again."""
+    engine = create_async_engine(DATABASE_URL, pool_size=4, max_overflow=0)
+    sessions = async_sessionmaker(engine, expire_on_commit=False)
+    asset_a_id, asset_b_id, asset_c_id = uuid4(), uuid4(), uuid4()
+    user = MagicMock(email="phase1-relationship-lifecycle@example.invalid")
+    relationship_ids = []
+    try:
+        async with sessions() as setup:
+            setup.add_all([
+                Asset(
+                    id=asset_a_id, reference=f"REL-LIFE-A-{asset_a_id.hex[:8]}",
+                    name="Relationship lifecycle A", asset_type="hardware",
+                    lifecycle_status="Actif",
+                ),
+                Asset(
+                    id=asset_b_id, reference=f"REL-LIFE-B-{asset_b_id.hex[:8]}",
+                    name="Relationship lifecycle B", asset_type="hardware",
+                    lifecycle_status="Actif",
+                ),
+                Asset(
+                    id=asset_c_id, reference=f"REL-LIFE-C-{asset_c_id.hex[:8]}",
+                    name="Relationship lifecycle C", asset_type="hardware",
+                    lifecycle_status="Actif",
+                ),
+            ])
+            await setup.commit()
+
+        async with sessions() as db:
+            first = await create_asset_relationship(
+                asset_id=asset_a_id,
+                data=RelationshipCreate(
+                    target_asset_id=asset_b_id,
+                    relationship_type="supports",
+                    description="Historical relationship retained after retirement",
+                ),
+                request=_request(),
+                db=db,
+                current_user=user,
+            )
+            relationship_ids.append(first.id)
+
+        async with sessions() as db:
+            await retire_asset(
+                asset_id=asset_a_id, request=_request(), db=db, current_user=user,
+            )
+
+        async with sessions() as verify:
+            historical = (
+                await verify.execute(
+                    select(AssetRelationship).where(
+                        AssetRelationship.source_asset_id == asset_a_id,
+                        AssetRelationship.target_asset_id == asset_b_id,
+                    )
+                )
+            ).scalars().all()
+            assert len(historical) == 1
+            relationship_ids.extend(item.id for item in historical)
+
+        async with sessions() as db:
+            with pytest.raises(HTTPException) as exc:
+                await create_asset_relationship(
+                    asset_id=asset_a_id,
+                    data=RelationshipCreate(
+                        target_asset_id=asset_c_id,
+                        relationship_type="supports",
+                    ),
+                    request=_request(),
+                    db=db,
+                    current_user=user,
+                )
+            assert exc.value.status_code == 409
+
+        async with sessions() as db:
+            await update_asset(
+                asset_id=asset_a_id,
+                data=AssetUpdate(lifecycle_status="Actif"),
+                request=_request(),
+                db=db,
+                current_user=user,
+            )
+
+        async with sessions() as db:
+            second = await create_asset_relationship(
+                asset_id=asset_a_id,
+                data=RelationshipCreate(
+                    target_asset_id=asset_c_id,
+                    relationship_type="supports",
+                    description="New relationship after reactivation",
+                ),
+                request=_request(),
+                db=db,
+                current_user=user,
+            )
+            relationship_ids.append(second.id)
+
+        async with sessions() as verify:
+            persisted = await verify.get(Asset, asset_a_id)
+            edges = (
+                await verify.execute(
+                    select(AssetRelationship).where(
+                        AssetRelationship.source_asset_id == asset_a_id
+                    )
+                )
+            ).scalars().all()
+            actions = (
+                await verify.execute(
+                    select(AuditOutbox.payload["action"].astext).where(
+                        AuditOutbox.payload["resource_id"].astext.in_(
+                            [str(asset_a_id), *[str(value) for value in relationship_ids]]
+                        )
+                    )
+                )
+            ).scalars().all()
+            assert persisted.lifecycle_status == "Actif"
+            assert persisted.retired_at is None
+            assert {
+                (edge.source_asset_id, edge.target_asset_id) for edge in edges
+            } == {(asset_a_id, asset_b_id), (asset_a_id, asset_c_id)}
+            assert "RETIRE" in actions
+            assert "REACTIVATE" in actions
+            assert actions.count("CREATE_RELATIONSHIP") == 2
+    finally:
+        async with sessions() as cleanup:
+            await cleanup.execute(
+                delete(AuditOutbox).where(
+                    AuditOutbox.payload["resource_id"].astext.in_(
+                        [str(asset_a_id), str(asset_b_id), str(asset_c_id),
+                         *[str(value) for value in relationship_ids]]
+                    )
+                )
+            )
+            await cleanup.execute(
+                delete(AssetRelationship).where(
+                    or_(
+                        AssetRelationship.source_asset_id.in_([asset_a_id, asset_b_id, asset_c_id]),
+                        AssetRelationship.target_asset_id.in_([asset_a_id, asset_b_id, asset_c_id]),
+                    )
+                )
+            )
+            await cleanup.execute(
+                delete(Asset).where(Asset.id.in_([asset_a_id, asset_b_id, asset_c_id]))
+            )
             await cleanup.commit()
         await engine.dispose()
