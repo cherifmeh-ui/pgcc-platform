@@ -137,3 +137,14 @@ Le baseline `0001_initial` appelle `Base.metadata.create_all()` à partir d'un e
 ### Vérification PostgreSQL du backfill SHA-256
 
 Le job d'intégration crée désormais, sur une base migrée jusqu'à `0024_audit_outbox`, un document historique contenant un binaire sans empreinte. Après migration vers `head`, il compare le SHA-256 persisté à l'empreinte calculée indépendamment par `sha256sum`. Il répète ensuite le contrôle après downgrade vers `0025_user_auth_version` puis nouvel upgrade vers `head`. Le test d'accès documentaire PostgreSQL altère aussi le binaire tout en conservant l'empreinte d'origine et attend HTTP 409 au téléchargement.
+
+
+## Evidence consolidée — 27 novembre 2026
+
+Les sections historiques ci-dessus décrivent les états observés à leurs dates respectives. Elles sont supersédées pour l'état actuel par les preuves suivantes :
+
+- Workflow `45961991384`, commit code `ed0e2739d026c2b8192b9e7d9f529bfc06ef28ca`, PostgreSQL 16 : migration base neuve jusqu'à la tête Alembic, contrôle de dérive SQLAlchemy/PostgreSQL, upgrade depuis un schéma hérité, downgrade/upgrade de la contrainte de conservation des actions et sauvegarde/restauration PostgreSQL réussis.
+- Suite PostgreSQL : **42 passed**. Elle couvre notamment sessions, graphe d'actifs, liens fournisseurs, intégrité des risques, conservation des actions, cycle de vie documentaire/RAG, ACL, unicité des uploads, journal append-only et outbox.
+- Le scénario backup/restore est un test CI automatisé avec base jetable et dump restauré dans une base de test. Il ne constitue pas un exercice de restauration sur l'infrastructure cible ni une preuve de sauvegarde offsite/immutable.
+- La tête Alembic effective doit être confirmée par `alembic heads` sur le commit testé avant toute exécution opérationnelle. Ne pas reprendre les références historiques `0024_audit_outbox` comme tête actuelle : les migrations `0025` à `0031` existent désormais.
+- Restent à réaliser et consigner avec responsables : sauvegardes chiffrées et WAL/PITR, rétention et immutabilité/offsite, restauration sur environnement cible, mesures RPO/RTO, supervision/alertes et validation humaine de la procédure.
