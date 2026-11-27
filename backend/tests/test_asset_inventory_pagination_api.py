@@ -57,3 +57,53 @@ async def test_asset_inventory_page_returns_zero_pages_for_empty_inventory():
     assert response["items"] == []
     assert response["total"] == 0
     assert response["pages"] == 0
+
+
+def test_canonical_inventory_filters_cover_all_shared_dimensions():
+    from sqlalchemy.dialects import postgresql
+    from app.api.v1.endpoints.assets import _build_asset_inventory_filters
+
+    filters = _build_asset_inventory_filters(
+        q="  serveur  ",
+        asset_type="hardware",
+        criticality="Critique",
+        lifecycle_status="Actif",
+        direction=" DI ",
+        owner=" Exploitation ",
+        classification="Confidentiel",
+        location=" Tunis ",
+        include_retired=False,
+    )
+    sql = " AND ".join(
+        str(item.compile(dialect=postgresql.dialect(), compile_kwargs={"literal_binds": True}))
+        for item in filters
+    )
+
+    assert "assets.retired_at IS NULL" in sql
+    assert "assets.lifecycle_status NOT IN ('Retiré', 'Décommissionné')" in sql
+    assert "assets.name ILIKE '%serveur%'" in sql
+    assert "assets.reference ILIKE '%serveur%'" in sql
+    assert "assets.hostname ILIKE '%serveur%'" in sql
+    assert "assets.fqdn ILIKE '%serveur%'" in sql
+    assert "assets.asset_type = 'hardware'" in sql
+    assert "assets.criticality = 'Critique'" in sql
+    assert "assets.lifecycle_status = 'Actif'" in sql
+    assert "assets.direction ILIKE 'DI'" in sql
+    assert "assets.owner ILIKE '%Exploitation%'" in sql
+    assert "assets.classification = 'Confidentiel'" in sql
+    assert "assets.location ILIKE '%Tunis%'" in sql
+
+
+def test_canonical_inventory_filters_can_explicitly_include_retired_assets():
+    from sqlalchemy.dialects import postgresql
+    from app.api.v1.endpoints.assets import _build_asset_inventory_filters
+
+    filters = _build_asset_inventory_filters(include_retired=True)
+    sql = " AND ".join(
+        str(item.compile(dialect=postgresql.dialect(), compile_kwargs={"literal_binds": True}))
+        for item in filters
+    )
+
+    assert filters == []
+    assert "retired_at" not in sql
+    assert "lifecycle_status NOT IN" not in sql
