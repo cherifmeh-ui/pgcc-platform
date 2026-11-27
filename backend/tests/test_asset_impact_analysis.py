@@ -59,3 +59,16 @@ def test_relationship_creation_rejects_any_retirement_marker():
     assert not _relationship_assets_are_active([active_marker, decommissioned_status])
     assert not _relationship_assets_are_active([active_marker, marker_only])
     assert not _relationship_assets_are_active([active_marker])
+
+
+
+def test_impact_traverses_large_dependency_chain_without_recursion():
+    # Exercise a long graph while preserving nearest-dependent ordering.
+    nodes = [UUID(int=index + 100) for index in range(1500)]
+    edges = [(nodes[index + 1], nodes[index]) for index in range(len(nodes) - 1)]
+
+    result = _compute_asset_impact(nodes[0], edges)
+
+    assert len(result) == len(nodes) - 1
+    assert result[0] == (nodes[1], 1)
+    assert result[-1] == (nodes[-1], len(nodes) - 1)
