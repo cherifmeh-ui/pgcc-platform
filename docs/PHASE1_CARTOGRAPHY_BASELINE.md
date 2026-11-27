@@ -699,3 +699,42 @@ fournisseurs avec JWT et base réelle (décision, revue, révocation, expiration
 terminaison). Cette extension, ainsi que les contrôles CSV transactionnels/
 concurrents, pagination et équivalence export, reste au backlog. La Phase 0
 demeure ouverte.
+
+
+## Complément — cycle complet fournisseur via HTTP/JWT et PostgreSQL (27/11/2026)
+
+Le test `test_supplier_access_full_lifecycle_over_http_with_real_jwt_and_postgres`
+dans `backend/tests/test_supplier_access_lifecycle_postgres.py` valide
+maintenant le cycle métier complet à travers les routes FastAPI et la base
+PostgreSQL migrée :
+
+- un premier administrateur authentifié crée la demande ;
+- un second administrateur authentifié l'approuve (l'identité distincte
+  vérifie l'interdiction d'auto-approbation) ;
+- le second administrateur révoque l'autorisation ;
+- il termine ensuite la relation fournisseur-actif ;
+- le test relit les états persistés et contrôle les événements d'audit
+  `CREATE_SUPPLIER_ACCESS_REQUEST`, `REVOKE_SUPPLIER_ACCESS` et
+  `TERMINATE_SUPPLIER_ASSET_LINK`.
+
+Les deux comptes sont de vrais utilisateurs PostgreSQL ; les access tokens
+sont signés et validés par la dépendance d'authentification de l'application.
+Les appels passent par `TestClient`, sans remplacer la dépendance JWT par
+un utilisateur simulé.
+
+**Résultats CI sur le SHA `ca0716989be7c08bfa892115347fe85de1d89ff6`** —
+workflow Push `46013811517` : **5/5 jobs réussis**.
+- Backend : **542 passed, 57 skipped, 1 warning**.
+- PostgreSQL Integration : **56 passed, 1 warning** ; le cycle complet HTTP/JWT
+  et PostgreSQL est inclus dans ce décompte.
+- Frontend : build réussi.
+- Compose Smoke : stack, API/proxy, parser isolé, authentification, refus
+  fail-closed et verdicts ClamAV sain/EICAR réussis.
+- Production Runtime Smoke : migrations, démarrage, health, TLS/proxy,
+  isolation réseau et parcours parser réussis.
+
+**Portée** : la création, l'approbation, la révocation et la terminaison sont
+désormais couvertes de bout en bout. Les opérations de revue périodique et
+d'expiration restent à ajouter à ce parcours PostgreSQL HTTP/JWT ; les tests
+HTTP de refus RBAC de l'auditeur existent déjà pour ces deux opérations.
+La Phase 0 reste ouverte.
