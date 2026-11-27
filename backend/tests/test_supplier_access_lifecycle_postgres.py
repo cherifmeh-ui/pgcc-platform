@@ -3,7 +3,7 @@ from __future__ import annotations
 
 import asyncio
 import os
-from datetime import date, timedelta
+from datetime import date, datetime, timedelta, timezone
 from unittest.mock import AsyncMock, MagicMock
 from uuid import uuid4
 
@@ -235,6 +235,8 @@ async def test_approved_access_blocks_link_termination_until_revocation():
                 status="Approuvé",
                 requested_by_id=actor_id,
                 decided_by_id=actor_id,
+                decided_at=datetime.now(timezone.utc),
+                decision_comment="Approbation initiale de test",
             )
             setup.add(access_request)
             await setup.commit()
