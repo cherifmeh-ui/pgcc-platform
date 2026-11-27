@@ -180,6 +180,7 @@ def test_docx_archive_rejects_duplicate_entries():
     buffer = io.BytesIO()
     with zipfile.ZipFile(buffer, "w") as archive:
         archive.writestr("word/document.xml", "<document/>")
-        archive.writestr("word/document.xml", "<document>second</document>")
+        with pytest.warns(UserWarning, match="Duplicate name"):
+            archive.writestr("word/document.xml", "<document>second</document>")
     with pytest.raises(ValueError, match="entrées dupliquées"):
         document_extractor._validate_docx_archive(buffer.getvalue())
