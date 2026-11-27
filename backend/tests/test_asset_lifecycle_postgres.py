@@ -20,7 +20,7 @@ from app.models.supplier import Supplier, SupplierAccessRequest, SupplierAssetLi
 from app.models.user import User
 from app.api.v1.endpoints.suppliers import (
     SupplierAccessRequestCreate, SupplierAssetLinkCreate,
-    create_supplier_access_request, link_supplier_asset,)
+    create_supplier_access_request, link_supplier_asset, terminate_supplier_asset_link,)
 
 
 DATABASE_URL = os.getenv("PGCC_INTEGRATION_DATABASE_URL")
@@ -1001,8 +1001,8 @@ async def test_asset_risk_link_creation_and_retirement_are_serialized():
 
 
 @pytest.mark.asyncio
-async def test_supplier_access_request_creation_and_asset_retirement_are_serialized():
-    """An access request cannot become open after its asset has been retired."""
+async def test_supplier_access_request_creation_and_link_termination_are_serialized():
+    """An access request cannot become open after its supplier-asset link is terminated."""
     engine = create_async_engine(DATABASE_URL, pool_size=5, max_overflow=0)
     sessions = async_sessionmaker(engine, expire_on_commit=False)
     user_id, supplier_id, asset_id, link_id = uuid4(), uuid4(), uuid4(), uuid4()
@@ -1075,33 +1075,34 @@ async def test_supplier_access_request_creation_and_asset_retirement_are_seriali
                 except HTTPException as exc:
                     return exc.status_code
 
-        async def retire():
+        async def terminate_link():
             async with sessions() as db:
                 try:
-                    await retire_asset(
-                        asset_id=asset_id,
+                    await terminate_supplier_asset_link(
+                        supplier_id=supplier_id,
+                        link_id=link_id,
                         request=_request(),
                         db=db,
                         current_user=MagicMock(email=user.email),
                     )
-                    return 204
+                    return 200
                 except HTTPException as exc:
                     return exc.status_code
 
-        outcomes = await asyncio.gather(request_access(), retire())
-        assert outcomes in ([201, 409], [422, 204])
+        outcomes = await asyncio.gather(request_access(), terminate_link())
+        assert outcomes in ([201, 409], [404, 200])
 
         async with sessions() as verify:
-            persisted_asset = await verify.get(Asset, asset_id)
+            persisted_link = await verify.get(SupplierAssetLink, link_id)
             open_requests = (
                 await verify.execute(
                     select(SupplierAccessRequest.id).where(
-                        SupplierAccessRequest.asset_id == asset_id,
+                        SupplierAccessRequest.supplier_asset_link_id == link_id,
                         SupplierAccessRequest.status.in_(("Demandé", "Approuvé", "Suspendu")),
                     )
                 )
             ).scalars().all()
-            assert (persisted_asset.lifecycle_status == "Retiré") == (not open_requests)
+            assert (persisted_link.status == "Terminé") == (not open_requests)
     finally:
         async with sessions() as cleanup:
             request_ids = (
