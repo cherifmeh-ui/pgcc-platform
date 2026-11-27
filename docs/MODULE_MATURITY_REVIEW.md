@@ -761,3 +761,20 @@ Status: targeted code review recorded; additional runtime/API tests remain requi
 - Compose a validé le parser isolé, l'authentification et le mode fail-closed, ainsi que ClamAV propre/EICAR. Le smoke de production a validé le démarrage avec secrets/certificat éphémères, migrations, TLS, proxy et isolation réseau.
 - Workflow documentaire `45962009531` sur `e442ba4` : terminé avec succès. La note de validation a ensuite été mise à jour sur cette branche ; vérifier le workflow déclenché par cette dernière modification avant d'affirmer qu'elle est elle-même couverte.
 - Les preuves restent des tests automatisés CI. La Phase 0 reste ouverte pour les sauvegardes chiffrées/WAL et immutables/offsite, l'exercice de restauration et RPO/RTO sur environnement cible, supervision/alertes, validation des secrets/certificats réels, revue humaine et acceptation formelle des risques résiduels.
+
+
+## Mise à jour de maturité — 27 novembre 2026
+
+Les constats historiques des sections initiales ci-dessus décrivent le code observé au 21 novembre et ne doivent plus être lus comme l'état actuel des modules concernés. Les revues ciblées ultérieures et les tests CI apportent les éléments suivants :
+
+- **Authentification / sessions / MFA :** refresh token transporté par cookie HttpOnly, rotation persistée, détection de rejeu, révocation, invalidation par `auth_version`, MFA chiffré et contrôle d'origine ; tests unitaires et PostgreSQL. Les validations d'exploitation des secrets et de la topologie proxy restent à réaliser.
+- **RBAC / administration :** les cinq routes d'administration des comptes exigent `users:manage`, réservé à admin ; revalidation de l'acteur sous verrou, protection du dernier administrateur MFA, révocation des sessions et audit transactionnel. Les tests PostgreSQL couvrent les mutations administratives et l'invalidation des tokens.
+- **Rate limiting :** compteurs PostgreSQL partagés entre instances, identifiants HMAC, IP client issue du pair immédiat sauf proxy explicitement approuvé, mode fail-closed si persistance indisponible, Retry-After et nettoyage après 48 h. Les tests PostgreSQL couvrent 25 requêtes concurrentes depuis une IP et 12 IP distinctes ciblant un même compte. Les seuils, métriques, alertes et CIDR proxy restent à approuver par l'exploitation.
+- **Documents / RAG :** ACL de classification et de portée propriétaire/département/role appliquée à la récupération SQL, contrôle d'empreinte SHA-256, parser isolé et antivirus ClamAV. Compose et production smoke valident l'extraction, le fail-closed parser et la détection EICAR. Les règles métier d'accès et la gestion opérationnelle des signatures antivirus restent à faire accepter.
+- **Cartographie / risques / fournisseurs :** relations Asset–Risk, Asset–Application, Asset–Asset et Supplier–Asset revues ; contraintes de base, verrous et tests de concurrence/suppression ; retrait d'actifs cohérent avec `retired_at`. Les revues ciblées n'ont pas identifié de défaut applicatif nouveau confirmé dans le dernier passage.
+- **Migrations PostgreSQL :** tête Alembic actuelle `0031_risk_action_restrict`. CI valide base neuve, upgrade depuis un schéma hérité représentatif, contrôle de dérive, downgrade/upgrade ciblé et dump/restore sur base jetable. Ne pas confondre cette preuve avec une restauration de sauvegarde de production ou un test WAL/PITR.
+- **Environnement :** workflow `45962418271` sur le HEAD `1e93f80e3a31da782f2eac1865797ec25063dc88` terminé avec 5/5 jobs réussis : Backend 460 passed/43 skipped, PostgreSQL 42 passed, Frontend, Compose smoke et Production runtime smoke.
+
+### Statut global
+
+La maturité automatisée du socle s'est nettement améliorée, mais **Phase 0 reste ouverte**. Restent notamment : revue humaine exhaustive de la PR #1 (219 fichiers modifiés), exercice de restauration chiffrée/offsite avec WAL/PITR sur l'environnement cible, RPO/RTO mesurés et approuvés, validation des vrais secrets/certificats, revue de la topologie proxy/réseau, supervision/alertes et acceptation formelle des risques résiduels. Les phases fonctionnelles suivantes ne sont pas considérées comme démarrées dans ce jalon.
