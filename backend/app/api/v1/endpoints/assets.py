@@ -451,7 +451,15 @@ async def confirm_asset_csv_import(
     rows = preview["validated_rows"]
     for row in rows:
         await _ensure_application_exists(row["data"].get("application_id"), db)
-    assets = [Asset(**row["data"]) for row in rows]
+    assets = [
+        Asset(
+            **{
+                **row["data"],
+                "retired_at": _lifecycle_retirement_marker(row["data"].get("lifecycle_status"), None),
+            }
+        )
+        for row in rows
+    ]
     db.add_all(assets)
     try:
         await db.flush()
@@ -665,7 +673,9 @@ async def create_asset(
     current_user: User = require_permission("assets", "create"),
 ):
     await _ensure_application_exists(data.application_id, db)
-    asset = Asset(**data.model_dump())
+    asset_data = data.model_dump()
+    asset_data["retired_at"] = _lifecycle_retirement_marker(asset_data.get("lifecycle_status"), None)
+    asset = Asset(**asset_data)
     db.add(asset)
     try:
         await db.flush()
