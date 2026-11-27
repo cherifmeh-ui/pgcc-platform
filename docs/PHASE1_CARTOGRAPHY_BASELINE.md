@@ -843,3 +843,33 @@ un conflit concurrent et confirme que la CI exécute bien le fichier de tests.
 Restent à vérifier les collisions concurrentes sur hostname/numéro de série
 (si ces attributs doivent être uniques au niveau global), ainsi que la
 cohérence pagination/export sur les mêmes filtres. La Phase 0 reste ouverte.
+
+
+## Complément — équivalence pagination / export de l'inventaire (27/11/2026)
+
+Le test `test_asset_inventory_pagination_matches_filtered_csv_export_over_http`
+dans `backend/tests/test_asset_inventory_quality_postgres.py` vérifie les
+routes HTTP réelles avec un JWT auditeur et PostgreSQL :
+
+- trois actifs satisfont les filtres communs ; un actif d'un autre type et un
+  actif retiré doivent être exclus ;
+- les pages 1 et 2 retournent respectivement deux et un actifs, avec le même
+  total et le même nombre de pages ;
+- l'export CSV utilise exactement les mêmes filtres ;
+- l'ensemble ordonné des références exportées est identique à la concaténation
+  des références des pages ;
+- l'autorisation d'export est exécutée et son action `EXPORT` est vérifiée.
+
+**Résultats CI sur le SHA `e40286a02b3799793133732fa75d9721aa59a0d9`** —
+workflow Push `46016290040` : **5/5 jobs réussis**.
+- Backend : **542 passed, 61 skipped, 1 warning**.
+- PostgreSQL Integration : **60 passed, 1 warning**.
+- Frontend : build réussi.
+- Compose Smoke : réussi.
+- Production Runtime Smoke : réussi.
+
+La cohérence pagination/export est maintenant démontrée pour un jeu de filtres
+multi-critères, incluant l'exclusion des actifs retirés. Les prochains contrôles
+restants portent notamment sur les collisions concurrentes hostname/numéro
+de série (selon la règle métier retenue) et sur la couverture des filtres
+combinés/limites de pagination. La Phase 0 reste ouverte.
