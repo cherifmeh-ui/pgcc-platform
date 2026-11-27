@@ -681,19 +681,19 @@ async def get_asset_inventory_quality(
         select(
             func.count(Asset.id).label("total_active"),
             func.coalesce(
-                func.sum(case((func.nullif(func.btrim(Asset.owner), None).is_(None), 1), else_=0)), 0
+                func.sum(case((func.coalesce(func.btrim(Asset.owner), "") == "", 1), else_=0)), 0
             ).label("missing_owner"),
             func.coalesce(
-                func.sum(case((func.nullif(func.btrim(Asset.classification), None).is_(None), 1), else_=0)), 0
+                func.sum(case((func.coalesce(func.btrim(Asset.classification), "") == "", 1), else_=0)), 0
             ).label("missing_classification"),
             func.coalesce(
                 func.sum(case((Asset.last_inventory_date.is_(None), 1), else_=0)), 0
             ).label("missing_inventory_date"),
             func.coalesce(
-                func.sum(case((func.nullif(func.btrim(Asset.criticality), None).is_(None), 1), else_=0)), 0
+                func.sum(case((func.coalesce(func.btrim(Asset.criticality), "") == "", 1), else_=0)), 0
             ).label("missing_criticality"),
             func.coalesce(
-                func.sum(case((func.nullif(func.btrim(Asset.direction), None).is_(None), 1), else_=0)), 0
+                func.sum(case((func.coalesce(func.btrim(Asset.direction), "") == "", 1), else_=0)), 0
             ).label("missing_direction"),
             func.coalesce(
                 func.sum(case((Asset.end_of_support_date < now, 1), else_=0)), 0
