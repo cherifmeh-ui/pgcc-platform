@@ -491,3 +491,23 @@ Phase 1 est **démarrée**, mais aucun sous-jalon fonctionnel n'est déclaré te
 3. Revoir les cas limites de l'agrégation des risques et des expositions fournisseurs dans l'analyse d'impact.
 4. Terminer la revue de bout en bout du frontend Cartographie et la matrice route × rôle × opération.
 5. Consolider les critères de sortie et les preuves de non-régression dans la recette Phase 1.
+
+
+### Tranche intégrité — concurrence Asset ↔ Risk et cycle de vie
+
+- Commit de test : `50ad440c8e2c90396c8bad8356bdc6fe7373bf06` — `test(cartography): serialize risk links with asset retirement`.
+- Le nouveau test PostgreSQL `test_asset_risk_link_creation_and_retirement_are_serialized` lance en concurrence la création d'un lien actif↔risque et le retrait du même actif, puis vérifie l'état persistant de l'actif et du lien.
+- Les deux opérations verrouillent la ligne Asset avec `SELECT ... FOR UPDATE`. La sérialisation garantit que le lien est soit créé avant le retrait (et conservé comme association historique), soit refusé si le retrait est déjà effectif. Le retrait reste autorisé en présence d'un lien Asset↔Risk historique ; les liens fournisseur actifs et les demandes d'accès ouvertes sont, eux, des bloqueurs métier explicites.
+- Contrôle du code fournisseur : la création d'une relation fournisseur↔actif verrouille également l'actif ; un test PostgreSQL concurrent création de lien fournisseur/retrait existait déjà dans `test_asset_lifecycle_postgres.py`. Le chemin de création d'une demande d'accès verrouille le fournisseur, la relation fournisseur-actif et l'actif avant validation.
+- Validation du commit `50ad440c` : workflow Push `45987836209` et workflow Pull Request `45987849935`, chacun avec **5/5 jobs réussis** (backend, PostgreSQL integration, frontend, Compose smoke et Production runtime smoke). Backend : **531 passed, 51 skipped, 1 warning**. Le warning concerne une dépréciation Starlette/AnyIO ; il n'a pas fait échouer la suite.
+- Aucun changement de code applicatif ni migration de schéma dans cette tranche : ajout de couverture de concurrence et documentation uniquement.
+- Limite : les tests de concurrence valident des interleavings contrôlés par les opérations asynchrones du test, mais ne constituent pas un test de stress multi-utilisateurs prolongé ni une preuve de performance sous charge.
+- PR #1 reste ouverte, Draft et non fusionnée ; `main` reste inchangée.
+
+### Prochaine tranche d'intégrité
+
+1. Ajouter/compléter un test de concurrence entre création d'une demande d'accès fournisseur et retrait d'actif, avec vérification de l'absence d'autorisation ouverte sur un actif retiré.
+2. Vérifier les chemins de modification/réactivation d'un lien fournisseur et leur cohérence avec les demandes d'accès historiques.
+3. Finaliser la matrice route × rôle × opération pour les endpoints Asset, Risk et Supplier, en incluant refus avant toute lecture métier.
+4. Terminer les essais d'import CSV transactionnels/concurrents et l'équivalence pagination/export.
+5. Maintenir le profilage PostgreSQL représentatif comme gate séparé : aucun `EXPLAIN (ANALYZE, BUFFERS)` représentatif n'est encore disponible.
