@@ -218,7 +218,7 @@ The initial code-level review found that DOCX extraction joined paragraphs/table
 - Archival also refuses while supplier access requests are in `Demandé`, `Approuvé`, or `Suspendu` states.
 - The archive operation intentionally does not silently terminate links or revoke approvals: those actions require their own traceable workflows and actors.
 - Regression tests cover both conflict conditions.
-- **Remaining validation:** route-level role/permission tests and database integration tests are pending; review whether terminated supplier status should also block new link creation and access approvals (currently archived state is the explicit block).
+- **Validation follow-up (27 Nov 2026):** the earlier open question is resolved in the current implementation. Access requests require an approved supplier; approvals re-check supplier eligibility; new asset links reject `Suspendu` and `Terminé`; status transitions to those states require active links to be terminated and open requests/approvals to be closed first. These checks use supplier/link/asset row locks. The PostgreSQL concurrency test `test_access_request_creation_and_link_termination_are_serialized` verifies that request creation and link termination cannot leave an inconsistent active authorization. The backend and PostgreSQL suites passed in workflow `45957879528` on code HEAD `a1d94d1`. Human review of the supplier policy and production authorization remains required.
 
 - Additional safeguard: new supplier-asset relationships are blocked when the supplier is `Suspendu` or `Terminé` (HTTP 409). Existing relationships remain available for explicit termination and historical review.
 
@@ -732,3 +732,11 @@ Status: targeted code review recorded; additional runtime/API tests remain requi
 - Validation groupée des identifiants d'applications : une seule requête SQL pour l'ensemble du fichier, au lieu d'une requête par ligne.
 - Tests Backend ajoutés pour les limites de taille/lignes, les en-têtes ambigus, les colonnes supplémentaires et le traitement groupé.
 - Workflow 45886912425 sur le HEAD 4e61f518b20cc82f4a3e6a6b85f59afb0cba8076 : 4/4 jobs réussis ; les 41 tests PostgreSQL restent verts.
+
+
+### 27 November 2026 — consolidated asset/supplier lifecycle follow-up
+
+- Asset retirement is now consistently represented by both `lifecycle_status` and `retired_at` on API creation, CSV import, PATCH and DELETE. Creation/import tests were added and validated by workflow `45957879528` on code HEAD `a1d94d1646dde266b5533d22a128c83e51a6c3b0` (Backend 460 passed/43 skipped; PostgreSQL 42 passed).
+- Supplier access eligibility was re-read end-to-end: request creation requires an approved supplier and active link; approval revalidates supplier, link and asset; terminated/suspended suppliers cannot gain new asset scope; status changes and archival refuse unresolved active links or open access requests. Row locks serialize the lifecycle operations, and the PostgreSQL race test covers request creation versus link termination.
+- The previous review note suggesting terminated supplier status was not checked is superseded by the implementation and test evidence above.
+- The CI evidence does not replace a human policy review or production authorization review.
