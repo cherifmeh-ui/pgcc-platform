@@ -18,7 +18,10 @@ from app.models.asset import Asset
 from app.models.audit_outbox import AuditOutbox
 from app.models.supplier import Supplier, SupplierAccessRequest, SupplierAssetLink
 from app.models.user import User
-from app.api.v1.endpoints.suppliers import (\n    SupplierAccessRequestCreate, SupplierAssetLinkCreate,\n    create_supplier_access_request, link_supplier_asset,\n)
+from app.api.v1.endpoints.suppliers import (
+    SupplierAccessRequestCreate, SupplierAssetLinkCreate,
+    create_supplier_access_request, link_supplier_asset,)
+
 
 DATABASE_URL = os.getenv("PGCC_INTEGRATION_DATABASE_URL")
 pytestmark = pytest.mark.skipif(
