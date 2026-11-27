@@ -9,7 +9,7 @@ from uuid import UUID
 from fastapi import APIRouter, Depends, HTTPException, Query, Request, UploadFile, File, status
 from fastapi.responses import Response
 from pydantic import BaseModel, ConfigDict, Field, field_validator
-from sqlalchemy import select, func
+from sqlalchemy import select, func, case
 from sqlalchemy.exc import IntegrityError
 from sqlalchemy.orm import aliased
 from sqlalchemy.ext.asyncio import AsyncSession
@@ -488,9 +488,16 @@ async def get_asset_dependency_graph(
     """Return the active asset inventory and its explicit relationships for visualization."""
     assets_result = await db.execute(select(Asset).where(*_active_asset_filter()).order_by(Asset.name.asc()))
     assets = assets_result.scalars().all()
-    relations_result = await db.execute(select(AssetRelationship).order_by(AssetRelationship.created_at.asc()))
-    asset_ids = {asset.id for asset in assets}
-    relations = [relation for relation in relations_result.scalars().all() if relation.source_asset_id in asset_ids and relation.target_asset_id in asset_ids]
+    active_asset_ids = select(Asset.id).where(*_active_asset_filter())
+    relations_result = await db.execute(
+        select(AssetRelationship)
+        .where(
+            AssetRelationship.source_asset_id.in_(active_asset_ids),
+            AssetRelationship.target_asset_id.in_(active_asset_ids),
+        )
+        .order_by(AssetRelationship.created_at.asc())
+    )
+    relations = relations_result.scalars().all()
     return {
         "nodes": [{"id": asset.id, "reference": asset.reference, "name": asset.name, "asset_type": asset.asset_type, "criticality": asset.criticality, "direction": asset.direction, "lifecycle_status": asset.lifecycle_status, "owner": asset.owner, "location": asset.location} for asset in assets],
         "edges": [{"id": relation.id, "source": relation.source_asset_id, "target": relation.target_asset_id, "relationship_type": relation.relationship_type, "description": relation.description} for relation in relations],
@@ -667,18 +674,54 @@ async def get_asset_inventory_quality(
     current_user: User = require_permission("assets", "read"),
 ):
     """Return completeness and lifecycle indicators for the active inventory."""
-    result = await db.execute(select(Asset).where(*_active_asset_filter()))
-    assets = result.scalars().all()
-    total = len(assets)
-    missing_owner = sum(not (asset.owner or "").strip() for asset in assets)
-    missing_classification = sum(not (asset.classification or "").strip() for asset in assets)
-    missing_inventory_date = sum(asset.last_inventory_date is None for asset in assets)
-    missing_criticality = sum(not (asset.criticality or "").strip() for asset in assets)
-    missing_direction = sum(not (asset.direction or "").strip() for asset in assets)
     now = datetime.now(timezone.utc)
-    support_dates = [asset.end_of_support_date.replace(tzinfo=timezone.utc) if asset.end_of_support_date is not None and asset.end_of_support_date.tzinfo is None else asset.end_of_support_date for asset in assets]
-    overdue_support = sum(date is not None and date < now for date in support_dates)
-    support_ending_90_days = sum(date is not None and now <= date <= now + timedelta(days=90) for date in support_dates)
+    now_plus_90_days = now + timedelta(days=90)
+    active_filter = _active_asset_filter()
+    result = await db.execute(
+        select(
+            func.count(Asset.id).label("total_active"),
+            func.coalesce(
+                func.sum(case((func.nullif(func.btrim(Asset.owner), None).is_(None), 1), else_=0)), 0
+            ).label("missing_owner"),
+            func.coalesce(
+                func.sum(case((func.nullif(func.btrim(Asset.classification), None).is_(None), 1), else_=0)), 0
+            ).label("missing_classification"),
+            func.coalesce(
+                func.sum(case((Asset.last_inventory_date.is_(None), 1), else_=0)), 0
+            ).label("missing_inventory_date"),
+            func.coalesce(
+                func.sum(case((func.nullif(func.btrim(Asset.criticality), None).is_(None), 1), else_=0)), 0
+            ).label("missing_criticality"),
+            func.coalesce(
+                func.sum(case((func.nullif(func.btrim(Asset.direction), None).is_(None), 1), else_=0)), 0
+            ).label("missing_direction"),
+            func.coalesce(
+                func.sum(case((Asset.end_of_support_date < now, 1), else_=0)), 0
+            ).label("support_overdue"),
+            func.coalesce(
+                func.sum(
+                    case(
+                        (
+                            Asset.end_of_support_date.between(now, now_plus_90_days),
+                            1,
+                        ),
+                        else_=0,
+                    )
+                ),
+                0,
+            ).label("support_ending_90_days"),
+        ).where(*active_filter)
+    )
+    (
+        total,
+        missing_owner,
+        missing_classification,
+        missing_inventory_date,
+        missing_criticality,
+        missing_direction,
+        overdue_support,
+        support_ending_90_days,
+    ) = result.one()
     return {
         "total_active": total,
         "missing_owner": missing_owner,
