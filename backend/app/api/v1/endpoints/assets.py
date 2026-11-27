@@ -22,6 +22,7 @@ from app.models.risk import Risk
 from app.models.application import Application
 from app.models.user import User
 from app.services.security_logger import enqueue_audit_event, log_action  # log_action retained for compatibility with existing tests
+from app.services.asset_inventory import build_asset_inventory_filters
 from app.utils.rbac import role_has_permission
 
 router = APIRouter(prefix="/assets", tags=["Cartographie des actifs"])
@@ -498,45 +499,6 @@ async def get_asset_dependency_graph(
 
 
 @router.get("/page")
-def _build_asset_inventory_filters(
-    *,
-    q: str | None = None,
-    asset_type: AssetType | None = None,
-    criticality: Level | None = None,
-    lifecycle_status: Lifecycle | None = None,
-    direction: str | None = None,
-    owner: str | None = None,
-    classification: str | None = None,
-    location: str | None = None,
-    include_retired: bool = False,
-):
-    """Build canonical filters shared by inventory listing and CSV export."""
-    filters = []
-    if not include_retired:
-        filters.extend(_active_asset_filter())
-    if q and q.strip():
-        pattern = f"%{q.strip()}%"
-        filters.append(
-            Asset.name.ilike(pattern) | Asset.reference.ilike(pattern)
-            | Asset.hostname.ilike(pattern) | Asset.fqdn.ilike(pattern)
-        )
-    if asset_type:
-        filters.append(Asset.asset_type == asset_type)
-    if criticality:
-        filters.append(Asset.criticality == criticality)
-    if lifecycle_status:
-        filters.append(Asset.lifecycle_status == lifecycle_status)
-    if direction and direction.strip():
-        filters.append(Asset.direction.ilike(direction.strip()))
-    if owner and owner.strip():
-        filters.append(Asset.owner.ilike(f"%{owner.strip()}%"))
-    if classification and classification.strip():
-        filters.append(Asset.classification == classification)
-    if location and location.strip():
-        filters.append(Asset.location.ilike(f"%{location.strip()}%"))
-    return filters
-
-
 @router.get("/page")
 async def list_assets_page(
     q: str | None = Query(default=None, max_length=100),
@@ -554,7 +516,7 @@ async def list_assets_page(
     current_user: User = require_permission("assets", "read"),
 ):
     """Return a stable, count-bearing page of inventory records."""
-    filters = _build_asset_inventory_filters(
+    filters = build_asset_inventory_filters(
         q=q, asset_type=asset_type, criticality=criticality,
         lifecycle_status=lifecycle_status, direction=direction, owner=owner,
         classification=classification, location=location,
@@ -604,7 +566,7 @@ async def export_assets_csv(
     current_user: User = require_permission("assets", "export"),
 ):
     """Export the filtered inventory as UTF-8 CSV with spreadsheet formula protection."""
-    filters = _build_asset_inventory_filters(
+    filters = build_asset_inventory_filters(
         q=q, asset_type=asset_type, criticality=criticality,
         lifecycle_status=lifecycle_status, direction=direction, owner=owner,
         classification=classification, location=location,
