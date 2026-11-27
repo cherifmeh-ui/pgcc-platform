@@ -19,8 +19,12 @@ from app.models.audit_outbox import AuditOutbox
 from app.models.supplier import Supplier, SupplierAccessRequest, SupplierAssetLink
 from app.models.user import User
 from app.api.v1.endpoints.suppliers import (
-    SupplierAccessRequestCreate, SupplierAssetLinkCreate,
-    create_supplier_access_request, link_supplier_asset, terminate_supplier_asset_link,)
+    SupplierAccessRequestCreate,
+    SupplierAssetLinkCreate,
+    create_supplier_access_request,
+    link_supplier_asset,
+    terminate_supplier_asset_link,
+)
 
 
 DATABASE_URL = os.getenv("PGCC_INTEGRATION_DATABASE_URL")
@@ -1027,7 +1031,7 @@ async def test_supplier_access_request_creation_and_link_termination_are_seriali
     asset = Asset(
         id=asset_id,
         reference=f"PH1-ACCESS-RACE-{asset_id.hex[:8]}",
-        name="Supplier access request versus asset retirement",
+        name="Supplier access request versus supplier-link termination",
         asset_type="hardware",
         lifecycle_status="Actif",
         retired_at=None,
@@ -1112,7 +1116,7 @@ async def test_supplier_access_request_creation_and_link_termination_are_seriali
                     )
                 )
             ).scalars().all()
-            audit_ids = [str(asset_id), *[str(item) for item in request_ids]]
+            audit_ids = [str(asset_id), str(link_id), *[str(item) for item in request_ids]]
             await cleanup.execute(
                 delete(AuditOutbox).where(
                     AuditOutbox.payload["resource_id"].astext.in_(audit_ids)
