@@ -751,3 +751,13 @@ Status: targeted code review recorded; additional runtime/API tests remain requi
 - PostgreSQL integration coverage includes audit-failure rollback, stale-admin rejection, concurrent administrator demotion, access/refresh-token invalidation and session-revocation auditing. These tests passed in workflow `45957879528` (42 PostgreSQL tests).
 - A route-signature inventory across the business API endpoint modules found authentication/authorization dependencies on every inspected route. The six auth endpoints are intentionally unauthenticated at the bearer layer and instead implement their own pre-authentication token, refresh-cookie, MFA and trusted-origin checks; those flows remain covered by the backend security suite.
 - No new code defect was confirmed in this review pass. The review is static plus existing CI evidence; it is not a penetration test or a production authorization acceptance.
+
+
+### 27 novembre 2026 — clôture des preuves automatisées Cartographie et environnement
+
+- Revue des migrations `0007`, `0008`, `0010`, `0015`, `0029`, `0030` et `0031` : association Asset–Risk, cardinalité Asset–Application, restriction de suppression, relations fournisseur-actif, cohérence composite des demandes d'accès, invariants des scores de risque et conservation des plans d'action.
+- Revue des endpoints : la création d'un lien Asset–Risk verrouille l'actif puis le risque ; la suppression d'un risque verrouille le risque avant de contrôler les actions et liens associés. Les contraintes FK restent la dernière défense d'intégrité. Les tests PostgreSQL couvrent les courses lien/suppression et les dépendances opposées.
+- Workflow `45961991384` sur `ed0e273` : **5/5 jobs réussis** ; Backend 460 passed/43 skipped, PostgreSQL 42 passed, Frontend, Compose smoke et Production runtime smoke réussis.
+- Compose a validé le parser isolé, l'authentification et le mode fail-closed, ainsi que ClamAV propre/EICAR. Le smoke de production a validé le démarrage avec secrets/certificat éphémères, migrations, TLS, proxy et isolation réseau.
+- Workflow documentaire `45962009531` sur `e442ba4` : terminé avec succès. La note de validation a ensuite été mise à jour sur cette branche ; vérifier le workflow déclenché par cette dernière modification avant d'affirmer qu'elle est elle-même couverte.
+- Les preuves restent des tests automatisés CI. La Phase 0 reste ouverte pour les sauvegardes chiffrées/WAL et immutables/offsite, l'exercice de restauration et RPO/RTO sur environnement cible, supervision/alertes, validation des secrets/certificats réels, revue humaine et acceptation formelle des risques résiduels.
