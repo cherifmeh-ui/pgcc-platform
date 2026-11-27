@@ -209,3 +209,21 @@ Phase 1 est **démarrée**, mais aucun sous-jalon fonctionnel n'est déclaré te
 2. Ajouter des tests HTTP authentifiés avec JWT si les fixtures d'intégration existantes permettent de réutiliser proprement le cycle de vie DB/test ; ne pas dupliquer un faux système d'authentification.
 3. Auditer les filtres communs pagination/export, notamment la cohérence des champs et la protection des attributs sensibles dans les exports.
 4. Compléter la matrice de cycle de vie et de concurrence PostgreSQL.
+
+
+### Tranche filtres inventaire — pagination et export CSV
+
+- Constat confirmé : `GET /assets/page` et `GET /assets/export.csv` maintenaient deux copies de la même logique de filtrage. Une évolution d'un endpoint pouvait donc créer une divergence entre les actifs affichés et les actifs exportés.
+- Correction : centralisation dans `_build_asset_inventory_filters`, réutilisée par les deux endpoints. Les filtres partagés restent inchangés : recherche sur nom/référence/hostname/FQDN, type, criticité, cycle de vie, direction, responsable, classification, localisation et inclusion explicite des actifs retirés.
+- Le tri stable, la pagination, le comptage, les colonnes CSV, la protection contre l'injection de formules et l'audit de l'export sont conservés.
+- Tests ajoutés dans `backend/tests/test_asset_inventory_pagination_api.py` pour vérifier les prédicats SQL compilés, le nettoyage des paramètres textuels et le comportement explicite de `include_retired`.
+- Commits : `fa948bea840f9a5ff1cbe6eb6e9e4aae1f7d317f` (centralisation), `8a1602449431581d690aef4e3317daea078d8fe9` (restauration/validation de la route paginée après revue du diff), `40c97afa3826ff1751a7605324a9dc40ffaa9af9` (tests).
+- Revue statique du HEAD `40c97afa3826ff1751a7605324a9dc40ffaa9af9` : une seule définition du helper, une seule définition de chaque endpoint pagination/export ; l'export et la pagination appellent le helper commun.
+- CI : deux workflows ont été déclenchés pour le HEAD de tests ; ils sont en cours au moment de cette note. Aucun résultat de test n'est déclaré avant la fin des jobs.
+- Limite conservée : les tests de pagination restent en partie mockés ; ils ne remplacent pas une validation de cohérence sur une base PostgreSQL avec jeu de données réel et filtres combinés.
+
+### Contrôle de confidentialité de l'export — décision
+
+- Le CSV actuel contient notamment hostname, IP, FQDN, numéro de série et informations d'exploitation.
+- Ces champs sont des données d'inventaire sensibles, mais nécessaires à certains usages d'audit technique. Les retirer sans validation métier réduirait la valeur opérationnelle de l'export ; les conserver ne doit pas être interprété comme une autorisation générale de diffusion.
+- Décision provisoire : ne pas modifier les colonnes dans cette tranche. Conserver le contrôle RBAC `assets:export`, la journalisation de chaque export et le traitement anti-formule. Ajouter comme gate métier une validation formelle des profils autorisés, des destinataires, du stockage et de la durée de conservation des fichiers exportés. Une éventuelle séparation entre export standard et export technique sensible doit être décidée avec les responsables métier/sécurité avant migration de permissions.
