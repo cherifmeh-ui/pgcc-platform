@@ -1,4 +1,5 @@
 """Asset inventory and dependency graph API."""
+from collections import deque
 from datetime import date, datetime, timedelta, timezone
 import csv
 import io
@@ -208,9 +209,9 @@ def _compute_asset_impact(source_asset_id: UUID, dependency_pairs: list[tuple[UU
     for dependent_id, dependency_id in dependency_pairs:
         reverse_graph.setdefault(dependency_id, []).append(dependent_id)
     distances: dict[UUID, int] = {}
-    queue: list[tuple[UUID, int]] = [(source_asset_id, 0)]
+    queue = deque([(source_asset_id, 0)])
     while queue:
-        current, distance = queue.pop(0)
+        current, distance = queue.popleft()
         for dependent in reverse_graph.get(current, []):
             if dependent == source_asset_id or dependent in distances:
                 continue
