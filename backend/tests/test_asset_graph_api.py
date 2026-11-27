@@ -104,5 +104,6 @@ async def test_impact_excludes_retired_assets_from_dependency_edges():
     assert "asset_relationships.relationship_type =" in relation_sql
     assert "depends_on" in str(db.execute.await_args_list[1].args[0].compile().params.values())
     assert relation_sql.count("retired_at is null") == 2
-    assert "retiré" in relation_sql
-    assert "décommissionné" in relation_sql
+    bound_values = str(db.execute.await_args_list[1].args[0].compile().params.values())
+    assert "Retiré" in bound_values
+    assert "Décommissionné" in bound_values
