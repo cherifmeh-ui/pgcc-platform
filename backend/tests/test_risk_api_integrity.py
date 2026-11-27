@@ -34,6 +34,7 @@ async def test_create_risk_maps_database_uniqueness_race_to_conflict(monkeypatch
     from app.api.v1.endpoints import risks
 
     db = AsyncMock()
+    db.add = MagicMock()
     result = MagicMock()
     result.scalar_one_or_none.return_value = None
     db.execute.return_value = result
