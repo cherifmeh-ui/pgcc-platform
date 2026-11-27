@@ -1,8 +1,11 @@
 # Phase 0 Validation Status
 
-Updated: 2026-11-21
+Updated: 2026-11-27
 
 ## Scope
+
+> **Notice:** The checkpoint below dated 2026-11-21 is historical and superseded by the validation checkpoint dated 2026-11-27 at the end of this document. Do not use the old SHA or checklist as the current branch state.
+
 
 This document records repository-level checks and static-review findings for the
 `chore/phase0-stabilization` branch. It is not a production readiness claim,
@@ -13,7 +16,7 @@ penetration-test report, or runtime integration validation.
 - PR: #1
 - Base: `main`
 - Head: `chore/phase0-stabilization`
-- Current head SHA: `3ab97fa09f754a9bccc460a7511644d97b60f4de`
+- Historical head SHA at the initial 2026-11-21 checkpoint: `3ab97fa09f754a9bccc460a7511644d97b60f4de` (superseded)
 - State: open, draft
 
 ## Verified from repository metadata
