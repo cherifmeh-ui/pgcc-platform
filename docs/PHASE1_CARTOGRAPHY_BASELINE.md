@@ -290,3 +290,24 @@ Phase 1 est **démarrée**, mais aucun sous-jalon fonctionnel n'est déclaré te
 2. Examiner la cohérence de l'affectation `application_id` lors de l'import CSV et des mises à jour partielles.
 3. Poursuivre la revue des dépendances et de la réactivation des actifs, puis mettre à jour le registre de maturité Cartographie.
 
+### Tranche complémentaire — validation application CSV et réactivation avec historique
+
+- HEAD de code validé : `3297c576129dd90d2e7684343ce8ba370c10edef`.
+- Prévisualisation CSV : ajout d'un test qui fournit un `application_id` inconnu et vérifie le rejet de la ligne (`can_import=false`, zéro ligne valide), le message « Application associée introuvable » et l'absence de toute écriture.
+- Réactivation PostgreSQL : ajout d'un scénario qui réactive un actif retiré et vérifie simultanément la remise à `NULL` de `retired_at`, la conservation de `application_id`, la conservation du lien historique Asset↔Risk et la création d'un événement `REACTIVATE` dans l'audit outbox.
+- Validation observée sur le workflow Push `45975232474`, associé au HEAD exact :
+  - Backend : **513 passed, 46 skipped, 1 warning**.
+  - PostgreSQL Integration : **45 passed** ; le scénario de réactivation avec application et lien de risque est inclus dans cette suite.
+  - Frontend : succès.
+  - Docker Compose Smoke : succès, y compris les vérifications du parser et de ClamAV.
+  - Production Runtime Smoke : succès, y compris santé, TLS, proxy, isolation réseau, parser et ClamAV.
+- Résultat : **5/5 jobs réussis** sur le HEAD de code. Les tests sont exécutés par GitHub Actions ; aucun résultat de test local n'est revendiqué.
+- Les erreurs PostgreSQL visibles dans les logs correspondent à des cas négatifs attendus (contraintes d'unicité/FK, append-only et CHECK) ; la suite se termine avec succès.
+- Limite : le test CSV du nouvel identifiant d'application est un test unitaire de prévisualisation avec session mockée ; il complète les tests existants mais ne constitue pas un parcours HTTP complet d'import confirmé sur PostgreSQL.
+
+### Prochaine tranche
+
+1. Vérifier les workflows sur le HEAD documentaire qui enregistre cette validation.
+2. Étendre les scénarios CSV à la confirmation PostgreSQL et à la concurrence d'import si l'architecture du pipeline le permet.
+3. Poursuivre la matrice des relations Asset↔Asset, y compris cycles, réactivation, relations historiques et contention concurrente.
+4. Terminer l'audit de cohérence des routes et permissions Cartographie avant de déclarer un jalon Phase 1 achevé.
