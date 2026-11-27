@@ -400,3 +400,141 @@ async def test_refresh_revokes_sessions_after_role_or_mfa_policy_change(
             )
             await cleanup.commit()
         await engine.dispose()
+
+
+@pytest.mark.asyncio
+async def test_http_login_mfa_refresh_logout_lifecycle(monkeypatch):
+    """Exercise the real HTTP auth routes against PostgreSQL and a real TOTP/JWT."""
+    from fastapi import FastAPI
+    from fastapi.testclient import TestClient
+    from cryptography.fernet import Fernet
+    from sqlalchemy import delete
+    from sqlalchemy.pool import NullPool
+    import pyotp
+
+    from app.api.v1.endpoints import auth as auth_endpoint
+    from app.core.config import settings
+    from app.core.database import get_db
+    from app.core.security import hash_password
+    from app.models.audit_outbox import AuditOutbox
+    from app.services.mfa_encryption import encrypt_mfa_secret
+
+    engine = create_async_engine(DATABASE_URL, poolclass=NullPool)
+    sessions = async_sessionmaker(engine, expire_on_commit=False)
+    user_id = uuid.uuid4()
+    email = f"phase1-auth-http-{user_id.hex}@example.invalid"
+    password = "Phase1-E2E-StrongPassword!2026"
+    totp_secret = pyotp.random_base32()
+    origin = "http://localhost:5173"
+
+    monkeypatch.setattr(settings, "ENVIRONMENT", "development")
+    monkeypatch.setattr(settings, "JWT_ALGORITHM", "HS256")
+    monkeypatch.setattr(settings, "JWT_SECRET", "phase1-http-auth-test-secret-at-least-32-bytes")
+    monkeypatch.setattr(settings, "MFA_ENCRYPTION_KEYS", Fernet.generate_key().decode("ascii"))
+    monkeypatch.setattr(settings, "CORS_ORIGINS", origin)
+    monkeypatch.setattr(auth_endpoint, "enforce_auth_rate_limit", AsyncMock())
+    monkeypatch.setattr(auth_endpoint, "log_action", AsyncMock())
+
+    app = FastAPI()
+    app.include_router(auth_endpoint.router, prefix="/api/v1")
+
+    async def override_db():
+        async with sessions() as db:
+            yield db
+
+    app.dependency_overrides[get_db] = override_db
+
+    try:
+        async with sessions() as setup:
+            setup.add(User(
+                id=user_id,
+                email=email,
+                full_name="Phase 1 auth HTTP lifecycle",
+                role="auditor",
+                password_hash=hash_password(password),
+                must_change_password=False,
+                is_active=True,
+                mfa_enabled=True,
+                mfa_secret=encrypt_mfa_secret(totp_secret),
+                mfa_confirmed_at=datetime.now(timezone.utc),
+                backup_codes_hashed=[],
+                auth_version=0,
+            ))
+            await setup.commit()
+
+        with TestClient(app, base_url=origin) as client:
+            login = client.post(
+                "/api/v1/auth/login",
+                json={"email": email, "password": password},
+                headers={"Origin": origin},
+            )
+            assert login.status_code == 200
+            login_data = login.json()
+            assert login_data["mfa_required"] is True
+            assert login_data["mfa_enabled"] is True
+
+            confirm = client.post(
+                "/api/v1/auth/confirm-mfa",
+                json={
+                    "pre_auth_token": login_data["pre_auth_token"],
+                    "mfa_code": pyotp.TOTP(totp_secret).now(),
+                },
+                headers={"Origin": origin},
+            )
+            assert confirm.status_code == 200
+            assert confirm.json()["access_token"]
+            issued_cookie = confirm.headers.get("set-cookie", "")
+            assert "pgcc_refresh=" in issued_cookie
+            assert "HttpOnly" in issued_cookie
+            assert "SameSite=strict" in issued_cookie
+            assert "refresh_token" not in confirm.json()
+
+            refresh = client.post(
+                "/api/v1/auth/refresh",
+                headers={"Origin": origin},
+            )
+            assert refresh.status_code == 200
+            assert refresh.json()["access_token"]
+            rotated_cookie = refresh.headers.get("set-cookie", "")
+            assert "pgcc_refresh=" in rotated_cookie
+            assert "HttpOnly" in rotated_cookie
+            assert "SameSite=strict" in rotated_cookie
+
+            logout = client.post(
+                "/api/v1/auth/logout",
+                headers={"Origin": origin},
+            )
+            assert logout.status_code == 204
+            cleared_cookie = logout.headers.get("set-cookie", "")
+            assert "Max-Age=0" in cleared_cookie
+            assert "HttpOnly" in cleared_cookie
+            assert "SameSite=strict" in cleared_cookie
+
+        async with sessions() as verify:
+            persisted = (await verify.execute(
+                select(RefreshTokenSession).where(
+                    RefreshTokenSession.user_id == user_id
+                )
+            )).scalars().all()
+            assert len(persisted) == 2
+            assert all(session.revoked_at is not None for session in persisted)
+            actions = (await verify.execute(
+                select(AuditOutbox.payload["action"].astext).where(
+                    AuditOutbox.payload["user_email"].astext == email
+                )
+            )).scalars().all()
+            assert {
+                "MFA_ENROLLED_AND_LOGIN_SUCCESS",
+                "REFRESH_TOKEN_ROTATED",
+                "REFRESH_SESSION_LOGOUT",
+            }.issubset(set(actions))
+    finally:
+        async with sessions() as cleanup:
+            await cleanup.execute(
+                delete(AuditOutbox).where(
+                    AuditOutbox.payload["user_email"].astext == email
+                )
+            )
+            await cleanup.execute(delete(User).where(User.id == user_id))
+            await cleanup.commit()
+        await engine.dispose()
