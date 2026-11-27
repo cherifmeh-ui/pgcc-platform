@@ -506,3 +506,34 @@ def test_auditor_cannot_mutate_supplier_access_lifecycle_over_http_with_real_jwt
     db.execute.assert_awaited_once()
     db.commit.assert_not_awaited()
     db.flush.assert_not_awaited()
+
+
+@pytest.mark.parametrize("role", ["auditor", "executive"])
+def test_authorized_roles_can_read_paginated_asset_inventory_over_http(role):
+    db = AsyncMock()
+    count_result = MagicMock()
+    count_result.scalar_one.return_value = 0
+    db.execute.side_effect = [count_result, _empty_result()]
+
+    with _client_for_role(role, db) as client:
+        response = client.get("/api/v1/assets/page", params={"page": 1, "page_size": 25})
+
+    assert response.status_code == 200
+    assert response.json() == {
+        "items": [],
+        "total": 0,
+        "page": 1,
+        "page_size": 25,
+        "pages": 0,
+    }
+    assert db.execute.await_count == 2
+
+
+def test_viewer_is_denied_paginated_asset_inventory_over_http_without_database_query():
+    db = AsyncMock()
+
+    with _client_for_role("viewer", db) as client:
+        response = client.get("/api/v1/assets/page")
+
+    assert response.status_code == 403
+    db.execute.assert_not_awaited()
