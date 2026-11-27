@@ -62,29 +62,25 @@ Ce document définit les principaux objets métier et leurs relations. Il ne con
 **Application (entité existante)**
 - Le module Applications existant demeure le référentiel applicatif fonctionnel ; il n'est pas remplacé par Asset.
 - Les champs existants (nom, module, propriétaire, direction, hébergement, criticité, risque principal et plan de traitement) sont conservés.
-- Une fiche Asset peut référencer une Application existante via application_id (relation 1:1 optionnelle). Cela permet d'enrichir l'inventaire technique sans migration destructive ni duplication des données applicatives.
-- Le lien application_id est facultatif pour les actifs non applicatifs et unique lorsqu'il est renseigné.
+- Une fiche Asset peut référencer une Application existante via application_id (relation 1:N côté Application : une application peut être reliée à plusieurs actifs techniques ; chaque actif référence au plus une application). Cela enrichit l'inventaire technique sans remplacer ni dupliquer le catalogue applicatif.
+- Le lien application_id est facultatif pour les actifs non applicatifs. La migration 0008_asset_application_cardinality documente la suppression de l'ancienne cardinalité 1:1 ; le schéma physique et les contraintes de la migration restent la référence.
 
-**Asset**
-- id, reference, name, description.
-- asset_type : process, information, application, hardware, software, infrastructure, network, service, cloud_resource, facility, other.
-- owner_user_id et/ou owner_unit_id.
-- custodian_user_id, location, lifecycle_status.
-- criticality, confidentiality, integrity, availability.
-- classification, business_value, operational_status.
-- manufacturer, model, serial_number, hostname, ip_address, fqdn, operating_system, version, selon type.
-- discovery_source, source_reference, last_inventory_date.
-- purchase_date, end_of_support_date, retirement_date.
-- created_at, updated_at, created_by, updated_by, deleted_at.
+**Asset — cible logique et écart avec le modèle physique actuel**
+- Identité : id, reference, name, description, asset_type.
+- Responsabilités : à terme owner_user_id et/ou owner_unit_id, custodian_user_id ; le modèle physique actuel utilise encore les champs texte owner, custodian et direction.
+- Localisation et cycle de vie : location, lifecycle_status, criticality, retired_at.
+- CIA et classification : confidentiality, integrity, availability, classification.
+- Attributs techniques : manufacturer, model, serial_number, hostname, ip_address, fqdn, operating_system, version, selon type.
+- Inventaire : discovery_source, source_reference, last_inventory_date, end_of_support_date.
+- Traçabilité physique actuelle : created_at, updated_at, retired_at ; les champs created_by/updated_by, business_value, purchase_date et deleted_at restent des éléments de cible non démontrés dans le modèle Asset actuel.
 
-Les champs techniques sont optionnels et conditionnels au type d'actif. Une application ou un processus n'a pas besoin de numéro de série ; un équipement peut en avoir.
+Les champs techniques sont optionnels et conditionnels au type d'actif. Une application ou un processus n'a pas besoin de numéro de série ; un équipement peut en avoir. Toute évolution des responsabilités vers des clés étrangères doit être additive, précédée d'un inventaire des utilisateurs/unités et d'une stratégie de reprise des valeurs texte.
 
 **AssetRelationship**
-- id, source_asset_id, target_asset_id.
-- relationship_type : depends_on, hosts, connects_to, stores, processes, supports, contains, communicates_with, supplied_by, other.
-- description, criticality, direction, valid_from, valid_until.
-- created_by, created_at.
-- Contrainte : source et cible distinctes ; éviter les doublons selon la règle métier.
+- Modèle physique actuel : id, source_asset_id, target_asset_id, relationship_type, description, criticality, created_at, created_by.
+- Types : depends_on, hosts, connects_to, stores, processes, supports, contains, communicates_with, supplied_by, other.
+- Contraintes physiques actuelles : source et cible distinctes, unicité source/cible/type, clés étrangères restrictives.
+- Champs de cible éventuels : direction explicite, valid_from, valid_until ; ils ne doivent pas être considérés comme implémentés sans migration et tests associés.
 - Les relations peuvent être orientées ; l'interface peut afficher les deux directions.
 
 **AssetRiskLink**
