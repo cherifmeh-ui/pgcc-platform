@@ -775,3 +775,36 @@ sur les opérations de mutation sont également couverts en HTTP.
 Les contrôles de concurrence/import CSV, pagination et équivalence export
 restent au backlog. La Phase 0 demeure ouverte tant que les contrôles restants
 ne sont pas vérifiés et documentés.
+
+
+## Complément — concurrence et atomicité de l'import CSV (27/11/2026)
+
+Le test `test_asset_csv_concurrent_http_import_is_atomic_with_real_postgres`
+force deux requêtes HTTP authentifiées à franchir la prévalidation CSV avant
+de poursuivre simultanément vers l'insertion. Les deux tentatives importent
+la même référence d'actif.
+
+Résultat vérifié sur PostgreSQL :
+- une requête reçoit HTTP 201 et importe exactement un actif ;
+- l'autre reçoit HTTP 409 après conflit sur la contrainte d'unicité ;
+- un seul actif portant la référence est présent après les deux appels ;
+- un seul événement d'audit `IMPORT` est conservé.
+
+Ce test confirme que la prévalidation seule ne porte pas la garantie
+d'unicité : la contrainte PostgreSQL reste l'arbitre final et le rollback
+empêche une importation partielle en cas de conflit concurrent.
+
+**Résultats CI sur le SHA `6556b63770120f8cbe7bd4951a3ad6791ccd741b`** —
+workflow Push `46014867736` : **5/5 jobs réussis**.
+- Backend : **542 passed, 59 skipped, 1 warning**.
+- PostgreSQL Integration : **58 passed, 1 warning**.
+- Frontend : build réussi.
+- Compose Smoke : réussi.
+- Production Runtime Smoke : réussi.
+
+La couverture de concurrence de l'import est désormais prouvée pour la
+collision de référence et l'atomicité d'une insertion concurrente. Les
+prochains contrôles restent l'import de plusieurs lignes avec rollback
+intégral après conflit, les doublons concurrents sur hostname/numéro de série
+et la cohérence pagination/export sur les mêmes filtres. La Phase 0 reste
+ouverte.
