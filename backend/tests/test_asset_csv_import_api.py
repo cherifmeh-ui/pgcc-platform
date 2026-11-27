@@ -314,3 +314,35 @@ async def test_csv_import_rolls_back_assets_when_audit_outbox_enqueue_fails(monk
     audit.assert_awaited_once()
     db.rollback.assert_awaited_once()
     db.commit.assert_not_awaited()
+
+@pytest.mark.asyncio
+async def test_csv_preview_rejects_unknown_application_id():
+    application_id = uuid4()
+    csv_data = (
+        "reference,name,asset_type,criticality,application_id\\n"
+        f"APP-UNKNOWN-001,Serveur orphelin,hardware,Moyenne,{application_id}\\n"
+    )
+    upload = UploadFile(filename="assets.csv", file=BytesIO(csv_data.encode("utf-8")))
+    db = AsyncMock()
+    application_result = MagicMock()
+    application_result.scalars.return_value.all.return_value = []
+    asset_result = MagicMock()
+    asset_result.scalars.return_value.all.return_value = []
+    db.execute.side_effect = [application_result, asset_result]
+
+    response = await preview_asset_csv_import(
+        file=upload,
+        db=db,
+        current_user=MagicMock(email="tester@example.test"),
+    )
+
+    assert response["can_import"] is False
+    assert response["rows_valid"] == 0
+    assert any(
+        error["error"] == "Application associée introuvable"
+        for error in response["errors"]
+    )
+    assert db.execute.await_count == 2
+    db.commit.assert_not_awaited()
+    db.add.assert_not_called()
+    db.add_all.assert_not_called()
