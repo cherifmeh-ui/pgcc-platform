@@ -18,7 +18,7 @@ from app.models.asset import Asset
 from app.models.audit_outbox import AuditOutbox
 from app.models.supplier import Supplier, SupplierAccessRequest, SupplierAssetLink
 from app.models.user import User
-from app.api.v1.endpoints.suppliers import SupplierAssetLinkCreate, link_supplier_asset
+from app.api.v1.endpoints.suppliers import (\n    SupplierAccessRequestCreate, SupplierAssetLinkCreate,\n    create_supplier_access_request, link_supplier_asset,\n)
 
 DATABASE_URL = os.getenv("PGCC_INTEGRATION_DATABASE_URL")
 pytestmark = pytest.mark.skipif(
@@ -993,5 +993,137 @@ async def test_asset_risk_link_creation_and_retirement_are_serialized():
             )
             await cleanup.execute(delete(Asset).where(Asset.id == asset_id))
             await cleanup.execute(delete(Risk).where(Risk.id == risk_id))
+            await cleanup.commit()
+        await engine.dispose()
+
+
+@pytest.mark.asyncio
+async def test_supplier_access_request_creation_and_asset_retirement_are_serialized():
+    """An access request cannot become open after its asset has been retired."""
+    engine = create_async_engine(DATABASE_URL, pool_size=5, max_overflow=0)
+    sessions = async_sessionmaker(engine, expire_on_commit=False)
+    user_id, supplier_id, asset_id, link_id = uuid4(), uuid4(), uuid4(), uuid4()
+    user = User(
+        id=user_id,
+        email=f"phase1-access-race-{user_id.hex}@example.invalid",
+        full_name="Phase 1 supplier access race",
+        role="admin",
+        password_hash="not-used",
+        must_change_password=False,
+        is_active=True,
+        mfa_enabled=True,
+    )
+    supplier = Supplier(
+        id=supplier_id,
+        code=f"PH1-ACCESS-RACE-{user_id.hex[:8]}",
+        legal_name="Phase 1 access race supplier",
+        status="Approuvé",
+        criticality="Moyenne",
+        dependency_level="Moyenne",
+    )
+    asset = Asset(
+        id=asset_id,
+        reference=f"PH1-ACCESS-RACE-{asset_id.hex[:8]}",
+        name="Supplier access request versus asset retirement",
+        asset_type="hardware",
+        lifecycle_status="Actif",
+        retired_at=None,
+    )
+    link = SupplierAssetLink(
+        id=link_id,
+        supplier_id=supplier_id,
+        asset_id=asset_id,
+        relationship_type="Maintient",
+        access_level="Standard",
+        data_access=False,
+        status="Actif",
+        created_by_id=user_id,
+    )
+    today = datetime.now(timezone.utc).date()
+    try:
+        async with sessions() as setup:
+            setup.add(user)
+            await setup.flush()
+            setup.add_all([supplier, asset])
+            await setup.flush()
+            setup.add(link)
+            await setup.commit()
+
+        async def request_access():
+            async with sessions() as db:
+                try:
+                    await create_supplier_access_request(
+                        supplier_id=supplier_id,
+                        data=SupplierAccessRequestCreate(
+                            supplier_asset_link_id=link_id,
+                            access_level="Standard",
+                            data_access=False,
+                            justification="Maintenance planifiée sur cet actif",
+                            scope="Intervention technique limitée",
+                            start_date=today,
+                            end_date=today + timedelta(days=30),
+                            review_due_at=today + timedelta(days=15),
+                        ),
+                        request=_request(),
+                        db=db,
+                        current_user=MagicMock(id=user_id, email=user.email),
+                    )
+                    return 201
+                except HTTPException as exc:
+                    return exc.status_code
+
+        async def retire():
+            async with sessions() as db:
+                try:
+                    await retire_asset(
+                        asset_id=asset_id,
+                        request=_request(),
+                        db=db,
+                        current_user=MagicMock(email=user.email),
+                    )
+                    return 204
+                except HTTPException as exc:
+                    return exc.status_code
+
+        outcomes = await asyncio.gather(request_access(), retire())
+        assert outcomes in ([201, 409], [422, 204])
+
+        async with sessions() as verify:
+            persisted_asset = await verify.get(Asset, asset_id)
+            open_requests = (
+                await verify.execute(
+                    select(SupplierAccessRequest.id).where(
+                        SupplierAccessRequest.asset_id == asset_id,
+                        SupplierAccessRequest.status.in_(("Demandé", "Approuvé", "Suspendu")),
+                    )
+                )
+            ).scalars().all()
+            assert (persisted_asset.lifecycle_status == "Retiré") == (not open_requests)
+    finally:
+        async with sessions() as cleanup:
+            request_ids = (
+                await cleanup.execute(
+                    select(SupplierAccessRequest.id).where(
+                        SupplierAccessRequest.asset_id == asset_id
+                    )
+                )
+            ).scalars().all()
+            audit_ids = [str(asset_id), *[str(item) for item in request_ids]]
+            await cleanup.execute(
+                delete(AuditOutbox).where(
+                    AuditOutbox.payload["resource_id"].astext.in_(audit_ids)
+                )
+            )
+            await cleanup.execute(
+                delete(SupplierAccessRequest).where(
+                    SupplierAccessRequest.asset_id == asset_id
+                )
+            )
+            await cleanup.execute(
+                delete(SupplierAssetLink).where(SupplierAssetLink.asset_id == asset_id)
+            )
+            await cleanup.execute(delete(Asset).where(Asset.id == asset_id))
+            await cleanup.execute(delete(Supplier).where(Supplier.id == supplier_id))
+            await cleanup.execute(delete(User).where(User.id == user_id))
             await cleanup.commit()
         await engine.dispose()
