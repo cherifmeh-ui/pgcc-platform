@@ -537,3 +537,24 @@ def test_viewer_is_denied_paginated_asset_inventory_over_http_without_database_q
 
     assert response.status_code == 403
     db.execute.assert_not_awaited()
+
+
+@pytest.mark.parametrize(
+    "params",
+    [
+        {"page": "0"},
+        {"page_size": "0"},
+        {"page_size": "201"},
+        {"q": "x" * 101},
+        {"owner": "x" * 151},
+        {"location": "x" * 201},
+    ],
+)
+def test_asset_inventory_pagination_rejects_out_of_range_filters_before_database_query(params):
+    db = AsyncMock()
+
+    with _client_for_role("auditor", db) as client:
+        response = client.get("/api/v1/assets/page", params=params)
+
+    assert response.status_code == 422
+    db.execute.assert_not_awaited()
