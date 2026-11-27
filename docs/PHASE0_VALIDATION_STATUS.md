@@ -1328,3 +1328,14 @@ Cette section remplace les anciens états intermédiaires datés du 21 novembre 
 - Les logs backend ne contiennent plus l'avertissement `coroutine was never awaited` précédemment observé dans le test de collision de référence des risques. Le seul avertissement pytest restant provient du test DOCX qui crée intentionnellement une entrée ZIP dupliquée.
 - Le test `test_docx_archive_rejects_duplicate_entries` capture désormais explicitement ce `UserWarning` attendu avec `pytest.warns`, afin de conserver le scénario de sécurité sans polluer le résumé de test.
 - Ce changement est un nettoyage de test uniquement ; son exécution doit être confirmée par un workflow sur le nouveau HEAD avant de conclure à un résumé sans avertissement.
+
+
+### 27 novembre 2026 — validation complète du workflow code et restauration PostgreSQL
+
+- Le workflow `45961991384` sur le commit de code `ed0e2739d026c2b8192b9e7d9f529bfc06ef28ca` est terminé avec succès : Backend, PostgreSQL integration, Frontend, Compose smoke et Production runtime smoke (**5/5 jobs**).
+- Backend : **460 passed, 43 skipped** ; aucun avertissement pytest dans le résumé après capture explicite du `UserWarning` provoqué par l'entrée ZIP dupliquée dans le test DOCX.
+- PostgreSQL integration : **42 passed**. Les étapes de contrôle de dérive SQLAlchemy/PostgreSQL, upgrade depuis le schéma hérité, downgrade prévu par le test, sauvegarde/restauration et intégrité des modules couverts sont réussies.
+- Compose smoke : démarrage complet, API/proxy, isolement et authentification du parser, gestion fail-closed, démarrage ClamAV et verdicts fichier sain/EICAR réussis.
+- Production runtime smoke : images durcies, migrations de production, démarrage backend/frontend, health/TLS/proxy/isolement et vérifications parser réussis.
+- Le commit documentaire `e442ba4ea805408e3c867b1e92ff15e30d1c8acb` a également un workflow terminé avec succès. La PR #1 reste ouverte, Draft et non fusionnée.
+- Limite de portée : ces preuves sont celles du pipeline GitHub CI avec environnements et secrets éphémères. Elles ne remplacent pas une restauration sur l'infrastructure cible, ni la mesure de RPO/RTO, la validation des sauvegardes offsite/immutables, la supervision et l'acceptation des risques par les responsables.
