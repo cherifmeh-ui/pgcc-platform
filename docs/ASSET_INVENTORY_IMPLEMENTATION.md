@@ -1,7 +1,10 @@
 # PGCC — Implémentation du socle Cartographie
 
-**État :** MVP initial implémenté — validation CI effectuée  
-**Branche :** `chore/phase0-stabilization`
+**État :** socle fonctionnel étendu ; audit de maturité Phase 1 en cours  
+**Branche :** `chore/phase0-stabilization`  
+**Dernière revue documentaire :** 27 novembre 2026
+
+> **Note de lecture :** les sections historiques ci-dessous retracent les incréments successifs. Les listes de limites des premières versions ne décrivent plus nécessairement l'état actuel. Pour l'état consolidé et les écarts restant à vérifier, consulter `docs/PHASE1_CARTOGRAPHY_BASELINE.md`.
 
 ## 1. Périmètre livré
 
@@ -42,15 +45,15 @@ Le MVP ne transforme pas automatiquement les applications existantes en actifs :
 - Permissions vérifiées côté backend.
 - Migrations et tests CI.
 
-## 5. Limites du MVP et prochaines étapes
+## 5. Limites de la première version — historique
 
-- Vue graphique du graphe et analyse d'impact : à développer.
-- Import CSV avec validation, prévisualisation et rapport d'erreurs : à développer.
-- Liens explicites avec risques, contrôles, documents et fournisseurs : à développer.
-- Historique détaillé des modifications métier et workflow de validation de criticité : à développer.
-- Pagination UI et compteur total : à améliorer.
-- Revue de sécurité spécifique des données techniques (IP, hostname, serial) et règles de visibilité : à poursuivre.
-- Tests API avec base PostgreSQL de CI et tests migration upgrade/downgrade : à compléter.
+Les points ci-dessous décrivent les limites constatées au lancement du MVP. Plusieurs ont depuis été traités dans les sections d'implémentation ultérieures ; ils ne doivent pas être interprétés comme le backlog actuel :
+
+- Vue graphique du graphe et analyse d'impact : développées dans les incréments ultérieurs.
+- Import CSV avec validation et prévisualisation : développé dans les incréments ultérieurs.
+- Liens Asset↔Risk et fournisseur : développés partiellement dans les incréments ultérieurs.
+- La revue de sécurité des données techniques, l'historique détaillé et les validations métier restent à confirmer dans le cadre de la Phase 1.
+- La validation actuelle doit être appréciée sur le HEAD et les workflows exacts, pas sur les résultats de la version initiale.
 
 ## 6. Validation
 
@@ -153,3 +156,16 @@ Tests unitaires ajoutés : chaîne de dépendances, actif non lié, chemins mult
 - L'analyse d'impact expose une synthèse des risques distincts par niveau et statut, uniquement si le rôle dispose de risks:read; les risques sont dédupliqués dans les totaux lorsqu'ils concernent plusieurs actifs.
 
 - Les classes de synthèse des risques réutilisent exactement les seuils du registre existant : 1–4 Faible, 5–9 Modéré, 10–14 Élevé, 15–19 Critique, 20–25 Inacceptable.
+
+
+## État consolidé au démarrage de la Phase 1 — 27/11/2026
+
+Le dépôt contient désormais CRUD, relations Asset↔Asset, Asset↔Risk, association Asset↔Application, analyse d'impact, graphe, indicateurs de qualité, import CSV contrôlé, pagination serveur, filtres avancés et export CSV. Ces capacités sont présentes dans le code et décrites dans les sections précédentes ; leur maturité fonctionnelle et leur sécurité doivent encore être vérifiées par la matrice de tests Phase 1.
+
+Points à traiter en priorité :
+- réconcilier la cardinalité Application 1:N dans toute la documentation cible ;
+- décider, après inventaire des entités organisationnelles réellement existantes, si owner/custodian/direction doivent devenir des références structurées ;
+- mesurer la volumétrie du graphe et des indicateurs de qualité, qui chargent actuellement l'inventaire ou les relations en mémoire ;
+- comparer systématiquement les filtres pagination/export et préserver les routes historiques ;
+- compléter les tests des transitions de cycle de vie, des permissions par rôle, des imports concurrents et des intégrations fournisseurs/risques ;
+- ne pas créer de nouveaux liens Asset↔Control ou Asset↔Document avant d'avoir vérifié les modèles et contrats existants.
