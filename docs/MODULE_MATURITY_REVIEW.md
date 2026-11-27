@@ -740,3 +740,14 @@ Status: targeted code review recorded; additional runtime/API tests remain requi
 - Supplier access eligibility was re-read end-to-end: request creation requires an approved supplier and active link; approval revalidates supplier, link and asset; terminated/suspended suppliers cannot gain new asset scope; status changes and archival refuse unresolved active links or open access requests. Row locks serialize the lifecycle operations, and the PostgreSQL race test covers request creation versus link termination.
 - The previous review note suggesting terminated supplier status was not checked is superseded by the implementation and test evidence above.
 - The CI evidence does not replace a human policy review or production authorization review.
+
+### 27 November 2026 — administrative account lifecycle and RBAC route review
+
+- The account-management router exposes only list, detail, update, MFA reset and session-revocation operations; all five route dependencies require the backend `users:manage` permission, granted only to the normalized `admin` role.
+- Mutating operations revalidate the acting administrator under row locks and compare the previously observed `auth_version`, preventing a stale administrator session from continuing after a concurrent demotion, deactivation or security-state change.
+- The active MFA administrator set is locked in stable user-ID order before mutations that can reduce that set. The implementation prevents self-demotion/self-deactivation and prevents removing the final active MFA-enabled administrator.
+- Role change, deactivation, MFA reset and explicit session revocation invalidate access tokens through `auth_version`, revoke refresh sessions transactionally and write an audit-outbox event in the same transaction. MFA reset also clears the MFA secret, confirmation timestamp and recovery-code hashes.
+- Response models exclude password hashes, MFA secrets and recovery-code hashes. Update input rejects extra/sensitive fields and unknown roles.
+- PostgreSQL integration coverage includes audit-failure rollback, stale-admin rejection, concurrent administrator demotion, access/refresh-token invalidation and session-revocation auditing. These tests passed in workflow `45957879528` (42 PostgreSQL tests).
+- A route-signature inventory across the business API endpoint modules found authentication/authorization dependencies on every inspected route. The six auth endpoints are intentionally unauthenticated at the bearer layer and instead implement their own pre-authentication token, refresh-cookie, MFA and trusted-origin checks; those flows remain covered by the backend security suite.
+- No new code defect was confirmed in this review pass. The review is static plus existing CI evidence; it is not a penetration test or a production authorization acceptance.
