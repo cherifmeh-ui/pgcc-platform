@@ -445,3 +445,64 @@ def test_supplier_access_requests_require_authentication_over_http():
 
     assert response.status_code == 401
     db.execute.assert_not_awaited()
+
+
+@pytest.mark.parametrize(
+    ("method", "path", "payload"),
+    [
+        (
+            "POST",
+            "/api/v1/suppliers/00000000-0000-0000-0000-000000000031/access-requests/00000000-0000-0000-0000-000000000032/decision",
+            {"decision": "Approuvé", "comment": "Validation de sécurité"},
+        ),
+        (
+            "POST",
+            "/api/v1/suppliers/00000000-0000-0000-0000-000000000031/access-requests/00000000-0000-0000-0000-000000000032/reviews",
+            {"outcome": "Maintenue", "comment": "Revue périodique conforme"},
+        ),
+        (
+            "POST",
+            "/api/v1/suppliers/00000000-0000-0000-0000-000000000031/access-requests/00000000-0000-0000-0000-000000000032/revoke",
+            {"reason": "Fin de besoin opérationnel"},
+        ),
+        (
+            "POST",
+            "/api/v1/suppliers/00000000-0000-0000-0000-000000000031/access-requests/00000000-0000-0000-0000-000000000032/expire",
+            None,
+        ),
+        (
+            "POST",
+            "/api/v1/suppliers/00000000-0000-0000-0000-000000000031/assets/00000000-0000-0000-0000-000000000033/terminate",
+            None,
+        ),
+    ],
+)
+def test_auditor_cannot_mutate_supplier_access_lifecycle_over_http_with_real_jwt(
+    monkeypatch, method, path, payload
+):
+    email = "auditor-lifecycle-readonly@example.test"
+    user = MagicMock(
+        id="auditor-lifecycle-user-id",
+        email=email,
+        role="auditor",
+        is_active=True,
+        must_change_password=False,
+        mfa_enabled=False,
+        auth_version=4,
+    )
+    db = AsyncMock()
+    db.execute.return_value = _jwt_user_result(user)
+    headers = _real_jwt_headers(
+        monkeypatch, email=email, role="auditor", auth_version=4
+    )
+
+    with _jwt_client(db) as client:
+        response = client.request(
+            method, path, json=payload, headers=headers
+        )
+
+    assert response.status_code == 403
+    # Only the user lookup needed to validate the JWT is allowed to reach the DB.
+    db.execute.assert_awaited_once()
+    db.commit.assert_not_awaited()
+    db.flush.assert_not_awaited()
