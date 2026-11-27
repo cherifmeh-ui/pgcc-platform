@@ -431,3 +431,38 @@ Phase 1 est **démarrée**, mais aucun sous-jalon fonctionnel n'est déclaré te
 - PostgreSQL integration : `48 passed`, migrations et contrôle backup/restore réussis.
 - Frontend, Compose smoke et Production runtime smoke : succès sur les deux workflows.
 - La tranche JWT Risques/Fournisseurs est donc validée par CI. Le test d'authentification HTTP complet ajouté ensuite est suivi séparément.
+
+
+### Tranche authentification — parcours HTTP PostgreSQL complet
+
+- Un premier essai CI du nouveau test a échoué avec HTTP 422 à la requête login : l'adresse de fixture utilisait le domaine réservé `.invalid`, rejeté par la validation `EmailStr`. Il s'agissait d'une donnée de test invalide, pas d'un défaut de l'authentification.
+- Correction : adresse de fixture remplacée par un domaine valide `.com`, sans changement du code applicatif.
+- Commit du test corrigé : `958747943c335066e4ce08fc63c7c65b836c4be1`.
+- Le test `test_http_login_mfa_refresh_logout_lifecycle` exerce les routes FastAPI réelles avec PostgreSQL :
+  - connexion avec mot de passe vérifié ;
+  - validation TOTP réel à partir d'un secret chiffré ;
+  - émission du JWT d'accès et du refresh token en cookie HttpOnly ;
+  - rotation via la route HTTP et émission du nouveau cookie ;
+  - déconnexion HTTP, suppression du cookie et révocation des deux sessions persistées ;
+  - vérification des événements d'audit en outbox.
+- Validation PostgreSQL : `49 passed, 1 warning`, incluant le nouveau parcours.
+- Workflow PR `45980765680` : 5/5 jobs réussis.
+- Workflow Push `45980759047` : 5/5 jobs réussis.
+- Backend : `529 passed, 50 skipped, 1 warning`. Les tests PostgreSQL sont exécutés dans le job dédié ; le parcours HTTP complet est exécuté et réussi dans ce job.
+- Frontend, Compose smoke et Production runtime smoke : succès sur les deux workflows.
+- Limite : le parcours testé concerne un compte déjà enrôlé MFA. Le scénario d'enrôlement initial et de changement obligatoire de mot de passe reste couvert par des tests dédiés, mais pas encore dans un seul parcours HTTP intégré.
+
+### Décision de modèle — responsabilités et unités organisationnelles
+
+- Inspection du modèle physique : `User` contient un champ texte `department`, mais aucun modèle ni table `OrganizationUnit` n'existe dans le dépôt au checkpoint.
+- Le modèle `Asset` contient encore `owner`, `custodian` et `direction` sous forme de chaînes de caractères.
+- Décision : ne pas créer maintenant de FK `owner_user_id` / `owner_unit_id` et ne pas lancer de migration. Il n'existe pas encore de référentiel organisationnel canonique ni de correspondance de reprise vérifiée ; mapper des noms libres vers des comptes ou directions serait risqué et pourrait attribuer une responsabilité au mauvais acteur.
+- La section Organisation de `docs/TARGET_DATA_MODEL.md` distingue désormais explicitement la cible proposée du schéma physique existant.
+- Les champs actuels sont conservés sans changement. Une migration additive ne sera étudiée qu'après identification de la source organisationnelle, de ses codes stables, des règles hiérarchiques et des correspondances validées.
+
+### Prochaine priorité Phase 1
+
+1. Compléter les scénarios d'intégrité du cycle de vie Asset ↔ Application/Risk/Supplier et les tests de concurrence.
+2. Auditer les règles d'orientation et les cas limites de l'analyse d'impact ; obtenir des mesures `EXPLAIN (ANALYZE, BUFFERS)` sur PostgreSQL représentatif.
+3. Finaliser les tests d'import/export et la décision de classification des champs exportables.
+4. Terminer la recette frontend et la matrice de couverture route × rôle × opération.
