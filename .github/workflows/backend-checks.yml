@@ -35,6 +35,28 @@ jobs:
 
   frontend:
     runs-on: ubuntu-latest
+    services:
+      postgres:
+        image: pgvector/pgvector:pg16
+        env:
+          POSTGRES_USER: pgcc_browser
+          POSTGRES_PASSWORD: pgcc_browser
+          POSTGRES_DB: pgcc_browser
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd "pg_isready -U pgcc_browser -d pgcc_browser"
+          --health-interval 10s
+          --health-timeout 5s
+          --health-retries 5
+    env:
+      ENVIRONMENT: development
+      DEBUG: "false"
+      DATABASE_URL: postgresql+asyncpg://pgcc_browser:pgcc_browser@localhost:5432/pgcc_browser
+      JWT_ALGORITHM: HS256
+      JWT_SECRET: pgcc-browser-refresh-integration-secret-2026
+      CORS_ORIGINS: http://127.0.0.1:4173
+      PYTHONPATH: backend
     steps:
       - name: Checkout
         uses: actions/checkout@v4
@@ -61,6 +83,44 @@ jobs:
         working-directory: frontend
         run: npm test
 
+      - name: Set up Python for real backend browser integration
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+          cache: pip
+          cache-dependency-path: backend/requirements-dev.txt
+
+      - name: Install backend dependencies for browser integration
+        run: python -m pip install --upgrade pip && pip install -r backend/requirements-dev.txt
+
+      - name: Apply migrations for browser integration
+        working-directory: backend
+        run: alembic upgrade head
+
+      - name: Seed isolated PostgreSQL refresh session
+        shell: bash
+        run: |
+          python backend/scripts/seed_browser_refresh_test.py > /tmp/pgcc-browser-fixture.json
+          token=$(python -c "import json; print(json.load(open('/tmp/pgcc-browser-fixture.json'))['refresh_token'])")
+          test -n "$token"
+          echo "::add-mask::$token"
+          echo "PGCC_E2E_REFRESH_TOKEN=$token" >> "$GITHUB_ENV"
+
+      - name: Start real FastAPI backend for browser integration
+        working-directory: backend
+        shell: bash
+        run: |
+          nohup python -m uvicorn app.main:app --host 127.0.0.1 --port 8000 > /tmp/pgcc-browser-backend.log 2>&1 &
+          for attempt in $(seq 1 60); do
+            if curl --fail --silent http://127.0.0.1:8000/health > /tmp/pgcc-browser-health.json; then
+              cat /tmp/pgcc-browser-health.json
+              exit 0
+            fi
+            sleep 2
+          done
+          cat /tmp/pgcc-browser-backend.log
+          exit 1
+
       - name: Install ephemeral Playwright browser-test dependency
         working-directory: frontend
         run: npm install --no-save --package-lock=false @playwright/test
@@ -69,8 +129,10 @@ jobs:
         working-directory: frontend
         run: npx playwright install --with-deps chromium firefox webkit
 
-      - name: Run real-browser cross-tab refresh test
+      - name: Run real-browser cross-tab refresh tests
         working-directory: frontend
+        env:
+          VITE_API_PROXY_TARGET: http://127.0.0.1:8000
         run: npx playwright test --config=playwright.config.js
 
       - name: Build frontend
