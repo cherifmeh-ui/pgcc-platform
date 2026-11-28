@@ -474,7 +474,7 @@ async def test_multiple_assets_can_reference_same_application_on_postgres():
                     id=asset_ids[0],
                     reference=f"{reference_prefix}-A",
                     name="Application technical component A",
-                    asset_type="server",
+                    asset_type="hardware",
                     application_id=application_id,
                     lifecycle_status="Actif",
                 ),
