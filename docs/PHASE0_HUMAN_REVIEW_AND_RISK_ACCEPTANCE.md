@@ -157,3 +157,8 @@ La Phase 0 ne pourra être déclarée close que lorsque :
 - Point supplémentaire à inclure dans la revue Auth : coordination du refresh cookie entre onglets. La file d'attente Axios n'est locale qu'à un contexte JavaScript ; la concurrence entre onglets n'est pas démontrée comme maîtrisée. Exiger une preuve navigateur ou une décision formelle de contrainte/risque avant fermeture du gate.
 
 Le statut demeure **en attente d'un reviewer indépendant**. Aucune approbation ni acceptation de risque n'est présumée par cette actualisation.
+
+
+### Suivi dédié — concurrence de refresh entre onglets
+
+Le point de revue statique est désormais suivi dans l'issue [#7 — Coordination du renouvellement de session entre onglets navigateur](https://github.com/cherifmeh-ui/pgcc-platform/issues/7). Cette issue est un gate Auth Phase 0 : elle reste ouverte jusqu'à l'implémentation, aux tests navigateur multi-onglets et à la preuve que le rejeu réel reste détecté.
