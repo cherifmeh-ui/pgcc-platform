@@ -67,7 +67,7 @@ jobs:
 
       - name: Install Chromium for browser tests
         working-directory: frontend
-        run: npx playwright install --with-deps chromium
+        run: npx playwright install --with-deps chromium firefox webkit
 
       - name: Run real-browser cross-tab refresh test
         working-directory: frontend
