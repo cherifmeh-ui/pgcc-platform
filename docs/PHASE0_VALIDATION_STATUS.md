@@ -1564,3 +1564,12 @@ La revue du store Pinia a révélé un second point d'entrée : `restoreSession(
 - Avertissements observés : un avertissement pytest et avertissements Node/outillage ; aucun job en échec.
 
 **Décision :** le contrôle navigateur inter-onglets est maintenant validé dans son périmètre simulé et la CI complète du commit est verte. Le gate Auth et la Phase 0 ne sont pas clôturés : les scénarios d'échec réseau, l'intégration réelle, les opérations sur l'environnement cible et les approbations humaines restent nécessaires.
+
+
+### Décision de conception — récupération après perte de réponse refresh (28/11/2026)
+
+- Analyse du chemin réel : la rotation est commitée avant l'envoi du cookie de remplacement ; le modèle ne conserve que les hashes de tokens.
+- Un retry avec l'ancien cookie après commit est indistinguable d'un rejeu à partir du seul bearer token. Un délai de grâce fondé uniquement sur l'ancien token est donc rejeté.
+- Un mécanisme idempotent nécessiterait un identifiant d'opération aléatoire lié à l'ancien token, un stockage chiffré temporaire du JWT successeur avec une clé dédiée, une atomicité DB, une coordination multi-onglets et des tests de rejeu distincts.
+- Aucun changement de comportement backend n'est appliqué dans ce checkpoint. La protection actuelle de rejeu reste en place. Décision détaillée et critères de sortie : docs/REFRESH_ROTATION_RECOVERY_DESIGN.md.
+- Phase 0 Auth / issue #7 restent ouverts jusqu'à décision de menace, tests contre backend réel et validation des cas de perte réseau.
