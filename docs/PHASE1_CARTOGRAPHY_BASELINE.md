@@ -3,7 +3,7 @@
 **Date du checkpoint :** 27 novembre 2026  
 **Branche de travail :** `chore/phase0-stabilization`  
 **HEAD de départ Phase 1 :** `f4cce2ac69ee4f8f9beb58ab93fc089517a64459`  
-**Statut :** Phase 1 démarrée — audit initial du code et cadrage des corrections.  
+**Statut :** Phase 1 en cours — intégrité PostgreSQL, RBAC HTTP, impact risques et parcours Playwright renforcés ; critères de sortie restants explicités ci-dessous.  
 **Organisation de la recette :** aucune validation humaine n'est présumée ni attendue pendant le développement. La recette locale et les tests humains seront réalisés après clôture de tous les développements PGCC ; les gates propres à l'infrastructure CTF restent explicitement non validés jusque-là.
 
 ## 1. Validation du point de départ
@@ -1136,7 +1136,7 @@ relation) ne sont plus incluses dans les requêtes du graphe.
 
 ### P1-CARTO-007 — Synthèse de risques incomplète sur l'actif source
 
-**Statut : corrigé dans le code, validation CI du HEAD candidat en cours.**
+**Statut : corrigé et validé par CI complète sur le SHA 8065988 (5/5 jobs).**
 
 La revue a montré que l'agrégat de risques de l'analyse d'impact ne prenait
 en compte que les actifs dépendants et omettait les risques directement liés
@@ -1151,10 +1151,7 @@ La correction :
 - ajoute un test PostgreSQL couvrant un risque partagé source/dépendant et
   un risque lié uniquement à la source, ainsi qu'un test unitaire source-only.
 
-Le workflow sur le HEAD 80659881ee3a1111296f3e5f86c8af18db12a6ae a déjà
-validé Backend (596 passed / 64 skipped) et PostgreSQL Integration
-(63 passed). Les jobs Frontend, Compose et Production Runtime restent
-à vérifier avant de valider ce HEAD comme candidat complet.
+Le workflow PR 46162054458 sur le SHA 80659881ee3a1111296f3e5f86c8af18db12a6ae est terminé avec 5/5 jobs réussis : Backend (596 passed / 64 skipped), PostgreSQL Integration (63 passed), Frontend, Compose Smoke et Production Runtime Smoke. Le workflow PR 46163329501 sur le SHA a4289248eaec66fde7ad4e3e1107e2598fb9704f est également vert 5/5.
 
 ### Matrice des preuves automatisées disponibles
 
@@ -1168,7 +1165,7 @@ validé Backend (596 passed / 64 skipped) et PostgreSQL Integration
 - RBAC HTTP : refus de mutation pour auditor, executive et viewer ; refus
   de lecture viewer sur les routes inventaire et relations.
 - Interface : 3 parcours Playwright (admin, auditor, viewer) sur Chromium,
-  Firefox et WebKit ; 15 tests navigateur au total sur le SHA 617e83f.
+  Firefox et WebKit ; 24 tests navigateur au total sur le SHA a428924.
 
 ### Points restant à traiter avant sortie Phase 1
 
@@ -1183,3 +1180,18 @@ validé Backend (596 passed / 64 skipped) et PostgreSQL Integration
   export, liens risques/fournisseurs et gestion des erreurs.
 - Vérifier la CI complète sur le HEAD final et effectuer la revue de
   non-régression automatisée.
+### Mise à jour E2E — retrait logique (28 novembre 2026)
+
+Le parcours administrateur vérifie désormais aussi le retrait logique d'un
+actif : confirmation, requête DELETE et rechargement de l'inventaire.
+Le commit aaee2dd5cf7fedf1b5c87e0bf3df567de1d09068 est en cours de CI.
+Le résultat sera enregistré après la fin des workflows Push et PR.
+
+### Organisation de la sortie de Phase 1
+
+La sortie de développement de Phase 1 repose sur des preuves automatisées
+et une revue de non-régression. La recette humaine et l'installation locale
+ne sont pas attendues à ce stade : elles seront regroupées après la clôture
+de l'ensemble des développements PGCC. Les validations qui nécessitent les
+référentiels organisationnels, le réseau ou les secrets réels CTF restent
+explicitement des gates de déploiement.
