@@ -907,3 +907,47 @@ peut avancer sans déclarer ces gates validés.
 - PR #1 reste Draft et non fusionnée ; main demeure inchangée.
 
 Les phases suivantes seront développées dans l'ordre de la roadmap : Risques, TPRM, Conformité, Audits, Gouvernance/workflows, Pilotage/reporting, puis Automatisation/IA/production. L'installation locale et la recette humaine seront réalisées après la clôture de tous ces développements.
+
+### Revue ciblée Risques — modèle actuel et périmètre Phase 2 (28 novembre 2026)
+
+Inspection des fichiers `backend/app/models/risk.py`,
+`backend/app/schemas/risk.py`, `backend/app/api/v1/endpoints/risks.py`,
+`backend/app/services/risk_scoring.py` et des migrations `0030`/`0031`.
+
+**Acquis confirmés dans le code :**
+- Le score courant est calculé côté serveur selon la matrice initiale
+  impact × vraisemblance (échelles 1 à 5) ; les entrées booléennes et hors
+  plage sont rejetées.
+- Les contraintes PostgreSQL garantissent les plages, la cohérence du score,
+  la référence non vide et l'unicité normalisée.
+- La suppression d'un risque est protégée par les liens aux actifs,
+  fournisseurs et actions ; la FK des actions est restrictive.
+- Les mises à jour partielles recalculent le score si impact/vraisemblance
+  changent et vérifient qu'un statut « En traitement », « Traité » ou
+  « Accepté » possède un plan/une justification.
+
+**Lacunes confirmées et non assimilées à des fonctionnalités terminées :**
+- Le modèle ne conserve qu'un couple impact/vraisemblance et un score courant ;
+  il n'existe pas encore de version de méthodologie attachée à chaque
+  évaluation, ni de séries d'évaluations inhérentes/résiduelles.
+- Les changements de statut écrasent l'état courant ; aucun journal métier
+  append-only dédié ne conserve l'ancien et le nouvel état, l'acteur, la date
+  et la justification.
+- « Accepté » est aujourd'hui un statut accompagné d'un texte dans
+  `treatment_plan`, pas un enregistrement d'acceptation distinct avec
+  autorité, justification, date d'effet, échéance et revue/expiration.
+- La matrice 1–5 et le produit impact × vraisemblance sont explicitement une
+  méthode initiale du projet, pas une méthode approuvée par la CTF. Aucun
+  seuil de décision ni niveau d'autorité organisationnel ne doit être
+  inventé pour compléter le modèle.
+
+**Décision de réalisation :** Phase 2 doit introduire des entités additives
+pour les évaluations versionnées, les décisions de traitement et les
+acceptations, avec historique append-only et migration sans réécriture des
+champs legacy. Les anciens champs restent lisibles et leur provenance doit
+être indiquée ; aucune approbation historique ne sera fabriquée. Les règles
+organisationnelles non documentées resteront configurables et non activées
+par défaut. Voir issue #8.
+
+Cette revue est une inspection de code et de migrations, pas une validation
+métier de la méthodologie de risque CTF.
