@@ -187,8 +187,8 @@ def test_csv_preview_does_not_echo_rejected_field_values():
     db.execute.return_value = _empty_result()
     sentinel = "DO_NOT_DISCLOSE_CSV_SECRET_7f3a91"
     csv_content = (
-        "reference,name,asset_type,criticality\\n"
-        f"CSV-INVALID-001,Invalid asset,hardware,{sentinel}\\n"
+        "reference,name,asset_type,criticality\n"
+        f"CSV-INVALID-001,Invalid asset,hardware,{sentinel}\n"
     )
 
     with _csv_client(db) as client:
