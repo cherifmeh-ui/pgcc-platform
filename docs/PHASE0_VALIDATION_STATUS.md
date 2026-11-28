@@ -1668,3 +1668,24 @@ Un test Playwright supplémentaire exerce maintenant le véritable endpoint Fast
 - Le token de test est masqué dans les logs GitHub Actions et ne concerne qu'une base éphémère.
 
 **Statut :** test ajouté, validation CI du HEAD en attente. Il ne simule toujours pas la perte de réponse après commit ; ce cas reste fail-secure et nécessite une décision de conception avant implémentation d'une récupération idempotente. L'issue #7 reste ouverte jusqu'à la CI verte et la revue du résultat.
+
+
+### Validation bout-en-bout du refresh — 28 novembre 2026
+
+- HEAD testé : `51667cf35c6189dec9db7adb8bd5ec4ccb06f8bd`.
+- Workflow GitHub Actions `46157868116` : **5/5 jobs réussis** — Backend, PostgreSQL Integration, Frontend, Compose Smoke et Production Runtime Smoke.
+- Backend : **562 passed / 63 skipped** ; PostgreSQL Integration : **62 passed**.
+- Frontend : les tests Playwright réels passent sur **Chromium, Firefox et WebKit** (6/6).
+- Le test d'intégration lance PostgreSQL éphémère, applique toutes les migrations, crée un compte et une session refresh de test, démarre FastAPI et passe par le proxy Vite.
+- Deux onglets partagent le cookie HttpOnly et effectuent deux rotations successives réussies.
+- Le scénario de perte de réponse exécute la rotation sur le vrai backend via un client HTTP indépendant, interrompt la réponse destinée au navigateur, vérifie que le cookie obsolète reste dans le navigateur, puis vérifie que sa répétition est rejetée en HTTP 401.
+- Le test de fermeture de l'onglet propriétaire du Web Lock passe également sur les trois moteurs.
+- Le token de test est masqué dans les logs et la base est éphémère ; aucune donnée ou clé CTF n'est utilisée.
+
+#### Décision technique retenue pour Phase 0
+
+Pour éviter de stocker un refresh token de remplacement chiffré et d'introduire un nouveau secret de récupération, le comportement retenu comme défaut est **fail-closed avec réauthentification obligatoire** après une issue ambiguë : un ancien token déjà consommé n'est jamais accepté comme retry ; sa répétition suit la détection de rejeu et révoque les sessions actives. Aucun grace period sur l'ancien token seul n'est introduit.
+
+Cette décision réduit la surface de stockage de secrets, au prix d'une déconnexion possible lors d'une perte de réponse après commit. Le test ci-dessus démontre ce comportement sur PostgreSQL/FastAPI et trois moteurs navigateur. La décision doit encore être confirmée par le propriétaire du service dans la revue humaine ; ce n'est pas une acceptation de risque opérationnel.
+
+**Limites restantes :** le workflow s'exécute dans une infrastructure GitHub Actions éphémère. Il ne remplace pas la recette sur le réseau, les domaines, les certificats, les secrets, les proxys et les navigateurs effectivement déployés à la CTF.
