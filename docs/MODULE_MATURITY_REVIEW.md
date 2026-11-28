@@ -848,3 +848,8 @@ La revue du store Pinia a révélé un second point d'entrée : `restoreSession(
 Workflow PR `46148021953` sur le commit `48acdb2` : **5/5 jobs réussis**. Frontend : 3 tests Node + 1 test Playwright Chromium réussis, build Vite réussi, npm audit 0 vulnérabilité. Backend : 562 passed / 63 skipped. PostgreSQL : 62 passed. Compose et Production Runtime Smoke réussis.
 
 Le test navigateur est multi-pages avec cookie HttpOnly partagé, mais le endpoint HTTP est simulé. Maturité Auth améliorée ; elle ne suffit pas à clôturer le module : intégration réelle FastAPI/PostgreSQL, réponse perdue après commit, cycle de vie des onglets, compatibilité navigateur et revue humaine restent à faire. Issue #7 reste ouverte.
+
+
+### Auth — décision de conception sur le refresh ambigu (28/11/2026)
+
+Le cas commit DB / réponse HTTP perdue est documenté. Un grace period sur ancien token seul est rejeté ; le protocole candidat exige un identifiant d'opération, un stockage chiffré temporaire du successeur et une coordination inter-onglets. Pas de modification backend sans revue sécurité/clé et tests end-to-end. Voir docs/REFRESH_ROTATION_RECOVERY_DESIGN.md. Maturité Auth non clôturée.
