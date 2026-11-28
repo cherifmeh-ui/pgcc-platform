@@ -9,7 +9,7 @@ test('real FastAPI/PostgreSQL refresh rotation is serialized and lost responses 
   await context.addCookies([{
     name: 'pgcc_refresh',
     value: initialRefreshToken,
-    url: 'http://localhost:4173',
+    domain: 'localhost',
     path: '/api/v1/auth',
     httpOnly: true,
     sameSite: 'Strict',
