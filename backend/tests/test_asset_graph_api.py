@@ -96,8 +96,13 @@ async def test_impact_excludes_retired_assets_from_dependency_edges():
     source_result.scalar_one_or_none.return_value = source
     relation_result = MagicMock()
     relation_result.all.return_value = []
+    source_risk_id = UUID("00000000-0000-0000-0000-000000000099")
+    risk_result = MagicMock()
+    risk_result.all.return_value = [
+        (A, source_risk_id, "RISK-SOURCE-001", "Source-only risk", 20, "Ouvert"),
+    ]
     db = AsyncMock()
-    db.execute.side_effect = [source_result, relation_result]
+    db.execute.side_effect = [source_result, relation_result, risk_result]
 
     result = await get_asset_impact(
         asset_id=A, db=db, current_user=MagicMock(role="viewer"),
@@ -106,8 +111,17 @@ async def test_impact_excludes_retired_assets_from_dependency_edges():
     assert result["source"]["id"] == A
     assert result["impacted_assets"] == []
     assert result["total_impacted"] == 0
+    assert result["source"]["linked_risks"] == [{
+        "id": source_risk_id,
+        "ref": "RISK-SOURCE-001",
+        "title": "Source-only risk",
+        "risk_level": 20,
+        "status": "Ouvert",
+    }]
+    assert result["risk_summary"]["total"] == 1
+    assert result["risk_summary"]["unacceptable"] == 1
     assert result["supplier_access_available"] is False
-    assert db.execute.await_count == 2
+    assert db.execute.await_count == 3
 
     relation_sql = str(db.execute.await_args_list[1].args[0]).lower()
     assert "asset_relationships.relationship_type =" in relation_sql
