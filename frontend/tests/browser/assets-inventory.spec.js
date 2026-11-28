@@ -209,6 +209,7 @@ test('admin creates and updates an asset, then exports the filtered inventory', 
   const created = await createRequest;
   expect(created.postDataJSON().reference).toBe('AST-NEW-001');
   expect(created.postDataJSON().name).toBe('Nouvel actif de test');
+  await expect(page.locator('form.modal')).toHaveCount(0);
 
   const updateRequest = page.waitForRequest((request) =>
     request.method() === 'PATCH' && new URL(request.url()).pathname.endsWith('/' + assetOne.id)
@@ -218,6 +219,7 @@ test('admin creates and updates an asset, then exports the filtered inventory', 
   await page.locator('form.modal').getByRole('button', { name: 'Enregistrer' }).click();
   const updated = await updateRequest;
   expect(updated.postDataJSON().name).toBe('Serveur de production renommé');
+  await expect(page.locator('form.modal')).toHaveCount(0);
 
   const downloadPromise = page.waitForEvent('download');
   await page.getByRole('button', { name: 'Exporter CSV' }).click();
