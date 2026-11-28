@@ -147,3 +147,13 @@ La Phase 0 ne pourra être déclarée close que lorsque :
 - les responsables autorisent explicitement la clôture de Phase 0.
 
 **État au 27 novembre 2026 :** CI sur le SHA `5b87a54150394521fe974ab3bfc82a3a423c3b2c` : deux workflows observés, chacun avec les cinq jobs réussis. PR #1 toujours Draft ; aucune revue GitHub enregistrée au dernier contrôle. Les validations opérationnelles sur l'environnement cible et les décisions formelles d'acceptation restent à obtenir.
+
+
+## Actualisation du périmètre de revue — 28 novembre 2026
+
+- SHA candidat au checkpoint : `9194419b8017d8b8154a7c29bc6322fbfc8e4d90`.
+- Le compare GitHub `main...chore/phase0-stabilization` rapporte **1 693 commits en avance et 0 en retard** au moment de la vérification (le nombre historique 1 570 ci-dessus est donc obsolète). Le reviewer doit comprendre le graphe et le périmètre exact de la PR avant approbation ; ce nombre ne constitue pas à lui seul une preuve de problème.
+- Le workflow PR `46140116019` sur le SHA candidat est vert 5/5 ; Backend 562 passed / 63 skipped, PostgreSQL 62 passed. Les environnements CI sont jetables et ne couvrent pas l'exploitation réelle.
+- Point supplémentaire à inclure dans la revue Auth : coordination du refresh cookie entre onglets. La file d'attente Axios n'est locale qu'à un contexte JavaScript ; la concurrence entre onglets n'est pas démontrée comme maîtrisée. Exiger une preuve navigateur ou une décision formelle de contrainte/risque avant fermeture du gate.
+
+Le statut demeure **en attente d'un reviewer indépendant**. Aucune approbation ni acceptation de risque n'est présumée par cette actualisation.
