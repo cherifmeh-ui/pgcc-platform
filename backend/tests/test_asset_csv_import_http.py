@@ -141,3 +141,42 @@ def test_csv_preview_detects_case_insensitive_duplicate_identifiers_in_same_file
     assert payload["rows_parsed"] == 2
     assert any(expected_error in error["error"] for error in payload["errors"])
     db.commit.assert_not_awaited()
+
+
+@pytest.mark.parametrize(
+    ("payload", "expected_name"),
+    [
+        (
+            b"\xef\xbb\xbfreference,name,asset_type,comment\r\n"
+            b"CSV-BOM-001,\"Serveur, principal\",hardware,\"ligne 1\r\nligne 2\"\r\n"
+            b"\r\n",
+            "Serveur, principal",
+        ),
+        (
+            "reference,name,asset_type,comment\n"
+            "CSV-UTF8-001,\"Serveur réseau\",hardware,\"valeur avec ; séparateur\"\n"
+            "\n"
+        ).encode("utf-8"),
+            "Serveur réseau",
+        ),
+    ],
+)
+def test_csv_preview_accepts_utf8_bom_crlf_quoted_fields_and_blank_lines(
+    payload, expected_name
+):
+    db = AsyncMock()
+    db.execute.return_value = _empty_result()
+
+    with _csv_client(db) as client:
+        response = client.post(
+            "/api/v1/assets/import/preview",
+            files={"file": ("inventory.csv", payload, "text/csv")},
+        )
+
+    assert response.status_code == 200, response.text
+    result = response.json()
+    assert result["can_import"] is True
+    assert result["rows_parsed"] == 1
+    assert result["rows_valid"] == 1
+    assert result["validated_rows"][0]["data"]["name"] == expected_name
+    assert db.commit.await_count == 0
