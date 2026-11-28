@@ -1592,3 +1592,14 @@ La revue du store Pinia a révélé un second point d'entrée : `restoreSession(
 Ce résultat valide le workflow automatisé sur ce HEAD et les environnements éphémères CI. Il ne remplace pas la recette avec les secrets, certificats, DNS, reverse proxy, CIDR de confiance et seuils réels, ni un exercice de restauration depuis une sauvegarde de l'environnement cible. Les validations humaines, l'approbation des risques résiduels et les scénarios de refresh navigateur contre le véritable backend restent ouverts (issues #2, #4, #5 et #7).
 
 **Décision : Phase 0 reste ouverte.** Ne pas fusionner la PR #1 ni annoncer une readiness production sur la seule base de ce workflow vert.
+
+
+### Vérification ciblée — révocation des sessions par administration (28 novembre 2026)
+
+- Revue du test PostgreSQL `backend/tests/test_admin_user_lifecycle_postgres.py` : un test paramétré couvre explicitement quatre mutations de sécurité — changement de rôle, désactivation du compte, réinitialisation MFA et révocation explicite des sessions.
+- Pour chaque mutation, le test crée un access token avant changement, exécute la mutation, puis vérifie le rejet de l'ancien access token par `get_current_user`, la révocation de la session refresh persistée et la présence d'un événement d'audit correspondant.
+- Les tests existants couvrent également l'atomicité mutation/audit, le rollback si l'outbox échoue, la protection du dernier administrateur MFA actif et le contrôle de l'acteur administrateur après verrouillage.
+- Workflow `46152863909` sur le HEAD `6beb776d17334eac5ffefb91a11b4234699db399` : **5/5 jobs réussis**. Le job PostgreSQL a exécuté la suite d'intégration après migrations et restore CI ; le job Backend et le test navigateur Chromium sont également passés.
+- Cette preuve ferme le point de couverture des quatre mutations dans l'environnement PostgreSQL CI. Elle ne constitue pas une validation sur l'environnement CTF ni une revue humaine indépendante.
+
+**État des gates Phase 0 :** la couverture de révocation administrative est maintenant démontrée par les tests PostgreSQL. Restent notamment la recette opérationnelle réelle (proxy/CIDR, seuils/alertes), l'exercice de restauration depuis sauvegarde chiffrée réelle avec RPO/RTO, le test refresh navigateur contre FastAPI/PostgreSQL avec perte de réponse, et la revue humaine indépendante / acceptation formelle des risques.
