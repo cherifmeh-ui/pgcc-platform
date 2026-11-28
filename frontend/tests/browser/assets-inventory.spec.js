@@ -229,7 +229,6 @@ test('admin creates and updates an asset, then exports the filtered inventory', 
 
 test('admin previews and confirms a CSV import without bypassing the preview step', async ({ page }) => {
   await mockPgccApi(page, 'admin');
-  page.on('dialog', (dialog) => dialog.accept());
   await page.goto('/assets');
 
   await page.getByRole('button', { name: 'Importer CSV' }).click();
@@ -248,7 +247,11 @@ test('admin previews and confirms a CSV import without bypassing the preview ste
   const confirmRequest = page.waitForRequest((request) =>
     request.method() === 'POST' && new URL(request.url()).pathname.endsWith('/assets/import/confirm')
   );
+  const confirmationDialog = page.waitForEvent('dialog');
   await page.getByRole('button', { name: 'Confirmer l’import' }).click();
   await confirmRequest;
+  const dialog = await confirmationDialog;
+  expect(dialog.message()).toBe('1 actifs importés avec succès.');
+  await dialog.accept();
   await expect(page.getByRole('heading', { name: 'Cartographie des actifs' })).toBeVisible();
 });
