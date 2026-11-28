@@ -72,10 +72,10 @@ apiClient.interceptors.response.use(
     isRefreshing = true;
 
     try {
+      // Reuse the configured client so the 15s request timeout also bounds
+      // lock ownership; a stalled refresh must not block every same-origin tab.
       const { data } = await withCrossTabRefreshLock(() =>
-        axios.post(`${apiClient.defaults.baseURL}/auth/refresh`, null, {
-          withCredentials: true,
-        })
+        apiClient.post('/auth/refresh', null, { withCredentials: true })
       );
 
       const newAccessToken = data.access_token;
