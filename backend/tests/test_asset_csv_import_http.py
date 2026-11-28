@@ -180,3 +180,33 @@ def test_csv_preview_accepts_utf8_bom_crlf_quoted_fields_and_blank_lines(
     assert result["rows_valid"] == 1
     assert result["validated_rows"][0]["data"]["name"] == expected_name
     assert db.commit.await_count == 0
+
+
+def test_csv_preview_does_not_echo_rejected_field_values():
+    db = AsyncMock()
+    db.execute.return_value = _empty_result()
+    sentinel = "DO_NOT_DISCLOSE_CSV_SECRET_7f3a91"
+    csv_content = (
+        "reference,name,asset_type,criticality\\n"
+        f"CSV-INVALID-001,Invalid asset,hardware,{sentinel}\\n"
+    )
+
+    with _csv_client(db) as client:
+        response = client.post(
+            "/api/v1/assets/import/preview",
+            files={
+                "file": (
+                    "inventory.csv",
+                    csv_content.encode("utf-8"),
+                    "text/csv",
+                )
+            },
+        )
+
+    assert response.status_code == 200
+    payload = response.json()
+    assert payload["can_import"] is False
+    assert sentinel not in response.text
+    assert "criticality" in payload["errors"][0]["error"]
+    assert "input_value" not in response.text
+    db.commit.assert_not_awaited()
