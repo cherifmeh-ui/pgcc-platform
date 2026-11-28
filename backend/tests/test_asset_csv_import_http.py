@@ -153,7 +153,8 @@ def test_csv_preview_detects_case_insensitive_duplicate_identifiers_in_same_file
             "Serveur, principal",
         ),
         (
-            "reference,name,asset_type,comment\n"
+            (
+                "reference,name,asset_type,comment\n"
             "CSV-UTF8-001,\"Serveur réseau\",hardware,\"valeur avec ; séparateur\"\n"
             "\n"
         ).encode("utf-8"),
