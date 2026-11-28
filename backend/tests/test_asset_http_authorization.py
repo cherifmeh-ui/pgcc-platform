@@ -558,3 +558,73 @@ def test_asset_inventory_pagination_rejects_out_of_range_filters_before_database
 
     assert response.status_code == 422
     db.execute.assert_not_awaited()
+
+
+@pytest.mark.parametrize("role", ["auditor", "executive", "viewer"])
+@pytest.mark.parametrize(
+    ("method", "path", "payload", "upload"),
+    [
+        (
+            "PATCH",
+            "/api/v1/assets/00000000-0000-0000-0000-000000000041",
+            {"name": "Forbidden update"},
+            False,
+        ),
+        (
+            "DELETE",
+            "/api/v1/assets/00000000-0000-0000-0000-000000000041",
+            None,
+            False,
+        ),
+        (
+            "POST",
+            "/api/v1/assets/import/preview",
+            None,
+            True,
+        ),
+        (
+            "POST",
+            "/api/v1/assets/import/confirm",
+            None,
+            True,
+        ),
+        (
+            "POST",
+            "/api/v1/assets/00000000-0000-0000-0000-000000000041/relationships",
+            {
+                "target_asset_id": "00000000-0000-0000-0000-000000000042",
+                "relationship_type": "depends_on",
+            },
+            False,
+        ),
+        (
+            "POST",
+            "/api/v1/assets/00000000-0000-0000-0000-000000000041/risks",
+            {"risk_id": "00000000-0000-0000-0000-000000000043"},
+            False,
+        ),
+    ],
+)
+def test_non_admin_roles_cannot_mutate_assets_or_import_over_http(
+    role, method, path, payload, upload
+):
+    """Read-only roles must be rejected before asset-domain database queries."""
+    db = AsyncMock()
+    files = (
+        {"file": ("assets.csv", "reference,name,asset_type\nAUTH-001,Test,hardware\n", "text/csv")}
+        if upload
+        else None
+    )
+
+    with _client_for_role(role, db) as client:
+        response = client.request(
+            method,
+            path,
+            json=payload,
+            files=files,
+        )
+
+    assert response.status_code == 403
+    db.execute.assert_not_awaited()
+    db.commit.assert_not_awaited()
+    db.flush.assert_not_awaited()
