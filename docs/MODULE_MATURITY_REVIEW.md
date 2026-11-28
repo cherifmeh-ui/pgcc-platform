@@ -865,3 +865,9 @@ Le test Playwright de coordination inter-onglets est étendu à Chromium, Firefo
 Un scénario Playwright réel a été ajouté : le job lance PostgreSQL, applique les migrations, prépare un compte/session jetable, démarre FastAPI et fait transiter les appels depuis le navigateur via le proxy Vite. Deux onglets doivent réussir deux rotations successives avec cookie HttpOnly partagé ; un second contexte rejoue ensuite l'ancien cookie et doit obtenir HTTP 401. La matrice est Chromium, Firefox et WebKit. Le token d'intégration est éphémère et masqué par GitHub Actions.
 
 Cette preuve ne sera acquise qu'après réussite du workflow sur le HEAD exact. Le scénario commit réussi / réponse HTTP perdue reste non résolu volontairement : la détection de rejeu est conservée, sans grace period ni stockage du successeur avant revue de menace.
+
+### Validation Auth bout-en-bout — 28 novembre 2026
+
+Le workflow `46157868116` sur le commit `51667cf35c6189dec9db7adb8bd5ec4ccb06f8bd` est vert **5/5**. Les tests Playwright réels (6/6) tournent sur Chromium, Firefox et WebKit avec un backend FastAPI et une base PostgreSQL éphémère. Ils valident deux rotations inter-onglets avec cookie HttpOnly, la fermeture du détenteur du verrou, et le cas commit réussi / réponse perdue : le cookie périmé reste côté navigateur et sa répétition reçoit HTTP 401. Backend : 562 passed / 63 skipped ; PostgreSQL : 62 passed.
+
+Décision de conception Phase 0 proposée : rester fail-closed et exiger une réauthentification après résultat ambigu plutôt que d'ajouter un store de refresh tokens de récupération chiffrés. La décision technique est couverte par test, mais attend la confirmation du propriétaire du service. La maturité automatisée Auth progresse ; la recette sur l'environnement cible et la revue humaine restent ouvertes.
