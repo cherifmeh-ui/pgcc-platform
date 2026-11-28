@@ -841,3 +841,10 @@ La revue du store Pinia a révélé un second point d'entrée : `restoreSession(
 - Le serveur HTTP est simulé par interception Playwright ; la preuve couvre la sérialisation inter-pages et la propagation du cookie tourné, pas l'intégration complète avec FastAPI/PostgreSQL.
 - Le job CI installe Playwright/Chromium de façon éphémère, sans ajout au package.json/package-lock.
 - Maturité Auth : contrôle navigateur en cours de validation CI ; gate toujours ouvert pour intégration avec backend réel, réponse réseau perdue après commit, fermeture/suspension d'onglet, compatibilité navigateurs et revue humaine. Voir issue #7.
+
+
+### Validation CI — coordination refresh inter-onglets (28 novembre 2026)
+
+Workflow PR `46148021953` sur le commit `48acdb2` : **5/5 jobs réussis**. Frontend : 3 tests Node + 1 test Playwright Chromium réussis, build Vite réussi, npm audit 0 vulnérabilité. Backend : 562 passed / 63 skipped. PostgreSQL : 62 passed. Compose et Production Runtime Smoke réussis.
+
+Le test navigateur est multi-pages avec cookie HttpOnly partagé, mais le endpoint HTTP est simulé. Maturité Auth améliorée ; elle ne suffit pas à clôturer le module : intégration réelle FastAPI/PostgreSQL, réponse perdue après commit, cycle de vie des onglets, compatibilité navigateur et revue humaine restent à faire. Issue #7 reste ouverte.
