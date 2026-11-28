@@ -44,7 +44,7 @@ test('real FastAPI/PostgreSQL refresh rotation is serialized and lost responses 
   // Simulate the transport losing a successful response after FastAPI has
   // committed the rotation. route.fetch reaches the real backend, but aborting
   // the browser response prevents its Set-Cookie from reaching the cookie jar.
-  const cookieBeforeLoss = await context.cookies('http://localhost:4173');
+  const cookieBeforeLoss = await context.cookies('http://localhost:4173/api/v1/auth');
   const oldCookie = cookieBeforeLoss.find((cookie) => cookie.name === 'pgcc_refresh');
   expect(oldCookie?.value).toBeTruthy();
 
@@ -67,7 +67,7 @@ test('real FastAPI/PostgreSQL refresh rotation is serialized and lost responses 
   expect(responseWasLost).toBe(true);
   await firstTab.unroute('**/api/v1/auth/refresh');
 
-  const cookieAfterLoss = await context.cookies('http://localhost:4173');
+  const cookieAfterLoss = await context.cookies('http://localhost:4173/api/v1/auth');
   expect(cookieAfterLoss.find((cookie) => cookie.name === 'pgcc_refresh')?.value)
     .toBe(oldCookie.value);
 
