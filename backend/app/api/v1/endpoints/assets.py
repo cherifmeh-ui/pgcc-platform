@@ -11,7 +11,7 @@ from fastapi.responses import Response
 from pydantic import BaseModel, ConfigDict, Field, ValidationError, field_validator
 from sqlalchemy import select, func, case
 from sqlalchemy.exc import IntegrityError
-from sqlalchemy.orm import aliased
+from sqlalchemy.orm import aliased, load_only
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.api.deps import require_permission
@@ -502,16 +502,37 @@ async def get_asset_dependency_graph(
     current_user: User = require_permission("assets", "read"),
 ):
     """Return the active asset inventory and its explicit relationships for visualization."""
-    assets_result = await db.execute(select(Asset).where(*_active_asset_filter()).order_by(Asset.name.asc()))
+    # The graph is a read model: load only fields serialized in its response.
+    # Avoid fetching long descriptions, technical identifiers and other inventory
+    # columns for every node/edge when the graph is opened.
+    assets_result = await db.execute(
+        select(Asset)
+        .options(load_only(
+            Asset.id, Asset.reference, Asset.name, Asset.asset_type,
+            Asset.criticality, Asset.direction, Asset.lifecycle_status,
+            Asset.owner, Asset.location,
+        ))
+        .where(*_active_asset_filter())
+        .order_by(Asset.name.asc(), Asset.reference.asc(), Asset.id.asc())
+    )
     assets = assets_result.scalars().all()
     active_asset_ids = select(Asset.id).where(*_active_asset_filter())
     relations_result = await db.execute(
         select(AssetRelationship)
+        .options(load_only(
+            AssetRelationship.id, AssetRelationship.source_asset_id,
+            AssetRelationship.target_asset_id, AssetRelationship.relationship_type,
+            AssetRelationship.description,
+        ))
         .where(
             AssetRelationship.source_asset_id.in_(active_asset_ids),
             AssetRelationship.target_asset_id.in_(active_asset_ids),
         )
-        .order_by(AssetRelationship.created_at.asc())
+        .order_by(
+            AssetRelationship.source_asset_id.asc(),
+            AssetRelationship.target_asset_id.asc(),
+            AssetRelationship.id.asc(),
+        )
     )
     relations = relations_result.scalars().all()
     return {
