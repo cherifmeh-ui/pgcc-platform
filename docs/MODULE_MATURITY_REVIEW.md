@@ -830,3 +830,6 @@ suivantes n'est déclaré par cette mise à jour.
 - Ajout de trois tests Node du composant de verrou et exécution de `npm test` dans le job Frontend.
 - Le comportement est fail-closed sans Web Locks ; le support navigateur et la récupération après perte de réponse réseau restent à valider.
 - Aucun test Playwright multi-pages ni test end-to-end du cookie HttpOnly n'est encore présent : maturité Auth améliorée mais non clôturée. Voir issue #7.
+### Complément — restauration initiale de session
+
+La revue du store Pinia a révélé un second point d'entrée : `restoreSession()` appelait directement `/auth/refresh`, en dehors de l'intercepteur de renouvellement. Cet appel est maintenant lui aussi enveloppé dans le même verrou Web Locks. Ainsi, les rotations automatiques après 401 et la restauration au chargement de l'application partagent le même verrou inter-onglets. Cette correction est incluse dans le commit `af88df5` ; sa CI doit être vérifiée séparément.
