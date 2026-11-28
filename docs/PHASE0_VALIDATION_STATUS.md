@@ -1622,3 +1622,30 @@ Ce résultat valide le workflow automatisé sur ce HEAD et les environnements é
 Le test Playwright utilise toujours un endpoint refresh simulé ; il ne démontre pas un parcours navigateur contre le backend FastAPI/PostgreSQL ni le traitement d'une réponse perdue après commit. La sauvegarde/restauration exécutée est une preuve CI sur une base éphémère, pas un exercice sur une sauvegarde chiffrée de l'environnement CTF avec RPO/RTO approuvés. La recette des paramètres réels du reverse proxy/CIDR/rate-limit/alertes et la revue humaine indépendante restent nécessaires.
 
 **Décision :** le HEAD exact est vert en CI, mais Phase 0 reste ouverte. Ne pas fusionner PR #1 et ne pas présenter ce résultat comme une homologation ou une readiness production.
+
+### Revue opérationnelle ciblée — rate limiting et proxy de confiance (28 novembre 2026)
+
+Revue statique de `backend/app/services/auth_rate_limiter.py`, `backend/app/core/config.py`, `docker-compose.production.yaml`, `.env.production.example` et des tests unitaires/PostgreSQL.
+
+#### Politique actuellement codée
+
+| Action | Limite IP | Limite compte | Fenêtre | Blocage |
+|---|---:|---:|---:|---:|
+| Login | 20 | 20 | 15 min | 15 min |
+| Confirmation MFA | 30 | 10 | 15 min | 15 min |
+| Enrôlement MFA | 10 | 5 | 15 min | 15 min |
+| Changement mot de passe | 5 | 5 | 15 min | 15 min |
+| Refresh | 120 | 30 | 15 min | 5 min |
+
+- Les seuils sont des constantes applicatives, pas des paramètres d'environnement : leur adéquation métier doit être approuvée avant production et tout changement nécessite revue/test.
+- Les identifiants de buckets sont HMACés ; le stockage ne conserve pas directement les IP/adresses e-mail. Les compteurs sont partagés via PostgreSQL et incrémentés par upsert atomique.
+- Le service échoue en HTTP 503 si la persistance du limiteur échoue ; les tentatives sont donc refusées par défaut. Le nettoyage supprime les buckets inactifs après 48 heures.
+- Les journaux produisent un événement structuré `auth_rate_limit_exceeded` avec action, portée et délai Retry-After, sans inclure l'IP ou l'e-mail. La présence d'une collecte centralisée, d'une alerte et d'un tableau de bord sur l'environnement cible n'est pas démontrée par le dépôt.
+- `X-Forwarded-For` n'est exploité que si le pair réseau immédiat appartient à `AUTH_TRUSTED_PROXY_IPS`. Le Compose de production épingle actuellement le frontend à `172.31.10.10` et l'exemple configure ce /32 ; la topologie réelle doit confirmer que le backend ne peut recevoir le trafic client que depuis ce proxy et que cette adresse reste stable.
+- Les tests unitaires couvrent l'ignorance d'un XFF non fiable, la chaîne de proxys, les chaînes malformées, les seuils bornés, la confidentialité HMAC et l'échec fermé. Les tests PostgreSQL couvrent l'atomicité concurrente IP et compte.
+
+#### Décision et actions encore requises
+
+Ne pas modifier les seuils sans données d'exploitation. Avant clôture : faire approuver les seuils par le propriétaire métier/RSSI, vérifier la topologie réseau et le CIDR réellement observé, confirmer la centralisation des logs et créer des alertes testées pour les événements 429/503 et les anomalies de volume. Aucun test de recette sur l'infrastructure CTF n'a été réalisé par cette revue statique.
+
+**Statut :** le mécanisme technique et sa couverture automatisée sont présents ; le gate opérationnel proxy/seuils/alertes reste ouvert (issue #5).
