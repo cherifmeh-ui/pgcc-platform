@@ -1,5 +1,6 @@
 // frontend/src/services/api.js
 import axios from 'axios';
+import { withCrossTabRefreshLock } from './refreshLock.js';
 
 let accessToken = null;
 export function setAccessToken(token) {
@@ -71,9 +72,11 @@ apiClient.interceptors.response.use(
     isRefreshing = true;
 
     try {
-      const { data } = await axios.post(`${apiClient.defaults.baseURL}/auth/refresh`, null, {
-        withCredentials: true,
-      });
+      const { data } = await withCrossTabRefreshLock(() =>
+        axios.post(`${apiClient.defaults.baseURL}/auth/refresh`, null, {
+          withCredentials: true,
+        })
+      );
 
       const newAccessToken = data.access_token;
       setAccessToken(newAccessToken);
