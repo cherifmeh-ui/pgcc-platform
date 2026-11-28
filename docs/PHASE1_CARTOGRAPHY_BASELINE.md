@@ -4,7 +4,7 @@
 **Branche de travail :** `chore/phase0-stabilization`  
 **HEAD de départ Phase 1 :** `f4cce2ac69ee4f8f9beb58ab93fc089517a64459`  
 **Statut :** Phase 1 démarrée — audit initial du code et cadrage des corrections.  
-**Hypothèse de pilotage :** les validations humaines Phase 0 sont supposées conformes pour permettre le démarrage du développement ; leur preuve et la clôture administrative restent à enregistrer séparément.
+**Organisation de la recette :** aucune validation humaine n'est présumée ni attendue pendant le développement. La recette locale et les tests humains seront réalisés après clôture de tous les développements PGCC ; les gates propres à l'infrastructure CTF restent explicitement non validés jusque-là.
 
 ## 1. Validation du point de départ
 
@@ -60,8 +60,8 @@ Cette présence fonctionnelle ne vaut pas encore validation complète de chaque 
 - La vérification de `docs/TARGET_DATA_MODEL.md` confirme désormais explicitement la relation Application 1:N Asset (une application peut référencer plusieurs actifs ; chaque actif référence au plus une application).
 - `docs/ASSET_INVENTORY_IMPLEMENTATION.md`, `docs/ASSET_DATA_MODEL_REVIEW.md` et la migration `0008_asset_application_cardinality` concordent : la contrainte unique historique sur `assets.application_id` est supprimée, tandis que la FK restrictive est conservée.
 - Le modèle SQLAlchemy actuel ne déclare aucune unicité sur `application_id`.
-- Le test PostgreSQL existant `test_application_supports_multiple_assets_reassignment_and_restrictive_delete` dans `backend/tests/test_asset_lifecycle_postgres.py` couvre déjà deux actifs liés à une même application, la réaffectation vers une autre application et la restriction de suppression. Ce fichier est explicitement exécuté par le job PostgreSQL Integration.
-- **Décision :** aucune migration supplémentaire ni conversion de données n'est requise pour cette cardinalité. Le contrôle passe du statut « contradiction documentaire » au statut « test de régression physique à exécuter ».
+- Le test PostgreSQL existant `test_application_supports_multiple_assets_reassignment_and_restrictive_delete` dans `backend/tests/test_asset_lifecycle_postgres.py` couvre deux actifs liés à une même application, la réaffectation et la FK restrictive. Il est exécuté dans le job PostgreSQL Integration ; les workflows sur les HEAD e31b502 et suivants ont passé ce job.
+- **Décision :** aucune migration supplémentaire ni conversion de données n'est requise pour cette cardinalité. La contradiction documentaire est résolue et le test de régression PostgreSQL est exécuté.
 
 ### P1-CARTO-002 — Responsabilités d'actifs encore textuelles
 
@@ -72,10 +72,9 @@ Cette présence fonctionnelle ne vaut pas encore validation complète de chaque 
 
 ### P1-CARTO-003 — Endpoints graphe et qualité à évaluer en charge
 
-- `GET /assets/graph` charge tous les actifs actifs et toutes les relations avant filtrage en mémoire.
-- `GET /assets/quality` charge tous les actifs actifs pour calculer les compteurs.
-- L'impact charge les relations de dépendance pour parcourir le graphe.
-- **Action :** définir des seuils de volumétrie, examiner les plans SQL et ajouter des tests de volumétrie/latence. Envisager agrégations SQL, filtrage serveur ou pagination/limites explicites si les mesures le justifient.
+- `GET /assets/graph` charge désormais uniquement les colonnes affichées pour les actifs et relations, avec un tri déterministe ; la réponse conserve son contrat JSON.
+- `GET /assets/quality` utilise des agrégations SQL ; l'impact charge encore les relations de dépendance nécessaires au parcours transitif.
+- **Action restante :** mesurer plans SQL, mémoire et latence avec une volumétrie synthétique représentative avant toute décision de pagination, plafond ou stratégie de graphe. L'optimisation de projection seule ne constitue pas un benchmark.
 
 ### P1-CARTO-004 — Cohérence des filtres entre liste, pagination et export
 
@@ -103,31 +102,31 @@ Cette présence fonctionnelle ne vaut pas encore validation complète de chaque 
 - [ ] Revue complète des routes, schémas, tests et migrations du domaine.
 - [ ] Matrice route × rôle × opération × résultat attendu.
 - [ ] Matrice des transitions de cycle de vie et des dépendances inter-modules.
-- [ ] Réconciliation des documents de modèle et d'implémentation.
+- [x] Réconciliation des documents de modèle et d'implémentation (Application 1:N Asset).
 
 ### Jalon 2 — Intégrité métier et responsabilités
 - [ ] Tester et corriger les transitions de cycle de vie.
-- [ ] Valider Asset↔Application et Asset↔Risk sur PostgreSQL.
-- [ ] Valider Asset↔Asset, cycle, doublons et concurrence.
-- [ ] Valider les interactions fournisseurs et demandes d'accès.
+- [x] Valider Asset↔Application et Asset↔Risk sur PostgreSQL.
+- [x] Valider Asset↔Asset, cycle, doublons et concurrence.
+- [x] Valider les interactions fournisseurs et demandes d'accès par tests PostgreSQL de cycle de vie et de périmètre.
 - [ ] Décider le modèle de responsabilité (User/Unité) sur la base des entités existantes.
 
 ### Jalon 3 — Inventaire et opérations de masse
-- [ ] Tests API complets pagination/filtres/export.
-- [ ] Tests d'import CSV : encodage, limites, doublons, concurrence, atomicité et audit.
+- [x] Tests API/PostgreSQL pagination, filtres et équivalence export.
+- [x] Tests d'import CSV : encodage, limites, doublons, concurrence, atomicité et audit.
 - [ ] Vérification de l'absence de fuite de données dans les exports.
 - [ ] Vérification de la performance sur volumétrie représentative.
 
 ### Jalon 4 — Graphe et analyse d'impact
-- [ ] Tests de parcours multi-niveaux, chemins multiples, actifs retirés et cycles.
+- [x] Tests de parcours multi-niveaux, chemins multiples, actifs retirés et cycles (tests unitaires et PostgreSQL).
 - [ ] Définir précisément la sémantique des relations orientées.
-- [ ] Valider la déduplication des risques et les agrégats.
-- [ ] Vérifier l'accès aux informations fournisseurs et risques selon permissions.
+- [x] Valider la déduplication des risques et les agrégats sur l'actif source et les dépendants (test PostgreSQL ajouté).
+- [x] Vérifier l'accès aux informations fournisseurs et risques selon permissions.
 - [ ] Tester les limites de volumétrie et la stabilité de l'interface.
 
 ### Jalon 5 — Validation et clôture
 - [ ] Tests unitaires, API et PostgreSQL sur les scénarios pertinents.
-- [ ] Tests frontend et parcours utilisateur.
+- [x] Tests frontend et parcours navigateur Playwright sur Chromium, Firefox et WebKit (15 tests sur le SHA 617e83f).
 - [ ] Migrations fraîches et upgrade depuis schéma existant si changement DB.
 - [ ] CI complète verte sur le HEAD candidat.
 - [ ] Revue non-régression, documentation et critères de sortie Phase 1.
@@ -1132,3 +1131,55 @@ Le test `test_graph_returns_active_assets_and_relationships` vérifie que les
 colonnes utiles restent sélectionnées et que les colonnes inutiles
 (`description` de l'actif, `serial_number`, horodatage de création de la
 relation) ne sont plus incluses dans les requêtes du graphe.
+
+## 6. Complément — résultats et écarts actualisés (28 novembre 2026)
+
+### P1-CARTO-007 — Synthèse de risques incomplète sur l'actif source
+
+**Statut : corrigé dans le code, validation CI du HEAD candidat en cours.**
+
+La revue a montré que l'agrégat de risques de l'analyse d'impact ne prenait
+en compte que les actifs dépendants et omettait les risques directement liés
+à l'actif analysé. Le cas sans dépendant retournait également une synthèse
+vide, même si l'actif source avait des risques associés.
+
+La correction :
+- agrège les risques de l'actif source et de ses dépendants transitifs ;
+- déduplique un même risque lié à plusieurs actifs ;
+- expose les risques de l'actif source dans la réponse ;
+- les affiche dans le panneau d'analyse d'impact ;
+- ajoute un test PostgreSQL couvrant un risque partagé source/dépendant et
+  un risque lié uniquement à la source, ainsi qu'un test unitaire source-only.
+
+Le workflow sur le HEAD 80659881ee3a1111296f3e5f86c8af18db12a6ae a déjà
+validé Backend (596 passed / 64 skipped) et PostgreSQL Integration
+(63 passed). Les jobs Frontend, Compose et Production Runtime restent
+à vérifier avant de valider ce HEAD comme candidat complet.
+
+### Matrice des preuves automatisées disponibles
+
+- Application 1:N, réaffectation et suppression restrictive : PostgreSQL.
+- Relations Asset↔Asset : prévention de cycles simples et concurrents,
+  cycles à trois nœuds, retrait/réactivation : PostgreSQL.
+- Liens Asset↔Risk : intégrité, agrégat de risques dédupliqué et audit.
+- Fournisseurs : liens, autorisations, demandes et cycle de vie : PostgreSQL.
+- Inventaire : pagination, filtres et export cohérents ; import CSV avec
+  prévalidation, concurrence et rollback multi-lignes.
+- RBAC HTTP : refus de mutation pour auditor, executive et viewer ; refus
+  de lecture viewer sur les routes inventaire et relations.
+- Interface : 3 parcours Playwright (admin, auditor, viewer) sur Chromium,
+  Firefox et WebKit ; 15 tests navigateur au total sur le SHA 617e83f.
+
+### Points restant à traiter avant sortie Phase 1
+
+- Compléter la matrice route × rôle × opération et la matrice formelle
+  des transitions de cycle de vie.
+- Mesurer graphe/impact/qualité sur volumétrie synthétique représentative,
+  avec plans SQL et latence.
+- Définir la sémantique métier des types de relations orientées.
+- Décider le modèle de responsabilité owner/custodian/direction seulement
+  après identification du référentiel organisationnel CTF.
+- Compléter les tests UI sur les parcours création, modification, import,
+  export, liens risques/fournisseurs et gestion des erreurs.
+- Vérifier la CI complète sur le HEAD final et effectuer la revue de
+  non-régression automatisée.
