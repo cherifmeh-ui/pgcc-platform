@@ -833,3 +833,11 @@ suivantes n'est déclaré par cette mise à jour.
 ### Complément — restauration initiale de session
 
 La revue du store Pinia a révélé un second point d'entrée : `restoreSession()` appelait directement `/auth/refresh`, en dehors de l'intercepteur de renouvellement. Cet appel est maintenant lui aussi enveloppé dans le même verrou Web Locks. Ainsi, les rotations automatiques après 401 et la restauration au chargement de l'application partagent le même verrou inter-onglets. Cette correction est incluse dans le commit `af88df5` ; sa CI doit être vérifiée séparément.
+
+
+### Actualisation — authentification inter-onglets (28 novembre 2026)
+
+- Un test Playwright Chromium a été ajouté : deux pages réelles du même contexte partagent un cookie HttpOnly et invoquent le module Web Locks de production simultanément.
+- Le serveur HTTP est simulé par interception Playwright ; la preuve couvre la sérialisation inter-pages et la propagation du cookie tourné, pas l'intégration complète avec FastAPI/PostgreSQL.
+- Le job CI installe Playwright/Chromium de façon éphémère, sans ajout au package.json/package-lock.
+- Maturité Auth : contrôle navigateur en cours de validation CI ; gate toujours ouvert pour intégration avec backend réel, réponse réseau perdue après commit, fermeture/suspension d'onglet, compatibilité navigateurs et revue humaine. Voir issue #7.
