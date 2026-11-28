@@ -362,3 +362,8 @@ Le workflow PR `46148021953` sur `48acdb2` est vert **5/5**. Le job Frontend rap
 Le test Chromium utilise deux pages du même contexte et un cookie HttpOnly partagé ; l'endpoint est simulé. Il valide la sérialisation navigateur et la transmission du cookie renouvelé, mais ne prouve pas le parcours navigateur contre le vrai backend. Les tests PostgreSQL serveur couvrent indépendamment rotation concurrente et détection de rejeu.
 
 **Risque résiduel à traiter :** si le backend commit la rotation mais que la réponse réseau et son Set-Cookie sont perdus, le client conserve l'ancien cookie. Le verrou inter-onglets ne peut pas, à lui seul, rendre cette opération idempotente. Ne pas désactiver la détection de rejeu pour contourner ce cas ; concevoir et tester explicitement le comportement serveur/client avant clôture du gate. Issue #7 reste ouverte.
+
+
+### Analyse approfondie — perte de réponse après commit (28/11/2026)
+
+Le serveur ne peut pas distinguer une répétition légitime après perte de Set-Cookie d'un rejeu malveillant sur la seule base de l'ancien refresh JWT. Un simple délai de grâce affaiblirait la détection de rejeu. Le stockage du successeur en clair est exclu ; une récupération idempotente impliquerait une réponse chiffrée temporaire, une clé dédiée gérée, un identifiant d'opération lié à l'ancien token et une coordination multi-onglets. Aucune modification backend n'a été faite avant revue de menace et de gestion des clés. Voir docs/REFRESH_ROTATION_RECOVERY_DESIGN.md.
