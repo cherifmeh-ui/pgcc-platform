@@ -1035,3 +1035,43 @@ n'a pas modifié le comportement applicatif.
   technique ou personnelle d'un actif préexistant.
 
 La Phase 0 reste ouverte.
+
+
+## Complément — cas limites CSV et non-divulgation des valeurs rejetées (28/11/2026)
+
+La revue du parseur a confirmé que le décodage utf-8-sig accepte le BOM
+UTF-8 et que le lecteur CSV traite les champs cités et les fins de ligne
+CRLF. Des tests HTTP couvrent maintenant ces cas, y compris un champ cité
+contenant un retour à la ligne, un séparateur dans une valeur et des lignes
+vides ignorées. Le test confirme qu'une seule ligne de données est comptée
+et que la prévisualisation reste importable.
+
+La revue a également identifié une exposition évitable : la représentation
+texte native d'une erreur Pydantic peut inclure la valeur fournie dans le CSV.
+Le traitement a été corrigé pour ne retourner que les noms de champs et les
+messages de validation, sans valeur d'entrée, URL de documentation ni contexte
+de validation. Un test HTTP injecte une valeur sentinelle et vérifie qu'elle
+n'apparaît pas dans la réponse.
+
+**Résultats CI sur le SHA d1ff9aa206374e1471174cc8d82796968c54e9cf** :
+- Workflow Push 46136144430 : **5/5 jobs réussis**.
+- Workflow Pull Request 46136147673 : **5/5 jobs réussis**.
+- Backend : **561 passed, 62 skipped, 1 warning**.
+- PostgreSQL Integration : **61 passed, 1 warning**.
+- Frontend build : réussi.
+- Compose Smoke : réussi.
+- Production Runtime Smoke : réussi.
+
+Les commits intermédiaires 46fddda, c14d3c8 et 32eaf92 ont
+déclenché des workflows dont le backend a échoué pendant la collecte des tests
+à cause d'une erreur de syntaxe dans la nouvelle fixture paramétrée. La
+syntaxe a été corrigée dans d1ff9aa, puis les deux workflows complets
+(Push et Pull Request) ont réussi. Ces échecs intermédiaires ne sont pas
+masqués dans le suivi.
+
+**Limites restantes** : la cohérence des données importées entre preview et
+confirm n'est pas encore démontrée par un test HTTP dédié avec le même fichier
+et une comparaison exhaustive des objets persistés. Les collisions
+concurrentes hostname/numéro de série ne doivent être testées comme conflits
+bloquants que si une contrainte d'unicité correspondante est ajoutée après
+validation de la règle métier. La Phase 0 reste ouverte.
