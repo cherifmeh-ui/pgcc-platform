@@ -1573,3 +1573,22 @@ La revue du store Pinia a révélé un second point d'entrée : `restoreSession(
 - Un mécanisme idempotent nécessiterait un identifiant d'opération aléatoire lié à l'ancien token, un stockage chiffré temporaire du JWT successeur avec une clé dédiée, une atomicité DB, une coordination multi-onglets et des tests de rejeu distincts.
 - Aucun changement de comportement backend n'est appliqué dans ce checkpoint. La protection actuelle de rejeu reste en place. Décision détaillée et critères de sortie : docs/REFRESH_ROTATION_RECOVERY_DESIGN.md.
 - Phase 0 Auth / issue #7 restent ouverts jusqu'à décision de menace, tests contre backend réel et validation des cas de perte réseau.
+
+
+### Checkpoint CI — HEAD b1db1ff11e940b42289a65804058cb5a181ff2b4 (28 novembre 2026)
+
+- Branche : `chore/phase0-stabilization` ; HEAD exact : `b1db1ff11e940b42289a65804058cb5a181ff2b4` (`docs(auth): record lost-response recovery decision`).
+- Workflow GitHub Actions `46151151501` : **5/5 jobs terminés avec succès** : Backend, PostgreSQL Integration, Frontend, Compose Smoke et Production Runtime Smoke.
+- Backend : compilation Python et suite de tests terminées avec succès.
+- PostgreSQL Integration : migrations, contrôle de dérive SQLAlchemy/Alembic, validation du chemin legacy/downgrade et sauvegarde/restauration CI terminés avec succès.
+- Frontend : tests Node, test Chromium multi-onglets, build Vite terminés avec succès.
+- Compose Smoke : validation des configurations et démarrage de la stack, proxy/API, parseur isolé et tests ClamAV terminés avec succès.
+- Production Runtime Smoke : images de production durcies, migrations, démarrage, health/TLS/proxy/isolation réseau, parser et tests ClamAV terminés avec succès.
+- Aucun job en échec. Les étapes conditionnelles d'affichage des logs d'erreur ont été ignorées car les jobs ont réussi.
+- `main` reste inchangée à `91d47a8fe29b391245449b99b55e651fa444ccb8`. PR #1 reste ouverte, Draft et non fusionnée.
+
+#### Portée et limites
+
+Ce résultat valide le workflow automatisé sur ce HEAD et les environnements éphémères CI. Il ne remplace pas la recette avec les secrets, certificats, DNS, reverse proxy, CIDR de confiance et seuils réels, ni un exercice de restauration depuis une sauvegarde de l'environnement cible. Les validations humaines, l'approbation des risques résiduels et les scénarios de refresh navigateur contre le véritable backend restent ouverts (issues #2, #4, #5 et #7).
+
+**Décision : Phase 0 reste ouverte.** Ne pas fusionner la PR #1 ni annoncer une readiness production sur la seule base de ce workflow vert.
