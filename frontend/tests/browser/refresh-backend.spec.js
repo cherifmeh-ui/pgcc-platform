@@ -49,8 +49,17 @@ test('real FastAPI/PostgreSQL refresh rotation is serialized and lost responses 
   expect(oldCookie?.value).toBeTruthy();
 
   await firstTab.route('**/api/v1/auth/refresh', async (route) => {
-    const committedResponse = await route.fetch();
-    expect(committedResponse.status()).toBe(200);
+    const requestHeaders = await route.request().allHeaders();
+    // Use Node's independent HTTP client so the backend commit happens but
+    // its Set-Cookie header is never applied to the browser cookie jar.
+    const committedResponse = await fetch('http://127.0.0.1:8000/api/v1/auth/refresh', {
+      method: 'POST',
+      headers: {
+        cookie: requestHeaders.cookie || '',
+        origin: 'http://localhost:4173',
+      },
+    });
+    expect(committedResponse.status).toBe(200);
     await route.abort('failed');
   });
   const responseWasLost = await firstTab.evaluate(async () => {
