@@ -858,3 +858,10 @@ Le cas commit DB / réponse HTTP perdue est documenté. Un grace period sur anci
 ### Auth — extension de la matrice navigateurs (28 novembre 2026)
 
 Le test Playwright de coordination inter-onglets est étendu à Chromium, Firefox et WebKit. Un scénario additionnel vérifie qu'un onglet en attente acquiert le verrou lorsque l'onglet propriétaire est fermé. Cette preuve reste circonscrite à l'API Web Locks avec endpoint HTTP simulé ; elle ne remplace pas l'intégration réelle FastAPI/PostgreSQL ni le scénario de réponse perdue après commit. Les résultats sont en attente du workflow déclenché sur le nouveau HEAD.
+
+
+### Auth — intégration navigateur vers FastAPI/PostgreSQL (28 novembre 2026)
+
+Un scénario Playwright réel a été ajouté : le job lance PostgreSQL, applique les migrations, prépare un compte/session jetable, démarre FastAPI et fait transiter les appels depuis le navigateur via le proxy Vite. Deux onglets doivent réussir deux rotations successives avec cookie HttpOnly partagé ; un second contexte rejoue ensuite l'ancien cookie et doit obtenir HTTP 401. La matrice est Chromium, Firefox et WebKit. Le token d'intégration est éphémère et masqué par GitHub Actions.
+
+Cette preuve ne sera acquise qu'après réussite du workflow sur le HEAD exact. Le scénario commit réussi / réponse HTTP perdue reste non résolu volontairement : la détection de rejeu est conservée, sans grace period ni stockage du successeur avant revue de menace.
