@@ -49,13 +49,14 @@ test('real FastAPI/PostgreSQL refresh rotation is serialized and lost responses 
   expect(oldCookie?.value).toBeTruthy();
 
   await firstTab.route('**/api/v1/auth/refresh', async (route) => {
-    const requestHeaders = await route.request().allHeaders();
-    // Use Node's independent HTTP client so the backend commit happens but
-    // its Set-Cookie header is never applied to the browser cookie jar.
+    // Use the cookie captured from the browser context explicitly. WebKit
+    // may omit HttpOnly Cookie from Playwright's intercepted request headers.
+    // Node's independent HTTP client commits the rotation without updating the
+    // browser's cookie jar from the returned Set-Cookie header.
     const committedResponse = await fetch('http://127.0.0.1:8000/api/v1/auth/refresh', {
       method: 'POST',
       headers: {
-        cookie: requestHeaders.cookie || '',
+        cookie: `pgcc_refresh=${oldCookie.value}`,
         origin: 'http://localhost:4173',
       },
     });
