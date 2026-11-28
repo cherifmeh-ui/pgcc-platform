@@ -1649,3 +1649,10 @@ Revue statique de `backend/app/services/auth_rate_limiter.py`, `backend/app/core
 Ne pas modifier les seuils sans données d'exploitation. Avant clôture : faire approuver les seuils par le propriétaire métier/RSSI, vérifier la topologie réseau et le CIDR réellement observé, confirmer la centralisation des logs et créer des alertes testées pour les événements 429/503 et les anomalies de volume. Aucun test de recette sur l'infrastructure CTF n'a été réalisé par cette revue statique.
 
 **Statut :** le mécanisme technique et sa couverture automatisée sont présents ; le gate opérationnel proxy/seuils/alertes reste ouvert (issue #5).
+
+### Extension du test de verrou inter-onglets — 28 novembre 2026
+
+- Ajout d'un scénario Playwright où un onglet détient le verrou exclusif de refresh, un second onglet attend explicitement dans la file Web Locks, puis le premier onglet est fermé. Le test vérifie que le second obtient ensuite le verrou : fermeture du détenteur et libération de la ressource.
+- La configuration Playwright exécute désormais les tests sur Chromium, Firefox et WebKit ; la CI installe les trois moteurs.
+- **Limite :** ces tests utilisent toujours un endpoint refresh simulé. Ils vérifient le comportement de Web Locks au niveau navigateur, pas l'intégration HTTP avec FastAPI/PostgreSQL, ni la perte de réponse après commit. Les résultats ne seront considérés acquis qu'après CI verte sur le HEAD exact.
+- Issue #7 reste ouverte jusqu'à preuve du parcours réel, de la gestion de la réponse perdue et revue des navigateurs cibles.
