@@ -591,7 +591,7 @@ def _csv_safe_value(value):
     # Spreadsheet applications may ignore leading whitespace/control characters
     # before formula markers. Inspect the first meaningful character, while also
     # treating leading tab/CR/LF as dangerous on their own.
-    meaningful = text_value.lstrip("\ufeff \t\r\n\v\f")
+    meaningful = text_value.lstrip("\ufeff").lstrip()
     if text_value.startswith(("\t", "\r", "\n")) or (
         meaningful and meaningful[0] in ("=", "+", "-", "@")
     ):
