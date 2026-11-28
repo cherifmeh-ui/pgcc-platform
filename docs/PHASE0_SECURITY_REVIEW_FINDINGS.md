@@ -353,3 +353,12 @@ La revue du store Pinia a révélé un second point d'entrée : `restoreSession(
 Un test Playwright multi-pages a été ajouté sur le module de verrou de production. Deux pages Chromium partagent le même contexte/cookie HttpOnly et tentent simultanément une rotation ; l'endpoint HTTP est intercepté et simulé. Le test contrôle que la deuxième rotation reçoit le cookie mis à jour après libération du verrou.
 
 Cette preuve est plus forte que le test unitaire du gestionnaire, mais elle reste **un test navigateur avec endpoint simulé**. Elle ne démontre pas encore l'intégration bout-en-bout avec le backend FastAPI/PostgreSQL. Les tests PostgreSQL du backend couvrent indépendamment la rotation concurrente et le rejeu. La CI du nouveau test doit être observée avant de qualifier ce contrôle de validé. Les scénarios réseau après commit et cycle de vie d'onglet restent ouverts.
+
+
+### Résultat du test Chromium et CI — 28 novembre 2026
+
+Le workflow PR `46148021953` sur `48acdb2` est vert **5/5**. Le job Frontend rapporte 3 tests Node réussis, 1 test Playwright Chromium multi-onglets réussi, build Vite réussi et npm audit à 0 vulnérabilité. Le backend rapporte 562 tests réussis / 63 ignorés ; PostgreSQL 62 tests réussis. Compose et Production Runtime Smoke sont réussis.
+
+Le test Chromium utilise deux pages du même contexte et un cookie HttpOnly partagé ; l'endpoint est simulé. Il valide la sérialisation navigateur et la transmission du cookie renouvelé, mais ne prouve pas le parcours navigateur contre le vrai backend. Les tests PostgreSQL serveur couvrent indépendamment rotation concurrente et détection de rejeu.
+
+**Risque résiduel à traiter :** si le backend commit la rotation mais que la réponse réseau et son Set-Cookie sont perdus, le client conserve l'ancien cookie. Le verrou inter-onglets ne peut pas, à lui seul, rendre cette opération idempotente. Ne pas désactiver la détection de rejeu pour contourner ce cas ; concevoir et tester explicitement le comportement serveur/client avant clôture du gate. Issue #7 reste ouverte.
