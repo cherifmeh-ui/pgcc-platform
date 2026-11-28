@@ -381,7 +381,7 @@ test('admin manages asset relationships and reviews supplier and risk impact', a
   await page.getByRole('button', { name: 'Relations' }).first().click();
   await expect(page.getByText('SUP-001 — Fournisseur Exemple')).toBeVisible();
   await expect(page.getByText('RISK-001 — Risque de compromission du serveur')).toBeVisible();
-  await expect(page.getByText('depends_on')).toBeVisible();
+  await expect(page.locator('.relations').getByText('depends_on')).toBeVisible();
 
   const relationRequest = page.waitForRequest((request) =>
     request.method() === 'POST' &&
