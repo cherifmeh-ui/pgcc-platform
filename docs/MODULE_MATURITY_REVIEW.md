@@ -871,3 +871,10 @@ Cette preuve ne sera acquise qu'après réussite du workflow sur le HEAD exact. 
 Le workflow `46157868116` sur le commit `51667cf35c6189dec9db7adb8bd5ec4ccb06f8bd` est vert **5/5**. Les tests Playwright réels (6/6) tournent sur Chromium, Firefox et WebKit avec un backend FastAPI et une base PostgreSQL éphémère. Ils valident deux rotations inter-onglets avec cookie HttpOnly, la fermeture du détenteur du verrou, et le cas commit réussi / réponse perdue : le cookie périmé reste côté navigateur et sa répétition reçoit HTTP 401. Backend : 562 passed / 63 skipped ; PostgreSQL : 62 passed.
 
 Décision de conception Phase 0 proposée : rester fail-closed et exiger une réauthentification après résultat ambigu plutôt que d'ajouter un store de refresh tokens de récupération chiffrés. La décision technique est couverte par test, mais attend la confirmation du propriétaire du service. La maturité automatisée Auth progresse ; la recette sur l'environnement cible et la revue humaine restent ouvertes.
+
+
+### Refresh lock — timeout de requête (28 novembre 2026)
+
+Le chemin de refresh automatique a été aligné sur le client Axios commun afin d'hériter de son timeout de 15 secondes. Le chemin de restauration initiale utilisait déjà ce client. Le timeout permet de terminer une requête réseau bloquée et de libérer le Web Lock lorsque l'event loop du navigateur fonctionne. Il ne constitue pas un TTL du verrou et ne garantit pas le déblocage pendant un gel complet du document par le système ; le test de suspension longue et la validation sur le parc réel restent ouverts.
+
+CI sur le commit b351a243 : 5/5 jobs réussis ; le test navigateur réel contre FastAPI/PostgreSQL reste vert sur Chromium, Firefox et WebKit.
