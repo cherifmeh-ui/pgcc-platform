@@ -1218,3 +1218,22 @@ faire avant décision de capacité.
 La PR #1 reste ouverte, Draft et non fusionnée. La branche `main` n'est pas
 modifiée. La validation humaine et l'installation locale sont reportées à la
 fin de l'ensemble du développement PGCC.
+
+
+## Export CSV — neutralisation des formules et CI (28 novembre 2026)
+
+La revue de `_csv_safe_value` a renforcé la neutralisation des cellules CSV :
+le contrôle inspecte la première valeur significative après BOM/espaces Unicode
+et neutralise aussi les préfixes tabulation, CR et LF. Les tests couvrent les
+marqueurs `=`, `+`, `-`, `@`, les espaces ordinaires, les caractères de
+contrôle, le BOM et les valeurs ordinaires/vides.
+
+Le workflow Push `46168118016` sur le HEAD exact
+`44158841042cfb77592fa5c167cb172ce1c92a05` est terminé avec **5/5 jobs
+réussis**. Backend : **606 passed / 65 skipped / 1 warning** ; PostgreSQL
+Integration : **64 passed / 1 warning** ; Frontend, Compose Smoke et
+Production Runtime Smoke réussis. Le warning Python concerne une dépréciation
+Starlette/AnyIO ; il n'a pas fait échouer les suites.
+
+La validation s'applique au code de ce HEAD. Les modifications documentaires
+ultérieures ont leur propre CI et ne sont pas couvertes par extrapolation.
