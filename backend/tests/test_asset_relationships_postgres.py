@@ -598,11 +598,12 @@ async def test_asset_graph_query_count_is_constant_for_large_inventory():
 
         assert result["node_count"] == 600
         assert result["edge_count"] == 599
-        assert len(select_statements) == 2
+        assert len(select_statements) == 2, (
+            f"expected two set-based SELECTs, got {len(select_statements)} "
+            f"in {elapsed_seconds:.3f}s"
+        )
         assert all("assets.description" not in statement for statement in select_statements)
         assert all("assets.serial_number" not in statement for statement in select_statements)
-        # Record elapsed time for CI diagnostics without asserting a fragile wall-clock SLA.
-        assert elapsed_seconds >= 0
     finally:
         try:
             event.remove(engine.sync_engine, "before_cursor_execute", count_selects)
