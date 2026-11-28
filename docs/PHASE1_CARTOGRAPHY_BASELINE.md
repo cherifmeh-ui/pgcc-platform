@@ -1194,3 +1194,27 @@ ne sont pas attendues à ce stade : elles seront regroupées après la clôture
 de l'ensemble des développements PGCC. Les validations qui nécessitent les
 référentiels organisationnels, le réseau ou les secrets réels CTF restent
 explicitement des gates de déploiement.
+
+## Résultat CI — graphe anti-N+1 et HEAD de référence (28 novembre 2026)
+
+Le workflow Push `46164484786` sur le SHA exact
+`c870dcd70a59a248340236d23f548b3a47f8d8c3` est terminé avec **5/5 jobs
+réussis** : Backend, PostgreSQL Integration, Frontend, Compose Smoke et
+Production Runtime Smoke.
+
+- Backend : **596 tests réussis, 65 ignorés**.
+- PostgreSQL Integration : **64 tests réussis** ; le test de volumétrie
+  `test_asset_graph_query_count_is_constant_for_large_inventory` vérifie
+  600 actifs, 599 relations et exactement deux requêtes SELECT ensemblistes.
+- Frontend : tests unitaires, intégration navigateur refresh multi-onglets
+  avec FastAPI/PostgreSQL et build réussis.
+- Compose Smoke et Production Runtime Smoke : réussis.
+
+Le commit `c870dcd` ne modifie que le diagnostic du test anti-N+1 : en cas
+ d'échec, le nombre de SELECT et le temps écoulé sont affichés. Aucun SLA de
+latence n'est prétendu. Le benchmark mémoire/latence représentatif reste à
+faire avant décision de capacité.
+
+La PR #1 reste ouverte, Draft et non fusionnée. La branche `main` n'est pas
+modifiée. La validation humaine et l'installation locale sont reportées à la
+fin de l'ensemble du développement PGCC.
