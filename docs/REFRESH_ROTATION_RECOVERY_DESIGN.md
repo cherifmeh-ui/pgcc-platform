@@ -52,3 +52,18 @@ This protocol creates a short-lived encrypted bearer-token recovery store and a 
 - Documentation and CI green on the exact reviewed commit.
 
 Until these criteria are met, retain the current fail-secure replay behavior and keep Phase 0 Auth / Issue #7 open.
+
+
+## Phase 0 decision — fail closed / re-authentication (28 November 2026)
+
+**Selected technical behavior for the Phase 0 baseline:** do not implement encrypted idempotent refresh recovery. If the database commits a rotation but the response/Set-Cookie is lost, the browser retains the consumed cookie. A retry with that cookie is treated as replay, audited, and the active refresh sessions are revoked; the user must authenticate again.
+
+This choice avoids persisting a recoverable replacement bearer token and avoids introducing a dedicated recovery-encryption key, recovery TTL store and cross-tab operation protocol. Its usability cost is an additional login after a lost response. A grace period based only on the old token remains rejected.
+
+### Evidence added
+
+Workflow `46157868116` on commit `51667cf35c6189dec9db7adb8bd5ec4ccb06f8bd` passed 5/5 jobs. The Playwright integration test runs against the actual FastAPI/PostgreSQL endpoint on Chromium, Firefox and WebKit. It performs two concurrent-tab rotations, executes a third rotation on the real backend while dropping the response before the browser receives Set-Cookie, confirms the browser still holds the consumed cookie, and confirms a retry is rejected with HTTP 401. A separate browser test confirms lock release when the owning tab closes.
+
+**Approval boundary:** this is the recommended technical default and is tested in CI; it is not a formal acceptance of the usability impact by the CTF service owner. Confirm it in the independent human review before closing Issue #7 / Phase 0.
+
+The CI environment is ephemeral and does not prove the actual CTF DNS, TLS, proxy, CORS/SameSite topology or supported client fleet.
