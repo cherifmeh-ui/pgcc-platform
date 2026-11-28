@@ -588,7 +588,13 @@ def _csv_safe_value(value):
     if value is None:
         return ""
     text_value = str(value)
-    if text_value.startswith(("=", "+", "-", "@", "\t", "\r")):
+    # Spreadsheet applications may ignore leading whitespace/control characters
+    # before formula markers. Inspect the first meaningful character, while also
+    # treating leading tab/CR/LF as dangerous on their own.
+    meaningful = text_value.lstrip("\\ufeff \\t\\r\\n\\v\\f")
+    if text_value.startswith(("\\t", "\\r", "\\n")) or (
+        meaningful and meaningful[0] in ("=", "+", "-", "@")
+    ):
         return "'" + text_value
     return text_value
 
