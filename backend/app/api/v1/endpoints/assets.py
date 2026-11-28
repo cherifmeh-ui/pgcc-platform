@@ -8,7 +8,7 @@ from uuid import UUID
 
 from fastapi import APIRouter, Depends, HTTPException, Query, Request, UploadFile, File, status
 from fastapi.responses import Response
-from pydantic import BaseModel, ConfigDict, Field, field_validator
+from pydantic import BaseModel, ConfigDict, Field, ValidationError, field_validator
 from sqlalchemy import select, func, case
 from sqlalchemy.exc import IntegrityError
 from sqlalchemy.orm import aliased
@@ -390,7 +390,23 @@ async def preview_asset_csv_import(
             if hostname: seen_hostnames.add(hostname)
             if serial: seen_serials.add(serial)
             rows.append({"row": row_number, "data": normalized})
-        except Exception as exc:
+        except ValidationError as exc:
+            # Pydantic's default string representation includes rejected input
+            # values. Keep the preview response limited to field names and
+            # validation messages so secrets accidentally pasted into a CSV
+            # are not echoed back by the API.
+            safe_errors = exc.errors(
+                include_input=False,
+                include_url=False,
+                include_context=False,
+            )
+            message = "; ".join(
+                f"{'.'.join(str(part) for part in error['loc'])}: {error['msg']}"
+                for error in safe_errors
+            )
+            errors.append({"row": row_number, "error": message})
+            invalid_row_numbers.add(row_number)
+        except ValueError as exc:
             errors.append({"row": row_number, "error": str(exc)})
             invalid_row_numbers.add(row_number)
     application_ids = {
