@@ -823,3 +823,10 @@ suivantes n'est déclaré par cette mise à jour.
 - Cette preuve renforce la maturité automatisée. Elle ne remplace pas la revue humaine de sécurité, la recette avec secrets/certificats et réseau réels, la restauration d'une sauvegarde chiffrée/offsite avec RPO/RTO approuvés, ni l'acceptation des risques résiduels.
 
 **Statut : Phase 0 reste ouverte pour les gates opérationnels et humains.**
+
+### 28 novembre 2026 — correction initiale de la concurrence refresh
+
+- Ajout d'un verrou Web Locks exclusif partagé entre les onglets pour sérialiser les appels de rotation du cookie refresh ; la détection backend des rejeux n'a pas été modifiée.
+- Ajout de trois tests Node du composant de verrou et exécution de `npm test` dans le job Frontend.
+- Le comportement est fail-closed sans Web Locks ; le support navigateur et la récupération après perte de réponse réseau restent à valider.
+- Aucun test Playwright multi-pages ni test end-to-end du cookie HttpOnly n'est encore présent : maturité Auth améliorée mais non clôturée. Voir issue #7.
