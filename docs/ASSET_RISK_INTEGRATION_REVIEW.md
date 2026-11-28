@@ -135,9 +135,12 @@ source. Il vérifie les distances transitives, l'affichage des liens source,
 la déduplication de l'agrégat et les catégories de risque. Un test unitaire
 couvre aussi la source sans aucun dépendant.
 
-Le workflow sur le SHA `80659881ee3a1111296f3e5f86c8af18db12a6ae` a passé
-Backend (596 passed / 64 skipped) et PostgreSQL Integration (63 passed).
-Les autres jobs de ce HEAD sont encore en cours au moment de cette mise à jour.
+Le workflow Pull Request 46162054458 sur le SHA `80659881ee3a1111296f3e5f86c8af18db12a6ae` est terminé avec 5/5 jobs réussis : Backend (596 passed / 64 skipped), PostgreSQL Integration (63 passed), Frontend, Compose Smoke et Production Runtime Smoke.
 
 Cette synthèse ne modifie pas le score de risque ni les seuils méthodologiques
 de classification ; elle agrège uniquement les valeurs déjà persistées.
+## Parcours UI complémentaires — preuve automatisée (28/11/2026)
+
+Le job Frontend du workflow PR 46163329501 (SHA a4289248eaec66fde7ad4e3e1107e2598fb9704f) est vert et exécute 24 tests Playwright réussis sur Chromium, Firefox et WebKit. Les scénarios couvrent les relations actif-actif, les associations de risques, les données fournisseurs et la synthèse d'impact source/dépendants, en plus des parcours CRUD, import/export et RBAC.
+
+Le test UI de retrait logique est ajouté dans le commit aaee2dd5cf7fedf1b5c87e0bf3df567de1d09068 ; sa CI est en cours et sera documentée après confirmation.
