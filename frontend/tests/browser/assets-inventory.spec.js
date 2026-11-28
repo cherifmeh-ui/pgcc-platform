@@ -141,8 +141,8 @@ test('admin navigates inventory pages, applies filters and opens dependency grap
 
   await page.getByRole('button', { name: 'Graphe des dépendances' }).click();
   await expect(page.getByText('2 actifs · 1 relations')).toBeVisible();
-  await expect(page.getByText('AST-001 — Serveur de production')).toBeVisible();
-  await expect(page.getByText('AST-002 — Application métier')).toBeVisible();
+  await expect(page.locator('.graph-list').getByText('AST-001 — Serveur de production')).toBeVisible();
+  await expect(page.locator('.graph-list').getByText('AST-002 — Application métier')).toBeVisible();
 });
 
 test('auditor can read and export inventory but cannot mutate assets', async ({ page }) => {
