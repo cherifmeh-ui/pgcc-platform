@@ -52,7 +52,7 @@ const graph = {
   edge_count: 1,
 };
 
-async function mockPgccApi(page, role = 'admin') {
+async function mockPgccApi(page, role = 'admin', options = {}) {
   const permissions = {
     dashboard: ['read'],
     assets: role === 'viewer' ? [] : ['read', ...(role === 'admin' ? ['create', 'update', 'delete'] : []), 'export'],
@@ -94,9 +94,11 @@ async function mockPgccApi(page, role = 'admin') {
 
     if (path === '/assets/page') {
       const query = url.searchParams;
-      const selected = query.get('q')?.includes('AST-002') || query.get('page') === '2'
-        ? [assetTwo]
-        : [assetOne];
+      const selected = options.includeBothAssets
+        ? [assetOne, assetTwo]
+        : query.get('q')?.includes('AST-002') || query.get('page') === '2'
+          ? [assetTwo]
+          : [assetOne];
       return route.fulfill({
         status: 200,
         contentType: 'application/json',
@@ -105,7 +107,7 @@ async function mockPgccApi(page, role = 'admin') {
           total: 2,
           page: Number(query.get('page') || 1),
           page_size: Number(query.get('page_size') || 25),
-          pages: 2,
+          pages: options.includeBothAssets ? 1 : 2,
         }),
       });
     }
@@ -120,6 +122,121 @@ async function mockPgccApi(page, role = 'admin') {
 
     if (path === '/assets/graph') {
       return route.fulfill({ status: 200, contentType: 'application/json', body: JSON.stringify(graph) });
+    }
+
+    const sourceRisk = {
+      id: '00000000-0000-0000-0000-000000000401',
+      ref: 'RISK-001',
+      title: 'Risque de compromission du serveur',
+      risk_level: 20,
+      status: 'Ouvert',
+    };
+    const dependentRisk = {
+      id: '00000000-0000-0000-0000-000000000402',
+      ref: 'RISK-002',
+      title: 'Indisponibilité applicative',
+      risk_level: 12,
+      status: 'En traitement',
+    };
+
+    if (path === `/suppliers/assets/${assetOne.id}/suppliers`) {
+      return route.fulfill({
+        status: 200,
+        contentType: 'application/json',
+        body: JSON.stringify([{
+          id: '00000000-0000-0000-0000-000000000501',
+          supplier_id: '00000000-0000-0000-0000-000000000502',
+          supplier_code: 'SUP-001',
+          supplier_name: 'Fournisseur Exemple',
+          relationship_type: 'maintenance',
+          access_level: 'Privilégié',
+          data_access: true,
+          scope: 'Maintenance du serveur',
+        }]),
+      });
+    }
+
+    if (path === `/assets/${assetOne.id}/risks` && request.method() === 'GET') {
+      return route.fulfill({
+        status: 200,
+        contentType: 'application/json',
+        body: JSON.stringify([{
+          id: '00000000-0000-0000-0000-000000000601',
+          risk_id: sourceRisk.id,
+          relationship_context: 'Risque direct sur le serveur',
+        }]),
+      });
+    }
+
+    if (path === '/risks/') {
+      return route.fulfill({
+        status: 200,
+        contentType: 'application/json',
+        body: JSON.stringify([sourceRisk, dependentRisk]),
+      });
+    }
+
+    if (path === `/assets/${assetOne.id}/relationships` && request.method() === 'GET') {
+      return route.fulfill({
+        status: 200,
+        contentType: 'application/json',
+        body: JSON.stringify([{
+          id: '00000000-0000-0000-0000-000000000701',
+          source_asset_id: assetTwo.id,
+          target_asset_id: assetOne.id,
+          relationship_type: 'depends_on',
+          description: 'Application hébergée sur le serveur',
+        }]),
+      });
+    }
+
+    if (path === `/assets/${assetOne.id}/impact`) {
+      return route.fulfill({
+        status: 200,
+        contentType: 'application/json',
+        body: JSON.stringify({
+          source: {
+            id: assetOne.id,
+            reference: assetOne.reference,
+            name: assetOne.name,
+            linked_risks: [sourceRisk],
+            linked_suppliers: [{
+              supplier_id: '00000000-0000-0000-0000-000000000502',
+              supplier_code: 'SUP-001',
+              supplier_name: 'Fournisseur Exemple',
+              relationship_type: 'maintenance',
+              access_level: 'Privilégié',
+              data_access: true,
+            }],
+            active_supplier_authorizations: [],
+          },
+          impacted_assets: [{
+            ...assetTwo,
+            dependency_distance: 1,
+            linked_risks: [dependentRisk],
+            linked_suppliers: [],
+            active_supplier_authorizations: [],
+          }],
+          total_impacted: 1,
+          risk_summary: {
+            total: 2,
+            unacceptable: 1,
+            critical: 0,
+            high: 1,
+            moderate: 0,
+            low: 0,
+            by_status: { Ouvert: 1, 'En traitement': 1 },
+          },
+          supplier_summary: {
+            total_suppliers: 1,
+            active_relationships: 1,
+            active_authorizations: 0,
+            authorized_privileged_access: 0,
+            authorized_data_access: 0,
+          },
+          supplier_access_available: true,
+        }),
+      });
     }
 
     if (path === '/assets/import/preview' && request.method() === 'POST') {
@@ -254,4 +371,40 @@ test('admin previews and confirms a CSV import without bypassing the preview ste
   expect(dialog.message()).toBe('1 actifs importés avec succès.');
   await dialog.accept();
   await expect(page.getByRole('heading', { name: 'Cartographie des actifs' })).toBeVisible();
+});
+
+
+test('admin manages asset relationships and reviews supplier and risk impact', async ({ page }) => {
+  await mockPgccApi(page, 'admin', { includeBothAssets: true });
+  await page.goto('/assets');
+
+  await page.getByRole('button', { name: 'Relations' }).first().click();
+  await expect(page.getByText('SUP-001 — Fournisseur Exemple')).toBeVisible();
+  await expect(page.getByText('RISK-001 — Risque de compromission du serveur')).toBeVisible();
+  await expect(page.getByText('depends_on')).toBeVisible();
+
+  const relationRequest = page.waitForRequest((request) =>
+    request.method() === 'POST' &&
+    new URL(request.url()).pathname.endsWith('/assets/' + assetOne.id + '/relationships')
+  );
+  await page.getByLabel('Actif cible').selectOption(assetTwo.id);
+  await page.getByRole('button', { name: 'Ajouter la relation' }).click();
+  await relationRequest;
+
+  const riskRequest = page.waitForRequest((request) =>
+    request.method() === 'POST' &&
+    new URL(request.url()).pathname.endsWith('/assets/' + assetOne.id + '/risks')
+  );
+  await page.getByLabel('Risque à associer').selectOption('00000000-0000-0000-0000-000000000402');
+  await page.getByPlaceholder('Pourquoi cet actif est concerné ?').fill('Dépendance métier directe');
+  await page.getByRole('button', { name: 'Associer le risque' }).click();
+  await riskRequest;
+
+  await page.getByRole('button', { name: 'Fermer' }).click();
+  await page.getByRole('button', { name: 'Impact' }).first().click();
+  await expect(page.getByRole('heading', { name: 'Analyse d’impact — Serveur de production' })).toBeVisible();
+  await expect(page.getByText('Synthèse des risques liés à l’actif et à ses dépendances')).toBeVisible();
+  await expect(page.getByText('RISK-001 — Risque de compromission du serveur')).toBeVisible();
+  await expect(page.getByText('RISK-002 — Indisponibilité applicative')).toBeVisible();
+  await expect(page.getByText('Fournisseur Exemple')).toBeVisible();
 });
