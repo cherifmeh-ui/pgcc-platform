@@ -101,10 +101,12 @@ jobs:
         shell: bash
         run: |
           python backend/scripts/seed_browser_refresh_test.py > /tmp/pgcc-browser-fixture.json
-          token=$(python -c "import json; print(json.load(open('/tmp/pgcc-browser-fixture.json'))['refresh_token'])")
-          test -n "$token"
-          echo "::add-mask::$token"
-          echo "PGCC_E2E_REFRESH_TOKEN=$token" >> "$GITHUB_ENV"
+          for browser in chromium firefox webkit; do
+            token=$(BROWSER="$browser" python -c "import json, os; print(json.load(open('/tmp/pgcc-browser-fixture.json'))['refresh_tokens'][os.environ['BROWSER']])")
+            test -n "$token"
+            echo "::add-mask::$token"
+            echo "PGCC_E2E_REFRESH_TOKEN_$(echo "$browser" | tr '[:lower:]' '[:upper:]')=$token" >> "$GITHUB_ENV"
+          done
 
       - name: Start real FastAPI backend for browser integration
         working-directory: backend
