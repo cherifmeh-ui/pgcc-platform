@@ -1656,3 +1656,15 @@ Ne pas modifier les seuils sans données d'exploitation. Avant clôture : faire 
 - La configuration Playwright exécute désormais les tests sur Chromium, Firefox et WebKit ; la CI installe les trois moteurs.
 - **Limite :** ces tests utilisent toujours un endpoint refresh simulé. Ils vérifient le comportement de Web Locks au niveau navigateur, pas l'intégration HTTP avec FastAPI/PostgreSQL, ni la perte de réponse après commit. Les résultats ne seront considérés acquis qu'après CI verte sur le HEAD exact.
 - Issue #7 reste ouverte jusqu'à preuve du parcours réel, de la gestion de la réponse perdue et revue des navigateurs cibles.
+
+
+### Intégration navigateur réelle du renouvellement — 28 novembre 2026
+
+Un test Playwright supplémentaire exerce maintenant le véritable endpoint FastAPI /api/v1/auth/refresh relié à PostgreSQL, au lieu d'intercepter ce endpoint :
+- Le job Frontend dispose d'un service PostgreSQL éphémère, applique les migrations Alembic, crée un utilisateur de test isolé et une session refresh persistée.
+- L'API FastAPI est démarrée dans le job ; Vite proxy les appels navigateur vers ce backend.
+- Deux pages du même contexte Chromium/Firefox/WebKit partagent le cookie HttpOnly pgcc_refresh et renouvellent simultanément. Le test exige deux réponses 200 avec deux access tokens distincts.
+- Un contexte séparé rejoue ensuite le cookie initial révoqué et vérifie la réponse 401 de détection de rejeu.
+- Le token de test est masqué dans les logs GitHub Actions et ne concerne qu'une base éphémère.
+
+**Statut :** test ajouté, validation CI du HEAD en attente. Il ne simule toujours pas la perte de réponse après commit ; ce cas reste fail-secure et nécessite une décision de conception avant implémentation d'une récupération idempotente. L'issue #7 reste ouverte jusqu'à la CI verte et la revue du résultat.
