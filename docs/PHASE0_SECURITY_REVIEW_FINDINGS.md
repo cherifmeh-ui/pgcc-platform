@@ -335,3 +335,11 @@ Le fichier `docker-compose.production.yaml` exige les secrets et clés nécessai
 ### Suivi dédié — concurrence de refresh entre onglets
 
 Le point de revue statique est désormais suivi dans l'issue [#7 — Coordination du renouvellement de session entre onglets navigateur](https://github.com/cherifmeh-ui/pgcc-platform/issues/7). Cette issue est un gate Auth Phase 0 : elle reste ouverte jusqu'à l'implémentation, aux tests navigateur multi-onglets et à la preuve que le rejeu réel reste détecté.
+
+### 28 novembre 2026 — mesure corrective initiale Web Locks
+
+Une première correction a été ajoutée dans `frontend/src/services/refreshLock.js` et branchée dans `frontend/src/services/api.js` : toutes les rotations de refresh passent sous un verrou Web Locks exclusif nommé `pgcc-auth-refresh`, partagé par les onglets de même origine. La réponse HTTP est attendue à l'intérieur du verrou, de sorte que le cookie rafraîchi soit traité par le navigateur avant que l'onglet suivant n'entre dans la section critique.
+
+Le verrou est fail-closed si `navigator.locks` n'est pas disponible. Cette stratégie évite de prétendre qu'un fallback localStorage à bail/expiration serait sûr face à un onglet suspendu ou à un détenteur disparu. Une erreur réseau dans la section critique remonte au traitement d'échec existant et provoque la reconnexion ; aucun retry automatique du même cookie n'est ajouté. Si le serveur a commité la rotation mais que la réponse n'a pas été reçue, l'état du cookie doit être vérifié par un test navigateur dédié : la présente correction ne prétend pas résoudre ce cas de manière démontrée.
+
+Trois tests Node couvrent le verrou (sérialisation, API absente, libération après erreur) et `npm test` est ajouté à la CI frontend. **Limite importante :** pas encore de preuve Playwright multi-pages, ni de reproduction navigateur avec le vrai endpoint et cookie HttpOnly. Le risque est réduit par la sérialisation mais le gate reste ouvert jusqu'aux tests d'intégration multi-onglets et à la validation de la politique navigateurs supportés.
