@@ -1463,3 +1463,39 @@ résiduels.
 - PR #1 : ouverte, Draft, non fusionnée ; sa tête correspond au commit documentaire courant après ce checkpoint.
 - Branche `main` inchangée à `91d47a8fe29b391245449b99b55e651fa444ccb8`.
 - La Phase 0 reste ouverte. Les gates opérationnels et humains déjà recensés — secrets/certificats/DNS/proxy/réseau réels, supervision, sauvegardes chiffrées avec WAL/PITR, protection hors site/immutabilité, exercice de restauration RPO/RTO sur l'environnement cible, revue humaine exhaustive et acceptation des risques résiduels — ne sont pas remplacés par les succès CI.
+
+
+## Validation checkpoint actualisé — 28 novembre 2026 (HEAD 28de85a)
+
+- Branche : `chore/phase0-stabilization` ; HEAD exact : `28de85a9f468b7e3f4408d159ef624eff906eba5`.
+- PR #1 : ouverte, Draft, non fusionnée ; base `main` inchangée à `91d47a8fe29b391245449b99b55e651fa444ccb8`.
+- Workflows Push `46139190920` et Pull Request `46139194452` : **5/5 jobs réussis chacun** (Backend, PostgreSQL Integration, Frontend, Compose Smoke, Production Runtime Smoke).
+- Backend : **562 passed, 63 skipped, 1 warning**.
+- PostgreSQL Integration : **62 passed, 1 warning**. La commande exécute explicitement les suites refresh rotation, relations actifs, cycle fournisseurs, documents/RAG, chiffrement MFA, audit/outbox, cycle de vie administrateur, rate limiting, intégrité des risques, qualité inventaire, import CSV et pagination/export.
+- Le smoke de production a exécuté les migrations jusqu'à `0031_risk_action_restrict`, démarré les services et vérifié les health checks, TLS/proxy et parcours du parser. Compose/Runtime smoke ont également validé le comportement du parser et les scénarios ClamAV sain/EICAR.
+- Le nouveau test HTTP de confirmation CSV invalide vérifie HTTP 422, l'absence d'écho de la valeur sentinelle et l'absence d'écriture DB (pas de `add_all`, `flush` ou `commit`).
+- Les avertissements observés sont des avertissements d'outillage/dépendances (Starlette/AnyIO et dépréciation Node 20 des actions GitHub) ; ils n'ont pas fait échouer les workflows.
+
+### Lecture du résultat
+
+Cette validation démontre un niveau élevé de maturité automatisée du code sur les environnements éphémères CI. Elle ne démontre pas que l'environnement réel de déploiement de PGCC est prêt ni que les procédures d'exploitation ont été exécutées avec les secrets, certificats, sauvegardes et équipements réels.
+
+### Gates de clôture Phase 0 — statut après ce checkpoint
+
+1. **CI et non-régression sur HEAD :** validées (les deux workflows complets sont verts).
+2. **Migrations et intégration PostgreSQL CI :** validées dans le périmètre des suites automatisées ci-dessus ; ne pas assimiler au test de reprise de production.
+3. **Revue humaine finale de sécurité et du diff PR #1 :** à réaliser/faire approuver.
+4. **Recette de l'environnement cible :** à réaliser avec les vrais secrets, certificats, DNS, reverse proxy, règles réseau, CIDR proxy de confiance, seuils de rate limiting et supervision/alertes.
+5. **Reprise après sinistre cible :** à réaliser depuis une sauvegarde chiffrée conservée hors site/immutable, avec WAL/PITR si retenu, puis mesure et approbation des RPO/RTO.
+6. **Acceptation formelle des risques résiduels :** à obtenir auprès des responsables concernés.
+
+**Décision : Phase 0 reste ouverte.** Les points 3 à 6 ne peuvent pas être déclarés terminés sur la seule base de GitHub CI ; ils nécessitent une revue humaine et des opérations sur l'environnement cible.
+
+### Plan d'exécution court pour la clôture
+
+- Étape A — revue humaine ciblée de la PR et des configurations sensibles (JWT/MFA, cookies/CORS/proxy, secrets, RBAC/ACL documentaire, parser/antivirus, rate limiting, audit).
+- Étape B — recette sur environnement de préproduction/cible avec configuration réelle et preuves horodatées.
+- Étape C — exercice de restauration d'une sauvegarde chiffrée, vérification des données et mesure RPO/RTO.
+- Étape D — décision de risque, mise à jour de ce registre et rapport de clôture signé.
+
+Aucun délai ferme pour les étapes B à D ne peut être promis sans disponibilité de l'environnement, des sauvegardes et des approbateurs. Le travail de code Phase 0 est désormais principalement en validation et remédiation éventuelle, pas en développement de nouvelles fonctionnalités.
