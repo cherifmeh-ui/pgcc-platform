@@ -1519,3 +1519,8 @@ Aucun délai ferme pour les étapes B à D ne peut être promis sans disponibili
 ### Statut de clôture
 
 La CI du HEAD documentaire courant est entièrement verte. La Phase 0 reste ouverte pour la revue indépendante, la coordination inter-onglets à valider, la recette avec configuration réelle, la restauration depuis sauvegarde réelle avec RPO/RTO approuvés et les décisions formelles de risque.
+
+
+### Suivi dédié — concurrence de refresh entre onglets
+
+Le point de revue statique est désormais suivi dans l'issue [#7 — Coordination du renouvellement de session entre onglets navigateur](https://github.com/cherifmeh-ui/pgcc-platform/issues/7). Cette issue est un gate Auth Phase 0 : elle reste ouverte jusqu'à l'implémentation, aux tests navigateur multi-onglets et à la preuve que le rejeu réel reste détecté.
