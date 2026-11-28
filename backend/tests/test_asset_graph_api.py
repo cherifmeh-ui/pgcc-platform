@@ -32,8 +32,17 @@ async def test_graph_returns_active_assets_and_relationships():
     assert result["edges"][0]["source"] == B
     assert result["edges"][0]["target"] == A
     assert db.execute.await_count == 2
+    asset_statement = str(db.execute.await_args_list[0].args[0]).lower()
+    assert "assets.reference" in asset_statement
+    assert "assets.lifecycle_status" in asset_statement
+    assert "assets.serial_number" not in asset_statement
+    assert "assets.description" not in asset_statement
+
     relation_statement = str(db.execute.await_args_list[1].args[0]).lower()
+    assert "asset_relationships.relationship_type" in relation_statement
     assert "asset_relationships.source_asset_id in (select" in relation_statement
+    assert "asset_relationships.created_at" not in relation_statement
+    assert "asset_relationships.description" in relation_statement
     assert "asset_relationships.target_asset_id in (select" in relation_statement
     assert "assets.retired_at is null" in relation_statement
 
