@@ -164,28 +164,36 @@ Les métadonnées sont stockées en base ; les fichiers dans un stockage sécuri
 
 ## 9. Roadmap de référence
 
-### Phase 0 — Stabilisation
-- CI, tests, migrations, sécurité, dette technique et compatibilité des modules existants.
-- Documentation d'architecture et modèle de données.
+La roadmap de référence est alignée sur `docs/MASTER_ROADMAP.md` :
 
-### Phase 1 — Cartographie des actifs et dépendances
-- Modèle Asset et AssetRelationship.
-- CRUD/API, RBAC, audit, tests et interface.
-- Liens progressifs avec applications, risques, contrôles, documents et fournisseurs.
-- Vue de dépendances et analyse d'impact.
+### Phase 0 — Stabilisation et fondations
+- Architecture, CI, migrations, sécurité, tests, Docker et non-régression.
 
-### Phase 2 — Fournisseurs et tiers
-- Référentiel, contrats, évaluations, accès et alertes.
-- Liens avec actifs, risques, actions et preuves.
+### Phase 1 — Cartographie SI
+- Actifs, applications, relations, dépendances, import/export, analyse d'impact et liens risques/fournisseurs.
 
-### Phase 3 — Pilotage
-- Définitions KPI.
-- Dashboard RSSI et exécutif.
-- Rapports générés à partir de données vérifiables.
+### Phase 2 — Gestion du cycle de vie des risques
+- Évaluations inhérentes/résiduelles, méthodologie versionnée, décisions de traitement, acceptation explicite et historique.
 
-### Phase 4 — Automatisation et IA
-- Notifications, revues périodiques, workflows.
-- Assistant IA contextualisé, explicable et soumis aux permissions.
+### Phase 3 — TPRM
+- Fournisseurs, services, contrats, clauses, évaluations, accès, revues, risques et tendances.
+
+### Phase 4 — Conformité et contrôles
+- Référentiels, applicabilité, évaluations versionnées, preuves, écarts et SoA.
+
+### Phase 5 — Audits
+- Programme, missions, périmètre, constats, recommandations, preuves et suivi.
+
+### Phase 6 — Gouvernance et workflows
+- PSSI, objectifs, responsabilités, unités, décisions, approbations et notifications.
+
+### Phase 7 — Pilotage et reporting
+- KPI GRC, dashboards RSSI/PDG et rapports PDF/CSV/XLSX fondés sur les données métier.
+
+### Phase 8 — Automatisation, IA et production
+- Alertes, intégrations, assistant contextualisé, monitoring, sauvegardes, durcissement et déploiement.
+
+L'installation locale et la recette humaine sont regroupées après la clôture de tous les développements. Les contrôles qui nécessitent l'infrastructure CTF réelle restent des gates de déploiement et ne sont pas présumés validés.
 
 ## 10. Gouvernance des changements
 
