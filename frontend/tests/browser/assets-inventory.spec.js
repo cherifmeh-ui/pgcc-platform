@@ -342,6 +342,16 @@ test('admin creates and updates an asset, then exports the filtered inventory', 
   await page.getByRole('button', { name: 'Exporter CSV' }).click();
   const download = await downloadPromise;
   expect(download.suggestedFilename()).toBe('pgcc_assets_inventory.csv');
+
+  const retirementRequest = page.waitForRequest((request) =>
+    request.method() === 'DELETE' && new URL(request.url()).pathname.endsWith('/' + assetOne.id)
+  );
+  const retirementDialog = page.waitForEvent('dialog');
+  await page.getByRole('button', { name: 'Retirer' }).first().click();
+  const dialog = await retirementDialog;
+  expect(dialog.message()).toContain('Retirer l’actif AST-001');
+  await dialog.accept();
+  await retirementRequest;
 });
 
 test('admin previews and confirms a CSV import without bypassing the preview step', async ({ page }) => {
