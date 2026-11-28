@@ -878,3 +878,22 @@ Décision de conception Phase 0 proposée : rester fail-closed et exiger une ré
 Le chemin de refresh automatique a été aligné sur le client Axios commun afin d'hériter de son timeout de 15 secondes. Le chemin de restauration initiale utilisait déjà ce client. Le timeout permet de terminer une requête réseau bloquée et de libérer le Web Lock lorsque l'event loop du navigateur fonctionne. Il ne constitue pas un TTL du verrou et ne garantit pas le déblocage pendant un gel complet du document par le système ; le test de suspension longue et la validation sur le parc réel restent ouverts.
 
 CI sur le commit b351a243 : 5/5 jobs réussis ; le test navigateur réel contre FastAPI/PostgreSQL reste vert sur Chromium, Firefox et WebKit.
+
+
+## Organisation du cycle de livraison — 28 novembre 2026
+
+La validation humaine et la recette locale sont reportées à la fin du projet,
+après clôture de tous les développements fonctionnels et techniques. Elles ne
+sont pas des points d'attente pour les phases de développement.
+
+Les équipes de développement poursuivent les tests automatisés (unitaires,
+HTTP/JWT, PostgreSQL, navigateurs E2E, sécurité, migrations, build et smoke
+tests) sur chaque HEAD candidat. Les preuves sont documentées avec leur SHA
+exact et ne sont pas extrapolées à l'environnement CTF.
+
+Les gates propres à la production (réseau/proxy/DNS/TLS, secrets/certificats,
+supervision/alertes, sauvegardes chiffrées hors hôte, restauration, RPO/RTO,
+acceptation des risques et revue humaine) seront regroupés dans la phase finale
+d'installation locale et de recette. Le statut « non testé sur l'environnement
+cible » reste explicite jusque-là. Le développement des phases fonctionnelles
+peut avancer sans déclarer ces gates validés.
