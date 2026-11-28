@@ -60,7 +60,7 @@ Cette présence fonctionnelle ne vaut pas encore validation complète de chaque 
 - La vérification de `docs/TARGET_DATA_MODEL.md` confirme désormais explicitement la relation Application 1:N Asset (une application peut référencer plusieurs actifs ; chaque actif référence au plus une application).
 - `docs/ASSET_INVENTORY_IMPLEMENTATION.md`, `docs/ASSET_DATA_MODEL_REVIEW.md` et la migration `0008_asset_application_cardinality` concordent : la contrainte unique historique sur `assets.application_id` est supprimée, tandis que la FK restrictive est conservée.
 - Le modèle SQLAlchemy actuel ne déclare aucune unicité sur `application_id`.
-- Une validation PostgreSQL directe est ajoutée dans `backend/tests/test_asset_relationships_postgres.py` : deux actifs distincts doivent pouvoir référencer la même application. Son résultat reste en attente de la CI déclenchée sur le nouveau HEAD.
+- Le test PostgreSQL existant `test_application_supports_multiple_assets_reassignment_and_restrictive_delete` dans `backend/tests/test_asset_lifecycle_postgres.py` couvre déjà deux actifs liés à une même application, la réaffectation vers une autre application et la restriction de suppression. Ce fichier est explicitement exécuté par le job PostgreSQL Integration.
 - **Décision :** aucune migration supplémentaire ni conversion de données n'est requise pour cette cardinalité. Le contrôle passe du statut « contradiction documentaire » au statut « test de régression physique à exécuter ».
 
 ### P1-CARTO-002 — Responsabilités d'actifs encore textuelles
