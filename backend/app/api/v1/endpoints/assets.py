@@ -965,22 +965,17 @@ async def get_asset_impact(
                 supplier_summary["authorized_data_access"] += 1
     source_suppliers = supplier_links_by_asset.get(asset_id, [])
     source_authorizations = authorized_access_by_asset.get(asset_id, [])
-    if not impacted:
-        empty_summary = {"total": 0, "unacceptable": 0, "critical": 0, "high": 0, "moderate": 0, "low": 0, "by_status": {}}
-        return {
-            "source": {"id": source.id, "reference": source.reference, "name": source.name, "linked_suppliers": source_suppliers, "active_supplier_authorizations": source_authorizations},
-            "impacted_assets": [], "total_impacted": 0, "risk_summary": empty_summary,
-            "supplier_summary": supplier_summary, "supplier_access_available": supplier_access_available,
-        }
-    asset_result = await db.execute(select(Asset).where(Asset.id.in_(impacted_ids)))
-    assets_by_id = {asset.id: asset for asset in asset_result.scalars().all()}
+    # Risk synthesis covers the source asset and every transitive dependent.
+    # A risk linked to multiple affected assets is counted only once globally.
     risks_by_asset: dict[UUID, list[dict]] = {}
     risk_summary = {"total": 0, "unacceptable": 0, "critical": 0, "high": 0, "moderate": 0, "low": 0, "by_status": {}}
     if role_has_permission((current_user.role or "").strip().lower(), "risks", "read"):
+        risk_asset_ids = [asset_id, *impacted_ids]
         risk_result = await db.execute(
             select(AssetRiskLink.asset_id, Risk.id, Risk.ref, Risk.title, Risk.risk_level, Risk.status)
             .join(Risk, Risk.id == AssetRiskLink.risk_id)
-            .where(AssetRiskLink.asset_id.in_(impacted_ids))
+            .where(AssetRiskLink.asset_id.in_(risk_asset_ids))
+            .order_by(AssetRiskLink.asset_id.asc(), Risk.ref.asc(), Risk.id.asc())
         )
         unique_risks: dict[UUID, dict] = {}
         for linked_asset_id, risk_id, risk_ref, risk_title, risk_level, risk_status in risk_result.all():
@@ -996,6 +991,21 @@ async def get_asset_impact(
             risk_summary[bucket] += 1
             status_key = str(risk["status"] or "Non renseigné")
             risk_summary["by_status"][status_key] = risk_summary["by_status"].get(status_key, 0) + 1
+
+    source_risks = risks_by_asset.get(asset_id, [])
+    if not impacted:
+        return {
+            "source": {
+                "id": source.id, "reference": source.reference, "name": source.name,
+                "linked_risks": source_risks, "linked_suppliers": source_suppliers,
+                "active_supplier_authorizations": source_authorizations,
+            },
+            "impacted_assets": [], "total_impacted": 0, "risk_summary": risk_summary,
+            "supplier_summary": supplier_summary, "supplier_access_available": supplier_access_available,
+        }
+
+    asset_result = await db.execute(select(Asset).where(Asset.id.in_(impacted_ids)))
+    assets_by_id = {asset.id: asset for asset in asset_result.scalars().all()}
     results = []
     for impacted_id, distance in impacted:
         asset = assets_by_id.get(impacted_id)
@@ -1011,7 +1021,7 @@ async def get_asset_impact(
             "active_supplier_authorizations": authorized_access_by_asset.get(asset.id, []),
         })
     return {
-        "source": {"id": source.id, "reference": source.reference, "name": source.name, "linked_suppliers": source_suppliers, "active_supplier_authorizations": source_authorizations},
+        "source": {"id": source.id, "reference": source.reference, "name": source.name, "linked_risks": source_risks, "linked_suppliers": source_suppliers, "active_supplier_authorizations": source_authorizations},
         "impacted_assets": results, "total_impacted": len(results), "risk_summary": risk_summary,
         "supplier_summary": supplier_summary, "supplier_access_available": supplier_access_available,
     }
