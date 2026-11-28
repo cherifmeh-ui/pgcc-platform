@@ -144,3 +144,8 @@ de classification ; elle agrège uniquement les valeurs déjà persistées.
 Le job Frontend du workflow PR 46163329501 (SHA a4289248eaec66fde7ad4e3e1107e2598fb9704f) est vert et exécute 24 tests Playwright réussis sur Chromium, Firefox et WebKit. Les scénarios couvrent les relations actif-actif, les associations de risques, les données fournisseurs et la synthèse d'impact source/dépendants, en plus des parcours CRUD, import/export et RBAC.
 
 Le test UI de retrait logique est ajouté dans le commit aaee2dd5cf7fedf1b5c87e0bf3df567de1d09068 ; sa CI est en cours et sera documentée après confirmation.
+## Validation complémentaire — cycle de vie UI et analyse transverse (28/11/2026)
+
+Le workflow Push 46164007103 sur le SHA a1874e0c890e3479e41585887584c301ba7a9163 est terminé avec 5/5 jobs réussis. Le job Frontend exécute 24 tests Playwright réussis sur Chromium, Firefox et WebKit ; le parcours couvre désormais aussi la confirmation du retrait logique d'un actif. Le job PostgreSQL confirme 63 tests réussis et le backend 596 tests réussis / 64 ignorés. npm audit : 0 vulnérabilité.
+
+Cette preuve complète le test PostgreSQL de l'agrégation des risques de l'actif source et de ses dépendants. Elle ne remplace pas les validations métier CTF ni l'installation locale, reportées à la fin du projet.
