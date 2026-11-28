@@ -1075,3 +1075,35 @@ et une comparaison exhaustive des objets persistés. Les collisions
 concurrentes hostname/numéro de série ne doivent être testées comme conflits
 bloquants que si une contrainte d'unicité correspondante est ajoutée après
 validation de la règle métier. La Phase 0 reste ouverte.
+
+
+## Complément — parcours HTTP prévisualisation puis confirmation PostgreSQL (28/11/2026)
+
+Un test d'intégration supplémentaire couvre désormais le parcours complet avec
+un même contenu CSV envoyé successivement aux endpoints HTTP
+`/import/preview` et `/import/confirm`. Le test utilise un JWT signé,
+un utilisateur administrateur dédié, une base PostgreSQL migrée et une
+connexion indépendante pour vérifier les données persistées.
+
+Le scénario contrôle :
+- la prévisualisation HTTP (`can_import`, une ligne analysée et valide) ;
+- les valeurs normalisées retournées pour la référence, le nom, le type,
+  la criticité, le propriétaire et le commentaire ;
+- la confirmation HTTP avec le même fichier et une réponse 201 ;
+- l'égalité des champs persistés en PostgreSQL avec ceux présentés dans la
+  prévisualisation ;
+- la présence d'un seul événement d'audit `IMPORT` ;
+- le nettoyage des données de test après exécution.
+
+**Résultats CI sur le SHA 22a5a6e59badfbb1da0f6d6758a2ff9b1d43b860** :
+- Workflow Push `46137828908` : **5/5 jobs réussis**.
+- Workflow Pull Request `46137834416` : **5/5 jobs réussis**.
+- Backend : **561 passed, 63 skipped, 1 warning**.
+- PostgreSQL Integration : **62 passed, 1 warning**.
+- Frontend build, Compose Smoke et Production Runtime Smoke : réussis.
+
+Ce contrôle démontre la cohérence preview/confirm pour ce scénario nominal
+sur PostgreSQL. Il ne remplace pas les scénarios négatifs (fichier modifié
+entre preview et confirm, droits insuffisants, validation métier rejetée,
+collision concurrente) déjà couverts partiellement ou restant à compléter.
+La Phase 0 reste ouverte.
