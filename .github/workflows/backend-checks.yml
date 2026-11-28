@@ -55,7 +55,7 @@ jobs:
       DATABASE_URL: postgresql+asyncpg://pgcc_browser:pgcc_browser@localhost:5432/pgcc_browser
       JWT_ALGORITHM: HS256
       JWT_SECRET: pgcc-browser-refresh-integration-secret-2026
-      CORS_ORIGINS: http://127.0.0.1:4173
+      CORS_ORIGINS: http://localhost:4173
       PYTHONPATH: backend
     steps:
       - name: Checkout
