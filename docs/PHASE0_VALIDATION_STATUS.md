@@ -1537,3 +1537,14 @@ Le workflow `46140646641` sur le commit documentaire `e7c0a32` a terminé avec 5
 ### Complément — restauration initiale de session
 
 La revue du store Pinia a révélé un second point d'entrée : `restoreSession()` appelait directement `/auth/refresh`, en dehors de l'intercepteur de renouvellement. Cet appel est maintenant lui aussi enveloppé dans le même verrou Web Locks. Ainsi, les rotations automatiques après 401 et la restauration au chargement de l'application partagent le même verrou inter-onglets. Cette correction est incluse dans le commit `af88df5` ; sa CI doit être vérifiée séparément.
+
+
+### 28 novembre 2026 — ajout du test navigateur multi-onglets (en attente CI)
+
+- Ajout de `frontend/playwright.config.js` et `frontend/tests/browser/refresh-lock.spec.js`.
+- Le scénario lance Chromium réel, ouvre deux pages du même contexte navigateur et démarre simultanément deux opérations utilisant le module de production `withCrossTabRefreshLock`.
+- Le point d'API est intercepté par Playwright : il simule deux rotations successives et renvoie un cookie `HttpOnly` partagé. Le test vérifie que la seconde requête ne part qu'après la première et présente le cookie tourné, et non le cookie initial.
+- Le job Frontend installe Playwright et Chromium de façon éphémère (sans modifier les dépendances déclarées ni le lockfile), puis exécute le scénario.
+- Workflow PR déclenché sur le commit `1c7b128b3207c4915e78b41a56515257b37ae316` : run `46147897538`, résultat à confirmer.
+- **Limite de preuve :** l'endpoint est simulé dans le navigateur. Ce test prouve l'interaction Chromium/Web Locks/cookie HttpOnly partagé, mais ne remplace pas un parcours navigateur contre le véritable backend FastAPI/PostgreSQL. Les tests PostgreSQL existants couvrent séparément la concurrence et la détection de rejeu côté serveur.
+- Les scénarios de perte de réponse après commit, suspension/fermeture d'onglet et la matrice de compatibilité navigateur restent à compléter. Issue #7 reste ouverte ; le gate Auth n'est pas clôturé.
