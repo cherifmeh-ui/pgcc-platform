@@ -308,3 +308,25 @@ Restent à réaliser hors CI : déploiement de recette avec secrets et certifica
 - Validation groupée des identifiants d'applications : une seule requête SQL pour l'ensemble du fichier, au lieu d'une requête par ligne.
 - Tests Backend ajoutés pour les limites de taille/lignes, les en-têtes ambigus, les colonnes supplémentaires et le traitement groupé.
 - Workflow 45886912425 sur le HEAD 4e61f518b20cc82f4a3e6a6b85f59afb0cba8076 : 4/4 jobs réussis ; les 41 tests PostgreSQL restent verts.
+
+
+## Revue complémentaire — 28 novembre 2026 (HEAD 9194419)
+
+### Résultats CI confirmés
+
+- Workflow PR `46140116019` sur `9194419b8017d8b8154a7c29bc6322fbfc8e4d90` : 5/5 jobs réussis.
+- Backend : 562 passed, 63 skipped, 1 warning ; PostgreSQL : 62 passed, 1 warning.
+- Compose et Production Runtime : parseur isolé et ClamAV opérationnels dans les environnements éphémères ; fichier sain accepté, EICAR détecté.
+- PostgreSQL : migrations jusqu'à `0031_risk_action_restrict`, vérification de dérive, tests d'intégration et dump/restore CI réussis.
+
+### Point de sécurité encore ouvert — renouvellement concurrent entre onglets
+
+La file d'attente `isRefreshing/failedQueue` de `frontend/src/services/api.js` empêche plusieurs refresh concurrents dans une même instance JavaScript, mais ne coordonne pas les onglets du navigateur. Comme le refresh token est porté par un cookie HttpOnly partagé, deux onglets peuvent présenter le même token à quelques millisecondes d'intervalle. Le verrouillage PostgreSQL sérialise les requêtes ; la seconde peut alors être traitée comme une réutilisation/rejeu et révoquer la session nouvellement créée par la première.
+
+**Action requise avant fermeture du gate Auth :** coordination inter-onglets (par exemple Web Locks avec stratégie de relecture de session/attente robuste) et tests multi-onglets automatisés ; vérifier aussi le comportement si un onglet est suspendu, si le détenteur du verrou disparaît ou si la réponse réseau est perdue après rotation. Ne pas affaiblir le mécanisme serveur de détection de rejeu.
+
+Cette observation est une revue statique de source, pas une reproduction runtime. Elle doit être transformée en test navigateur reproductible avant toute affirmation de correction.
+
+### Rappels d'exploitation
+
+Le fichier `docker-compose.production.yaml` exige les secrets et clés nécessaires, mais la recette doit encore confirmer les valeurs réelles, les CIDR de proxy, les certificats montés, les règles réseau, les alertes ClamAV/rate-limit et les seuils sur le trafic réel. Les tests CI utilisent des secrets et ressources éphémères.
