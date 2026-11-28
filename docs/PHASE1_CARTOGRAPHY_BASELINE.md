@@ -55,10 +55,13 @@ Cette présence fonctionnelle ne vaut pas encore validation complète de chaque 
 
 ### P1-CARTO-001 — Documentation du lien Application/Asset contradictoire
 
-- `docs/TARGET_DATA_MODEL.md` décrit encore une relation Application↔Asset optionnelle 1:1.
-- `docs/ASSET_INVENTORY_IMPLEMENTATION.md` indique que la migration `0008_asset_application_cardinality` a supprimé cette cardinalité 1:1 : une application peut être associée à plusieurs actifs techniques.
-- Le modèle Asset contient un `application_id` facultatif et une FK ; aucun indice de contrainte unique n'apparaît dans le modèle actuel.
-- **Action :** confirmer la migration physique et mettre à jour le modèle cible en relation Application 1:N Asset. Ne pas modifier les données ni le schéma pour corriger une simple contradiction documentaire.
+<badge>Résolu par revue documentaire — 28/11/2026</badge>
+
+- La vérification de `docs/TARGET_DATA_MODEL.md` confirme désormais explicitement la relation Application 1:N Asset (une application peut référencer plusieurs actifs ; chaque actif référence au plus une application).
+- `docs/ASSET_INVENTORY_IMPLEMENTATION.md`, `docs/ASSET_DATA_MODEL_REVIEW.md` et la migration `0008_asset_application_cardinality` concordent : la contrainte unique historique sur `assets.application_id` est supprimée, tandis que la FK restrictive est conservée.
+- Le modèle SQLAlchemy actuel ne déclare aucune unicité sur `application_id`.
+- Une validation PostgreSQL directe est ajoutée dans `backend/tests/test_asset_relationships_postgres.py` : deux actifs distincts doivent pouvoir référencer la même application. Son résultat reste en attente de la CI déclenchée sur le nouveau HEAD.
+- **Décision :** aucune migration supplémentaire ni conversion de données n'est requise pour cette cardinalité. Le contrôle passe du statut « contradiction documentaire » au statut « test de régression physique à exécuter ».
 
 ### P1-CARTO-002 — Responsabilités d'actifs encore textuelles
 
