@@ -11,6 +11,9 @@ from app.api.v1.endpoints.reports import router as reports_router # ✅ Rapports
 from app.api.v1.endpoints.actions import router as actions_router # ✅ Plans d'Action
 from app.api.v1.endpoints.compliance import router as compliance_router
 from app.api.v1.endpoints.documents import router as documents_router
+from app.api.v1.endpoints.assets import router as assets_router
+from app.api.v1.endpoints.suppliers import router as suppliers_router
+from app.api.v1.endpoints.admin_users import router as admin_users_router
 
 api_router = APIRouter()
 
@@ -24,3 +27,6 @@ api_router.include_router(reports_router)
 api_router.include_router(actions_router)
 api_router.include_router(compliance_router)
 api_router.include_router(documents_router)
+api_router.include_router(assets_router)
+api_router.include_router(suppliers_router)
+api_router.include_router(admin_users_router)

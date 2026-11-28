@@ -7,6 +7,8 @@ import LoginView from '@/views/LoginView.vue';
 import DashboardView from '@/views/DashboardView.vue';
 import RisksView from '@/views/RisksView.vue';
 import AppsView from '@/views/AppsView.vue';
+import AssetsView from '@/views/AssetsView.vue';
+import SuppliersView from '@/views/SuppliersView.vue';
 import IsoComplianceView from '@/views/IsoComplianceView.vue';
 import DocumentsView from '@/views/DocumentsView.vue'; // ⬅️ NOUVELLE VUE BIBLIOTHÈQUE
 import NotFoundView from '@/views/NotFoundView.vue';
@@ -52,6 +54,14 @@ const routes = [
       },
       
       { 
+        path: 'assets', 
+        name: 'AssetsInventory', 
+        component: AssetsView, 
+        meta: { requiresAuth: true, module: 'assets', action: 'read' } 
+      },
+      
+      { path: 'suppliers', name: 'Suppliers', component: SuppliersView, meta: { requiresAuth: true, module: 'suppliers', action: 'read' } },
+      { 
         path: 'compliance', 
         name: 'IsoCompliance', 
         component: IsoComplianceView, 
@@ -85,6 +95,11 @@ const router = createRouter({
  */
 router.beforeEach(async (to, from, next) => {
   const authStore = useAuthStore();
+
+  // Restore a cookie-backed session after a page reload before evaluating guards.
+  if (!authStore.isAuthenticated && (to.meta.requiresAuth || to.meta.requiresGuest)) {
+    await authStore.restoreSession();
+  }
 
   // 1. Gestion Invités (Page Login)
   if (to.meta.requiresGuest && authStore.isAuthenticated) {

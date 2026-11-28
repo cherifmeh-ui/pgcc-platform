@@ -63,6 +63,40 @@ PERMISSIONS: dict[str, dict[str, list[str]]] = {
         "delete": [Role.ADMIN.value],
     },
     
+    # --- Cartographie des actifs et dépendances ---
+    "assets": {
+        "read": [Role.ADMIN.value, Role.EXECUTIVE.value, Role.AUDITOR.value],
+        "create": [Role.ADMIN.value],
+        "update": [Role.ADMIN.value],
+        "delete": [Role.ADMIN.value],
+        "export": [Role.ADMIN.value, Role.AUDITOR.value],
+    },
+    
+    # --- Gestion des fournisseurs et tiers (TPRM) ---
+    "suppliers": {
+        "read": [Role.ADMIN.value, Role.EXECUTIVE.value, Role.AUDITOR.value],
+        "read_contacts": [Role.ADMIN.value, Role.AUDITOR.value],
+        "read_contracts": [Role.ADMIN.value, Role.AUDITOR.value],
+        "manage_contracts": [Role.ADMIN.value],
+        "read_assessments": [Role.ADMIN.value, Role.AUDITOR.value],
+        "read_assets": [Role.ADMIN.value, Role.AUDITOR.value],
+        "read_access_requests": [Role.ADMIN.value, Role.AUDITOR.value],
+        "request_access": [Role.ADMIN.value],
+        "decide_access": [Role.ADMIN.value],
+        "revoke_access": [Role.ADMIN.value],
+        "expire_access": [Role.ADMIN.value],
+        "review_access": [Role.ADMIN.value],
+        "manage_assets": [Role.ADMIN.value],
+        "manage_risks": [Role.ADMIN.value],
+        "assess": [Role.ADMIN.value],
+        "validate_assessment": [Role.ADMIN.value],
+        "create": [Role.ADMIN.value],
+        "update": [Role.ADMIN.value],
+        "archive": [Role.ADMIN.value],
+        "manage_contacts": [Role.ADMIN.value],
+        "export": [Role.ADMIN.value, Role.AUDITOR.value],
+    },
+    
     # --- Menaces & Vulnérabilités ---
     "threats": {
         "read": [Role.ADMIN.value, Role.EXECUTIVE.value, Role.AUDITOR.value],
@@ -98,6 +132,11 @@ PERMISSIONS: dict[str, dict[str, list[str]]] = {
     },
     
     # --- Assistant IA Souverain (Phi3/Llama3) ---
+    # --- Administration du cycle de vie des comptes ---
+    "users": {
+        "manage": [Role.ADMIN.value],
+    },
+
     "ai_assistant": {
         "read": [Role.ADMIN.value, Role.EXECUTIVE.value, Role.AUDITOR.value],
         "use": [Role.ADMIN.value, Role.EXECUTIVE.value, Role.AUDITOR.value],
@@ -115,10 +154,10 @@ def role_has_permission(role: str | None, module: str, action: str = "read") -> 
     """Vérifie si un rôle a une permission donnée."""
     if not role:
         return False
-    
-    # Strip pour tolérer les légères variations whitespace si jamais présentes ailleurs
-    clean_module = module.strip() 
-    clean_action = action.strip()
+
+    clean_role = role.strip().lower()
+    clean_module = module.strip().lower()
+    clean_action = action.strip().lower()
     
     module_perms = PERMISSIONS.get(clean_module)
     if not module_perms:
@@ -128,7 +167,7 @@ def role_has_permission(role: str | None, module: str, action: str = "read") -> 
     if allowed_roles is None:
         return False
     
-    return role in allowed_roles
+    return clean_role in allowed_roles
 
 
 def get_effective_permissions(role: str | None) -> dict[str, Any]:
@@ -138,11 +177,12 @@ def get_effective_permissions(role: str | None) -> dict[str, Any]:
     """
     if not role:
         return {}
-    
+
+    clean_role = role.strip().lower()
     result: dict[str, Any] = {}
     for module, actions in PERMISSIONS.items():
         allowed_actions = [
-            action for action, roles in actions.items() if role in roles
+            action for action, roles in actions.items() if clean_role in roles
         ]
         if allowed_actions:
             result[module] = allowed_actions

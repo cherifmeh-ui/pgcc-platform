@@ -70,31 +70,61 @@ def _create_token(
         "jti": uuid.uuid4().hex,
     }
     if extra_claims:
+        reserved_claims = {"sub", "type", "iat", "exp", "jti"}
+        if reserved_claims.intersection(extra_claims):
+            raise ValueError("Extra claims cannot override reserved JWT claims.")
         payload.update(extra_claims)
     return jwt.encode(payload, get_signing_key(), algorithm=settings.JWT_ALGORITHM)
 
 
-def create_access_token(subject, role: str, extra_claims=None) -> str:
+def create_access_token(subject, role: str, auth_version: int = 0, extra_claims=None) -> str:
+    if extra_claims and {"role", "auth_version"}.intersection(extra_claims):
+        raise ValueError("Extra claims cannot override reserved account-state claims.")
+    if not isinstance(role, str) or not role.strip():
+        raise ValueError("A normalized role is required for access tokens.")
     return _create_token(
         subject, "access", settings.ACCESS_TOKEN_EXPIRE_MINUTES,
-        {"role": role, **(extra_claims or {})},
+        {"role": role.strip().lower(), "auth_version": int(auth_version), **(extra_claims or {})},
     )
 
 
-def create_refresh_token(subject) -> str:
-    return _create_token(subject, "refresh", settings.REFRESH_TOKEN_EXPIRE_DAYS * 1440)
-
-
-def create_pre_auth_token(subject, role: str) -> str:
+def create_refresh_token(
+    subject,
+    role: str,
+    mfa_enabled: bool,
+    auth_version: int = 0,
+    mfa_confirmed_at: int | None = None,
+) -> str:
+    # Snapshot security-sensitive account state so role/MFA changes invalidate
+    # refresh sessions even when an administrator changes the user out of band.
+    if not isinstance(role, str) or not role.strip():
+        raise ValueError("A normalized role is required for refresh tokens.")
+    claims = {
+        "role": role.strip().lower(),
+        "mfa_enabled": bool(mfa_enabled),
+        "auth_version": int(auth_version),
+    }
+    if mfa_confirmed_at is not None:
+        claims["mfa_confirmed_at"] = int(mfa_confirmed_at)
     return _create_token(
-        subject, "pre_auth", settings.PRE_AUTH_TOKEN_EXPIRE_MINUTES, {"role": role}
+        subject,
+        "refresh",
+        settings.REFRESH_TOKEN_EXPIRE_DAYS * 1440,
+        extra_claims=claims,
     )
 
 
-def create_change_password_token(subject, role: str) -> str:
+def create_pre_auth_token(subject, role: str, auth_version: int = 0) -> str:
+    return _create_token(
+        subject, "pre_auth", settings.PRE_AUTH_TOKEN_EXPIRE_MINUTES,
+        {"role": role.strip().lower(), "auth_version": int(auth_version)},
+    )
+
+
+def create_change_password_token(subject, role: str, auth_version: int = 0) -> str:
     return _create_token(
         subject, "change_password", settings.CHANGE_PASSWORD_TOKEN_EXPIRE_MINUTES,
-        {"role": role},
+        {"role": role.strip().lower(), "auth_version": int(auth_version)},
     )
 
 
@@ -146,3 +176,13 @@ def verify_backup_code(code: str, hashed_codes: Optional[list[str]]) -> bool:
         return False
     cleaned = str(code).strip().upper()
     return any(verify_password(cleaned, h) for h in hashed_codes)
+
+def consume_backup_code(code: str, hashed_codes: Optional[list[str]]) -> Optional[list[str]]:
+    """Validate and consume one recovery code; return the remaining hashes or None."""
+    if not code or not hashed_codes:
+        return None
+    cleaned = str(code).strip().upper()
+    for index, hashed in enumerate(hashed_codes):
+        if verify_password(cleaned, hashed):
+            return hashed_codes[:index] + hashed_codes[index + 1 :]
+    return None

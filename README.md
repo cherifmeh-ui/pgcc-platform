@@ -40,6 +40,21 @@ Le projet suit une architecture moderne, scalable et conteneurisée.
 *   **Orchestration :** Docker Compose.
 *   **Services :** Postgres (DB), Backend (API), Frontend (SPA), Ollama (Host Machine).
 
+## 🧭 Architecture cible et documentation
+
+La référence d'architecture pour les évolutions futures est documentée dans :
+
+- [Master Roadmap PGCC — 9 phases](docs/MASTER_ROADMAP.md)
+- [Revue initiale de maturité des modules](docs/MODULE_MATURITY_REVIEW.md)
+- [Architecture cible](docs/ARCHITECTURE_TARGET.md)
+- [Modèle de données cible](docs/TARGET_DATA_MODEL.md)
+- [Interactions entre modules](docs/MODULE_INTERACTIONS.md)
+- [Implémentation Cartographie — MVP](docs/ASSET_INVENTORY_IMPLEMENTATION.md)
+- [Déploiement de production durci](docs/PRODUCTION_DEPLOYMENT.md)
+- [Exploitation du rate limiting d'authentification](docs/AUTH_RATE_LIMIT_OPERATIONS.md)
+
+Ces documents définissent l'orientation modulaire de PGCC et la roadmap. Ils ne remplacent pas l'analyse du code existant avant une migration.
+
 ## 📂 Structure du Projet
 
 ```text
@@ -62,3 +77,10 @@ pgcc-platform/
 ├── docker-compose.yaml     # Orchestration des containers
 ├── .env.example            # Template variables d'environnement (SECRET_KEY, DB_PASS...)
 └── README.md               # Ce fichier
+## Antivirus documentaire
+
+- Le service ClamAV est fourni dans le profil Compose optionnel `antivirus` ; activation : `docker compose --profile antivirus up -d`.
+- Le daemon n'expose pas de port sur l'hôte, conserve ses signatures dans le volume `clamav_db` et dispose d'un healthcheck `clamdscan --ping=3`.
+- Le backend attend le healthcheck lorsque le profil est activé. Sans service opérationnel, l'upload échoue volontairement en mode fail-closed.
+- Environnement externe : définir `CLAMAV_HOST`, `CLAMAV_PORT` et `CLAMAV_TIMEOUT_SECONDS` dans `.env`.
+- Le CI démarre désormais le daemon ClamAV, attend sa base de signatures, accepte un fichier propre et confirme la détection EICAR. Avant production : configurer les alertes, les mises à jour de signatures, la capacité mémoire/CPU et la supervision du daemon dans l'environnement cible.

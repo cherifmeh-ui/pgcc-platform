@@ -1,8 +1,12 @@
 # backend/app/core/config.py
+import base64
+import hashlib
+import ipaddress
 from functools import lru_cache
 from typing import List
 from urllib.parse import urlparse, urlunparse
 
+from cryptography.fernet import Fernet
 from pydantic import Field, model_validator
 from pydantic_settings import BaseSettings, SettingsConfigDict
 
@@ -19,7 +23,7 @@ class Settings(BaseSettings):
     ENVIRONMENT: str = Field(default="development")
     DEBUG: bool = False
 
-    # --- Base de donnees (obligatoire des la Phase 1) ---
+    # --- Database ---
     DATABASE_URL: str = Field(default="")
 
     # --- JWT ---
@@ -36,15 +40,27 @@ class Settings(BaseSettings):
     # --- MFA ---
     MFA_ISSUER_NAME: str = "CTF PGCC"
     MFA_VALID_WINDOW: int = 1
+    MFA_ENCRYPTION_KEYS: str = ""
 
-    # --- Protection anti brute-force ---
+    # --- Brute-force protection ---
     LOGIN_MAX_ATTEMPTS: int = 5
     LOGIN_LOCK_MINUTES: int = 15
+    AUTH_RATE_LIMIT_HMAC_KEY: str = ""
+    AUTH_TRUSTED_PROXY_IPS: str = ""
+
+    # --- Antivirus (ClamAV) ---
+    CLAMAV_HOST: str = ""
+    CLAMAV_PORT: int = 3310
+    CLAMAV_TIMEOUT_SECONDS: int = 30
+
+    # --- Isolated document parser ---
+    PARSER_BASE_URL: str = ""
+    PARSER_SHARED_TOKEN: str = ""
 
     # --- CORS ---
     CORS_ORIGINS: str = "http://localhost:5173,http://localhost:3000"
 
-    # --- IA (feature flags, actives en Phase 6) ---
+    # --- AI ---
     AI_ENABLED: bool = False
     AI_PROVIDER: str = "none"  # none | ollama
     OLLAMA_BASE_URL: str = "http://host.docker.internal:11434"
@@ -56,13 +72,91 @@ class Settings(BaseSettings):
     def cors_origins_list(self) -> List[str]:
         return [o.strip() for o in self.CORS_ORIGINS.split(",") if o.strip()]
 
+    @property
+    def auth_rate_limit_hmac_key(self) -> str:
+        configured = self.AUTH_RATE_LIMIT_HMAC_KEY.strip()
+        if configured:
+            return configured
+        if self.ENVIRONMENT.lower() == "development" and self.JWT_SECRET:
+            return hashlib.sha256(
+                ("pgcc-dev-rate-limit:" + self.JWT_SECRET).encode("utf-8")
+            ).hexdigest()
+        return ""
+
+    @property
+    def auth_trusted_proxy_ips(self) -> List[str]:
+        return [
+            item.strip()
+            for item in self.AUTH_TRUSTED_PROXY_IPS.split(",")
+            if item.strip()
+        ]
+
+    @property
+    def mfa_encryption_keys(self) -> List[str]:
+        configured = [key.strip() for key in self.MFA_ENCRYPTION_KEYS.split(",") if key.strip()]
+        if configured:
+            return configured
+        if self.ENVIRONMENT.lower() == "development" and self.JWT_SECRET:
+            # Deterministic development-only key. Production must use a managed secret.
+            digest = hashlib.sha256(("pgcc-dev-mfa:" + self.JWT_SECRET).encode("utf-8")).digest()
+            return [base64.urlsafe_b64encode(digest).decode("ascii")]
+        return []
+
     @model_validator(mode="after")
     def validate_security(self):
         if not self.DATABASE_URL:
             raise ValueError("DATABASE_URL est obligatoire (voir .env).")
 
+        if self.JWT_ALGORITHM not in {"HS256", "RS256"}:
+            raise ValueError("JWT_ALGORITHM doit être HS256 ou RS256.")
+
         if self.JWT_ALGORITHM == "HS256" and not self.JWT_SECRET:
             raise ValueError("JWT_SECRET est obligatoire avec HS256.")
+
+        if self.JWT_ALGORITHM == "HS256" and len(self.JWT_SECRET) < 32:
+            raise ValueError("JWT_SECRET doit contenir au moins 32 caractères.")
+
+        try:
+            for network in self.auth_trusted_proxy_ips:
+                ipaddress.ip_network(network, strict=False)
+        except ValueError as exc:
+            raise ValueError("AUTH_TRUSTED_PROXY_IPS contient un réseau IP invalide.") from exc
+
+        if self.ENVIRONMENT.lower() == "production":
+            if self.DEBUG:
+                raise ValueError("DEBUG doit être désactivé en production.")
+            if "*" in self.cors_origins_list:
+                raise ValueError("CORS wildcard interdit en production.")
+        if self.ENVIRONMENT.lower() != "development":
+            if self.JWT_ALGORITHM == "HS256" and self.JWT_SECRET.strip().startswith("CHANGE_ME"):
+                raise ValueError("JWT_SECRET placeholder interdit hors développement.")
+
+        if self.PARSER_BASE_URL and not self.PARSER_BASE_URL.startswith("http://"):
+            raise ValueError("PARSER_BASE_URL doit utiliser le réseau interne HTTP du service parser.")
+
+        if self.CLAMAV_PORT < 1 or self.CLAMAV_PORT > 65535:
+            raise ValueError("CLAMAV_PORT doit être compris entre 1 et 65535.")
+        if self.CLAMAV_TIMEOUT_SECONDS < 1 or self.CLAMAV_TIMEOUT_SECONDS > 300:
+            raise ValueError("CLAMAV_TIMEOUT_SECONDS doit être compris entre 1 et 300.")
+        if self.ENVIRONMENT.lower() != "development":
+            if not self.mfa_encryption_keys:
+                raise ValueError("MFA_ENCRYPTION_KEYS est obligatoire hors développement.")
+            try:
+                for key in self.mfa_encryption_keys:
+                    Fernet(key.encode("ascii"))
+            except Exception as exc:
+                raise ValueError("MFA_ENCRYPTION_KEYS doit contenir des clés Fernet valides.") from exc
+
+        if self.AUTH_RATE_LIMIT_HMAC_KEY and len(self.AUTH_RATE_LIMIT_HMAC_KEY.strip()) < 32:
+            raise ValueError("AUTH_RATE_LIMIT_HMAC_KEY doit contenir au moins 32 caractères.")
+        if self.ENVIRONMENT.lower() != "development":
+            if len(self.auth_rate_limit_hmac_key) < 32:
+                raise ValueError("AUTH_RATE_LIMIT_HMAC_KEY est obligatoire hors développement.")
+            if self.auth_rate_limit_hmac_key.upper().startswith("CHANGE_ME"):
+                raise ValueError("AUTH_RATE_LIMIT_HMAC_KEY placeholder interdit hors développement.")
+
+        if self.ENVIRONMENT.lower() != "development" and not self.CLAMAV_HOST.strip():
+            raise ValueError("CLAMAV_HOST est obligatoire hors développement : upload bloqué sans antivirus.")
 
         if self.JWT_ALGORITHM == "RS256":
             if not self.JWT_PRIVATE_KEY_PATH:
@@ -78,6 +172,11 @@ class Settings(BaseSettings):
         if self.AI_ENABLED and self.AI_PROVIDER == "ollama" and not self.OLLAMA_BASE_URL:
             raise ValueError("AI_PROVIDER=ollama necessite OLLAMA_BASE_URL.")
 
+        if self.ENVIRONMENT.lower() != "development":
+            if not self.PARSER_BASE_URL.strip() or len(self.PARSER_SHARED_TOKEN.strip()) < 32:
+                raise ValueError("PARSER_BASE_URL et PARSER_SHARED_TOKEN sont obligatoires hors développement.")
+            if self.PARSER_SHARED_TOKEN.strip().startswith("CHANGE_ME"):
+                raise ValueError("PARSER_SHARED_TOKEN placeholder interdit hors développement.")
         return self
 
     def masked_database_url(self) -> str:
@@ -101,8 +200,5 @@ def get_settings() -> Settings:
 
 settings = get_settings()
 
-print(
-    f"✅ CONFIG PGCC CHARGÉE | ENV={settings.ENVIRONMENT} | "
-    f"DB={settings.masked_database_url()} | JWT={settings.JWT_ALGORITHM} | "
-    f"IA={'activée (' + settings.AI_PROVIDER + ')' if settings.AI_ENABLED else 'désactivée'}"
-)
+# Avoid logging configuration values during module import. Import-time output can
+# leak database host/user details into container logs and complicate test runs.

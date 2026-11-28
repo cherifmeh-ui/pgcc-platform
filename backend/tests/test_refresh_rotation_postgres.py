@@ -1,0 +1,540 @@
+"""PostgreSQL-backed concurrency tests for persisted refresh-session rotation.
+
+These tests require a disposable database migrated to Alembic head. They are
+skipped locally when PGCC_INTEGRATION_DATABASE_URL is not configured.
+"""
+from __future__ import annotations
+
+import asyncio
+import os
+import uuid
+from datetime import datetime, timedelta, timezone
+from unittest.mock import AsyncMock
+import hashlib
+
+import pytest
+from fastapi import HTTPException, Response
+from starlette.requests import Request
+from sqlalchemy import select
+from sqlalchemy.ext.asyncio import async_sessionmaker, create_async_engine
+
+from app.models.refresh_token_session import RefreshTokenSession
+from app.models.audit_outbox import AuditOutbox
+from app.api.v1.endpoints import auth as auth_endpoint
+from app.models.user import User
+
+DATABASE_URL = os.getenv("PGCC_INTEGRATION_DATABASE_URL")
+
+
+pytestmark = pytest.mark.skipif(
+    not DATABASE_URL,
+    reason="PGCC_INTEGRATION_DATABASE_URL not configured; requires migrated PostgreSQL",
+)
+
+
+@pytest.mark.asyncio
+async def test_concurrent_rotation_has_exactly_one_winner_and_revokes_old_session():
+    engine = create_async_engine(DATABASE_URL, pool_size=5, max_overflow=0)
+    sessions = async_sessionmaker(engine, expire_on_commit=False)
+    user_id = uuid.uuid4()
+    old_hash = uuid.uuid4().hex
+    new_hash = uuid.uuid4().hex
+    email = f"phase0-concurrency-{user_id.hex}@example.invalid"
+    now = datetime.now(timezone.utc)
+
+    async with sessions() as setup:
+        setup.add(User(
+            id=user_id,
+            email=email,
+            full_name="Phase 0 concurrency test",
+            role="viewer",
+            password_hash="not-used",
+            must_change_password=False,
+            is_active=True,
+            mfa_enabled=True,
+        ))
+        # Commit the referenced user first: these ORM models intentionally do
+        # not define a relationship, so unit-of-work ordering is not guaranteed.
+        await setup.commit()
+        setup.add(RefreshTokenSession(
+            user_id=user_id,
+            token_jti_hash=old_hash,
+            expires_at=now + timedelta(days=1),
+        ))
+        await setup.commit()
+
+    async def rotate(replacement_hash: str) -> bool:
+        async with sessions() as db:
+            async with db.begin():
+                # The endpoint uses the user row as its serialization lock.
+                await db.execute(select(User).where(User.id == user_id).with_for_update())
+                session = (await db.execute(
+                    select(RefreshTokenSession)
+                    .where(RefreshTokenSession.token_jti_hash == old_hash)
+                    .with_for_update()
+                )).scalar_one()
+                if session.revoked_at is not None:
+                    return False
+                session.revoked_at = datetime.now(timezone.utc)
+                session.replaced_by_jti_hash = replacement_hash
+                db.add(RefreshTokenSession(
+                    user_id=user_id,
+                    token_jti_hash=replacement_hash,
+                    expires_at=datetime.now(timezone.utc) + timedelta(days=1),
+                ))
+                return True
+
+    try:
+        results = await asyncio.gather(rotate(new_hash), rotate(uuid.uuid4().hex))
+        assert sorted(results) == [False, True]
+
+        async with sessions() as verify:
+            old_session = (await verify.execute(
+                select(RefreshTokenSession).where(
+                    RefreshTokenSession.token_jti_hash == old_hash
+                )
+            )).scalar_one()
+            active_sessions = (await verify.execute(
+                select(RefreshTokenSession).where(
+                    RefreshTokenSession.user_id == user_id,
+                    RefreshTokenSession.revoked_at.is_(None),
+                )
+            )).scalars().all()
+            assert old_session.revoked_at is not None
+            assert len(active_sessions) == 1
+    finally:
+        async with sessions() as cleanup:
+            await cleanup.execute(
+                # Delete user; FK cascade removes refresh sessions.
+                __import__("sqlalchemy").delete(User).where(User.id == user_id)
+            )
+            await cleanup.commit()
+        await engine.dispose()
+
+@pytest.mark.asyncio
+async def test_refresh_endpoint_rotation_and_replay_are_audited_atomically(monkeypatch):
+    engine = create_async_engine(DATABASE_URL, pool_size=5, max_overflow=0)
+    sessions = async_sessionmaker(engine, expire_on_commit=False)
+    user_id = uuid.uuid4()
+    old_jti = uuid.uuid4().hex
+    old_hash = hashlib.sha256(old_jti.encode()).hexdigest()
+    email = f"phase0-http-refresh-{user_id.hex}@example.invalid"
+    now = datetime.now(timezone.utc)
+    issued_tokens = {
+        "old-refresh": {
+            "sub": email, "jti": old_jti, "iat": int(now.timestamp()),
+            "exp": int((now + timedelta(days=1)).timestamp()), "type": "refresh",
+            "role": "viewer", "auth_version": 0, "mfa_enabled": False, "mfa_confirmed_at": None,
+        }
+    }
+    replacement_counter = 0
+
+    def decode(token, expected_type="access"):
+        payload = issued_tokens[token]
+        assert payload["type"] == expected_type
+        return payload
+
+    def create_refresh(subject, role=None, mfa_enabled=None, auth_version=0, mfa_confirmed_at=None):
+        nonlocal replacement_counter
+        replacement_counter += 1
+        token = f"new-refresh-{replacement_counter}"
+        issued_tokens[token] = {
+            "sub": subject, "jti": uuid.uuid4().hex,
+            "iat": int(datetime.now(timezone.utc).timestamp()),
+            "exp": int((datetime.now(timezone.utc) + timedelta(days=1)).timestamp()),
+            "type": "refresh", "role": role, "auth_version": auth_version,
+            "mfa_enabled": mfa_enabled, "mfa_confirmed_at": mfa_confirmed_at,
+        }
+        return token
+
+    monkeypatch.setattr(auth_endpoint, "decode_token", decode)
+    monkeypatch.setattr(auth_endpoint, "create_access_token", lambda **kwargs: "new-access")
+    monkeypatch.setattr(auth_endpoint, "create_refresh_token", create_refresh)
+
+    async with sessions() as setup:
+        setup.add(User(
+            id=user_id, email=email, full_name="HTTP refresh integration",
+            role="viewer", password_hash="not-used", must_change_password=False,
+            is_active=True, mfa_enabled=False,
+        ))
+        await setup.commit()
+        setup.add(RefreshTokenSession(
+            user_id=user_id, token_jti_hash=old_hash,
+            expires_at=now + timedelta(days=1),
+        ))
+        await setup.commit()
+
+    request = Request({
+        "type": "http", "method": "POST", "path": "/auth/refresh",
+        "headers": [
+            (b"cookie", b"pgcc_refresh=old-refresh"),
+            (b"origin", b"http://localhost:5173"),
+        ],
+        "client": ("127.0.0.1", 1234),
+        "server": ("test", 80), "scheme": "http", "query_string": b"",
+    })
+
+    async def rotate():
+        async with sessions() as db:
+            response = Response()
+            result = await auth_endpoint.refresh_tokens(
+                request=request, response=response, db=db,
+                refresh_cookie="old-refresh",
+            )
+            return result, response
+
+    try:
+        results = await asyncio.gather(rotate(), rotate(), return_exceptions=True)
+        assert sum(not isinstance(item, BaseException) for item in results) == 1
+        successes = [item for item in results if not isinstance(item, BaseException)]
+        assert len(successes) == 1
+        assert "HttpOnly" in successes[0][1].headers.get("set-cookie", "")
+        assert "SameSite=strict" in successes[0][1].headers.get("set-cookie", "")
+        assert not hasattr(successes[0][0], "refresh_token")
+        failures = [item for item in results if isinstance(item, BaseException)]
+        assert len(failures) == 1
+        assert isinstance(failures[0], HTTPException)
+        assert failures[0].status_code == 401
+
+        async with sessions() as verify:
+            old_session = (await verify.execute(
+                select(RefreshTokenSession).where(
+                    RefreshTokenSession.token_jti_hash == old_hash
+                )
+            )).scalar_one()
+            all_sessions = (await verify.execute(
+                select(RefreshTokenSession).where(RefreshTokenSession.user_id == user_id)
+            )).scalars().all()
+            events = (await verify.execute(
+                select(AuditOutbox).where(AuditOutbox.payload["user_email"].astext == email)
+            )).scalars().all()
+            assert old_session.revoked_at is not None
+            assert all(session.revoked_at is not None for session in all_sessions)
+            assert {event.payload["action"] for event in events} == {
+                "REFRESH_TOKEN_ROTATED", "REFRESH_TOKEN_REUSE_DETECTED"
+            }
+    finally:
+        async with sessions() as cleanup:
+            await cleanup.execute(
+                __import__("sqlalchemy").delete(AuditOutbox).where(
+                    AuditOutbox.payload["user_email"].astext == email
+                )
+            )
+            await cleanup.execute(
+                __import__("sqlalchemy").delete(User).where(User.id == user_id)
+            )
+            await cleanup.commit()
+        await engine.dispose()
+
+
+@pytest.mark.asyncio
+async def test_refresh_rolls_back_rotation_if_audit_enqueue_fails(monkeypatch):
+    engine = create_async_engine(DATABASE_URL, pool_size=3, max_overflow=0)
+    sessions = async_sessionmaker(engine, expire_on_commit=False)
+    user_id = uuid.uuid4()
+    old_jti = uuid.uuid4().hex
+    old_hash = hashlib.sha256(old_jti.encode()).hexdigest()
+    email = f"phase0-refresh-audit-failure-{user_id.hex}@example.invalid"
+    now = datetime.now(timezone.utc)
+    issued_tokens = {
+        "old-refresh": {
+            "sub": email, "jti": old_jti, "iat": int(now.timestamp()),
+            "exp": int((now + timedelta(days=1)).timestamp()), "type": "refresh",
+            "role": "viewer", "auth_version": 0, "mfa_enabled": False, "mfa_confirmed_at": None,
+        },
+        "new-refresh": {
+            "sub": email, "jti": uuid.uuid4().hex,
+            "iat": int(now.timestamp()),
+            "exp": int((now + timedelta(days=1)).timestamp()), "type": "refresh",
+            "role": "viewer", "mfa_enabled": False, "mfa_confirmed_at": None,
+        },
+    }
+    monkeypatch.setattr(auth_endpoint, "decode_token", lambda token, expected_type="access": issued_tokens[token])
+    monkeypatch.setattr(auth_endpoint, "create_access_token", lambda **kwargs: "new-access")
+    monkeypatch.setattr(auth_endpoint, "create_refresh_token", lambda subject, **kwargs: "new-refresh")
+    monkeypatch.setattr(
+        auth_endpoint, "enqueue_audit_event",
+        AsyncMock(side_effect=RuntimeError("simulated refresh audit failure")),
+    )
+
+    async with sessions() as setup:
+        setup.add(User(
+            id=user_id, email=email, full_name="Refresh audit rollback",
+            role="viewer", password_hash="not-used", must_change_password=False,
+            is_active=True, mfa_enabled=False,
+        ))
+        await setup.commit()
+        setup.add(RefreshTokenSession(
+            user_id=user_id, token_jti_hash=old_hash,
+            expires_at=now + timedelta(days=1),
+        ))
+        await setup.commit()
+
+    request = Request({
+        "type": "http", "method": "POST", "path": "/auth/refresh",
+        "headers": [(b"origin", b"http://localhost:5173")],
+        "client": ("127.0.0.1", 1234),
+        "server": ("test", 80), "scheme": "http", "query_string": b"",
+    })
+    try:
+        async with sessions() as db:
+            with pytest.raises(RuntimeError, match="simulated refresh audit failure"):
+                await auth_endpoint.refresh_tokens(
+                    request=request, response=Response(), db=db,
+                    refresh_cookie="old-refresh",
+                )
+
+        async with sessions() as verify:
+            stored = (await verify.execute(
+                select(RefreshTokenSession).where(RefreshTokenSession.user_id == user_id)
+            )).scalars().all()
+            assert len(stored) == 1
+            assert stored[0].token_jti_hash == old_hash
+            assert stored[0].revoked_at is None
+    finally:
+        async with sessions() as cleanup:
+            await cleanup.execute(
+                __import__("sqlalchemy").delete(User).where(User.id == user_id)
+            )
+            await cleanup.commit()
+        await engine.dispose()
+
+@pytest.mark.asyncio
+@pytest.mark.parametrize(
+    ("stored_role", "stored_mfa_enabled", "stored_confirmed_at", "token_role", "token_mfa_enabled", "token_confirmed_at", "stored_auth_version", "token_auth_version"),
+    [
+        ("admin", True, datetime.now(timezone.utc), "viewer", True, None, 0, 0),
+        ("viewer", False, None, "viewer", True, int(datetime.now(timezone.utc).timestamp()), 0, 0),
+        ("viewer", False, None, "viewer", False, None, 1, 0),
+    ],
+    ids=["role-changed", "mfa-reset", "auth-version-changed"],
+)
+async def test_refresh_revokes_sessions_after_role_or_mfa_policy_change(
+    monkeypatch,
+    stored_role,
+    stored_mfa_enabled,
+    stored_confirmed_at,
+    token_role,
+    token_mfa_enabled,
+    token_confirmed_at,
+    stored_auth_version,
+    token_auth_version,
+):
+    engine = create_async_engine(DATABASE_URL, pool_size=3, max_overflow=0)
+    sessions = async_sessionmaker(engine, expire_on_commit=False)
+    user_id = uuid.uuid4()
+    jti = uuid.uuid4().hex
+    token_hash = hashlib.sha256(jti.encode()).hexdigest()
+    email = f"phase0-policy-change-{user_id.hex}@example.invalid"
+    now = datetime.now(timezone.utc)
+    token_confirmed = (
+        int(token_confirmed_at.timestamp())
+        if isinstance(token_confirmed_at, datetime)
+        else token_confirmed_at
+    )
+    token_payload = {
+        "sub": email, "jti": jti, "iat": int(now.timestamp()),
+        "exp": int((now + timedelta(days=1)).timestamp()), "type": "refresh",
+        "role": token_role, "mfa_enabled": token_mfa_enabled,
+        "auth_version": token_auth_version, "mfa_confirmed_at": token_confirmed,
+    }
+    monkeypatch.setattr(
+        auth_endpoint, "decode_token",
+        lambda token, expected_type="access": token_payload,
+    )
+
+    async with sessions() as setup:
+        setup.add(User(
+            id=user_id, email=email, full_name="Refresh policy change",
+            role=stored_role, password_hash="not-used", must_change_password=False,
+            is_active=True, mfa_enabled=stored_mfa_enabled,
+            mfa_confirmed_at=stored_confirmed_at, auth_version=stored_auth_version,
+        ))
+        await setup.commit()
+        setup.add(RefreshTokenSession(
+            user_id=user_id, token_jti_hash=token_hash,
+            expires_at=now + timedelta(days=1),
+        ))
+        await setup.commit()
+
+    request = Request({
+        "type": "http", "method": "POST", "path": "/auth/refresh",
+        "headers": [
+            (b"cookie", b"pgcc_refresh=old-refresh"),
+            (b"origin", b"http://localhost:5173"),
+        ],
+        "client": ("127.0.0.1", 1234),
+        "server": ("test", 80), "scheme": "http", "query_string": b"",
+    })
+    response = Response()
+    try:
+        async with sessions() as db:
+            with pytest.raises(HTTPException) as exc:
+                await auth_endpoint.refresh_tokens(
+                    request=request, response=response, db=db,
+                    refresh_cookie="old-refresh",
+                )
+            assert exc.value.status_code == 401
+            assert "Max-Age=0" in response.headers.get("set-cookie", "")
+
+        async with sessions() as verify:
+            stored = (await verify.execute(
+                select(RefreshTokenSession).where(
+                    RefreshTokenSession.token_jti_hash == token_hash
+                )
+            )).scalar_one()
+            assert stored.revoked_at is not None
+            events = (await verify.execute(
+                select(AuditOutbox).where(AuditOutbox.payload["user_email"].astext == email)
+            )).scalars().all()
+            assert any(event.payload["action"] == "REFRESH_SESSION_POLICY_CHANGED" for event in events)
+    finally:
+        async with sessions() as cleanup:
+            await cleanup.execute(
+                __import__("sqlalchemy").delete(AuditOutbox).where(
+                    AuditOutbox.payload["user_email"].astext == email
+                )
+            )
+            await cleanup.execute(
+                __import__("sqlalchemy").delete(User).where(User.id == user_id)
+            )
+            await cleanup.commit()
+        await engine.dispose()
+
+
+@pytest.mark.asyncio
+async def test_http_login_mfa_refresh_logout_lifecycle(monkeypatch):
+    """Exercise the real HTTP auth routes against PostgreSQL and a real TOTP/JWT."""
+    from fastapi import FastAPI
+    from fastapi.testclient import TestClient
+    from cryptography.fernet import Fernet
+    from sqlalchemy import delete
+    from sqlalchemy.pool import NullPool
+    import pyotp
+
+    from app.api.v1.endpoints import auth as auth_endpoint
+    from app.core.config import settings
+    from app.core.database import get_db
+    from app.core.security import hash_password
+    from app.models.audit_outbox import AuditOutbox
+    from app.services.mfa_encryption import encrypt_mfa_secret
+
+    engine = create_async_engine(DATABASE_URL, poolclass=NullPool)
+    sessions = async_sessionmaker(engine, expire_on_commit=False)
+    user_id = uuid.uuid4()
+    email = f"phase1-auth-http-{user_id.hex}@example.com"
+    password = "Phase1-E2E-StrongPassword!2026"
+    totp_secret = pyotp.random_base32()
+    origin = "http://localhost:5173"
+
+    monkeypatch.setattr(settings, "ENVIRONMENT", "development")
+    monkeypatch.setattr(settings, "JWT_ALGORITHM", "HS256")
+    monkeypatch.setattr(settings, "JWT_SECRET", "phase1-http-auth-test-secret-at-least-32-bytes")
+    monkeypatch.setattr(settings, "MFA_ENCRYPTION_KEYS", Fernet.generate_key().decode("ascii"))
+    monkeypatch.setattr(settings, "CORS_ORIGINS", origin)
+    monkeypatch.setattr(auth_endpoint, "enforce_auth_rate_limit", AsyncMock())
+    monkeypatch.setattr(auth_endpoint, "log_action", AsyncMock())
+
+    app = FastAPI()
+    app.include_router(auth_endpoint.router, prefix="/api/v1")
+
+    async def override_db():
+        async with sessions() as db:
+            yield db
+
+    app.dependency_overrides[get_db] = override_db
+
+    try:
+        async with sessions() as setup:
+            setup.add(User(
+                id=user_id,
+                email=email,
+                full_name="Phase 1 auth HTTP lifecycle",
+                role="auditor",
+                password_hash=hash_password(password),
+                must_change_password=False,
+                is_active=True,
+                mfa_enabled=True,
+                mfa_secret=encrypt_mfa_secret(totp_secret),
+                mfa_confirmed_at=datetime.now(timezone.utc),
+                backup_codes_hashed=[],
+                auth_version=0,
+            ))
+            await setup.commit()
+
+        with TestClient(app, base_url=origin) as client:
+            login = client.post(
+                "/api/v1/auth/login",
+                json={"email": email, "password": password},
+                headers={"Origin": origin},
+            )
+            assert login.status_code == 200
+            login_data = login.json()
+            assert login_data["mfa_required"] is True
+            assert login_data["mfa_enabled"] is True
+
+            confirm = client.post(
+                "/api/v1/auth/confirm-mfa",
+                json={
+                    "pre_auth_token": login_data["pre_auth_token"],
+                    "mfa_code": pyotp.TOTP(totp_secret).now(),
+                },
+                headers={"Origin": origin},
+            )
+            assert confirm.status_code == 200
+            assert confirm.json()["access_token"]
+            issued_cookie = confirm.headers.get("set-cookie", "")
+            assert "pgcc_refresh=" in issued_cookie
+            assert "HttpOnly" in issued_cookie
+            assert "SameSite=strict" in issued_cookie
+            assert "refresh_token" not in confirm.json()
+
+            refresh = client.post(
+                "/api/v1/auth/refresh",
+                headers={"Origin": origin},
+            )
+            assert refresh.status_code == 200
+            assert refresh.json()["access_token"]
+            rotated_cookie = refresh.headers.get("set-cookie", "")
+            assert "pgcc_refresh=" in rotated_cookie
+            assert "HttpOnly" in rotated_cookie
+            assert "SameSite=strict" in rotated_cookie
+
+            logout = client.post(
+                "/api/v1/auth/logout",
+                headers={"Origin": origin},
+            )
+            assert logout.status_code == 204
+            cleared_cookie = logout.headers.get("set-cookie", "")
+            assert "Max-Age=0" in cleared_cookie
+            assert "HttpOnly" in cleared_cookie
+            assert "SameSite=strict" in cleared_cookie
+
+        async with sessions() as verify:
+            persisted = (await verify.execute(
+                select(RefreshTokenSession).where(
+                    RefreshTokenSession.user_id == user_id
+                )
+            )).scalars().all()
+            assert len(persisted) == 2
+            assert all(session.revoked_at is not None for session in persisted)
+            actions = (await verify.execute(
+                select(AuditOutbox.payload["action"].astext).where(
+                    AuditOutbox.payload["user_email"].astext == email
+                )
+            )).scalars().all()
+            assert {
+                "MFA_ENROLLED_AND_LOGIN_SUCCESS",
+                "REFRESH_TOKEN_ROTATED",
+                "REFRESH_SESSION_LOGOUT",
+            }.issubset(set(actions))
+    finally:
+        async with sessions() as cleanup:
+            await cleanup.execute(
+                delete(AuditOutbox).where(
+                    AuditOutbox.payload["user_email"].astext == email
+                )
+            )
+            await cleanup.execute(delete(User).where(User.id == user_id))
+            await cleanup.commit()
+        await engine.dispose()

@@ -1,9 +1,16 @@
 // frontend/src/services/api.js
 import axios from 'axios';
+import { withCrossTabRefreshLock } from './refreshLock.js';
+
+let accessToken = null;
+export function setAccessToken(token) {
+  accessToken = token || null;
+}
 
 const apiClient = axios.create({
   baseURL: import.meta.env.VITE_API_BASE_URL || '/api/v1',
   timeout: 15000,
+  withCredentials: true,
   headers: {
     'Content-Type': 'application/json',
   },
@@ -14,9 +21,8 @@ const apiClient = axios.create({
 // ==============================
 apiClient.interceptors.request.use(
   (config) => {
-    const token = localStorage.getItem('pgcc_access_token');
-    if (token && !config.url.includes('/auth/login')) {
-      config.headers.Authorization = `Bearer ${token}`;
+    if (accessToken && !config.url.includes('/auth/login')) {
+      config.headers.Authorization = `Bearer ${accessToken}`;
     }
     return config;
   },
@@ -48,7 +54,7 @@ apiClient.interceptors.response.use(
     }
 
     // Éviter boucle infinie sur /auth/refresh lui-même
-    if (originalRequest._retry || originalRequest.url.includes('/auth/refresh')) {
+    if (originalRequest._retry || originalRequest.url.includes('/auth/refresh') || originalRequest.url.includes('/auth/logout')) {
       return Promise.reject(error);
     }
 
@@ -59,30 +65,23 @@ apiClient.interceptors.response.use(
         .then((token) => {
           originalRequest.headers.Authorization = `Bearer ${token}`;
           return apiClient(originalRequest);
-        })
-        .catch(reject);
+        });
     }
 
     originalRequest._retry = true;
     isRefreshing = true;
 
-    const refreshToken = localStorage.getItem('pgcc_refresh_token');
-    if (!refreshToken) {
-      logoutAndRedirect();
-      return Promise.reject(error);
-    }
-
     try {
-      const { data } = await axios.post(`${apiClient.defaults.baseURL}/auth/refresh`, {
-        refresh_token: refreshToken,
-      });
+      // Reuse the configured client so the 15s request timeout also bounds
+      // lock ownership; a stalled refresh must not block every same-origin tab.
+      const { data } = await withCrossTabRefreshLock(() =>
+        apiClient.post('/auth/refresh', null, { withCredentials: true })
+      );
 
       const newAccessToken = data.access_token;
-      const newRefreshToken = data.refresh_token;
-
-      localStorage.setItem('pgcc_access_token', newAccessToken);
-      localStorage.setItem('pgcc_refresh_token', newRefreshToken);
-
+      setAccessToken(newAccessToken);
+      localStorage.removeItem('pgcc_access_token');
+      localStorage.removeItem('pgcc_refresh_token');
       apiClient.defaults.headers.common['Authorization'] = `Bearer ${newAccessToken}`;
       originalRequest.headers.Authorization = `Bearer ${newAccessToken}`;
 
@@ -99,6 +98,8 @@ apiClient.interceptors.response.use(
 );
 
 function logoutAndRedirect() {
+  delete apiClient.defaults.headers.common['Authorization'];
+  setAccessToken(null);
   localStorage.removeItem('pgcc_access_token');
   localStorage.removeItem('pgcc_refresh_token');
   localStorage.removeItem('pgcc_user_role');

@@ -76,18 +76,42 @@ async def get_current_user(
             detail="Changement de mot de passe obligatoire avant accès.",
         )
 
-    # MFA obligatoire pour les rôles sensibles
-    if user.role in {"admin", "executive"} and not user.mfa_enabled:
+    # Normalize the persisted role exactly as the RBAC matrix does. This keeps
+    # privileged-role MFA enforcement fail-closed even if legacy data has case
+    # or whitespace inconsistencies.
+    normalized_role = (user.role or "").strip().lower()
+    if normalized_role in {"admin", "executive"} and not user.mfa_enabled:
         raise HTTPException(
             status_code=status.HTTP_403_FORBIDDEN,
             detail="MFA obligatoire pour ce rôle.",
         )
 
-    # Si le rôle a changé en base depuis l'émission du token, forcer reconnexion
-    if token_role and user.role and token_role != user.role:
+    # Access tokens issued by this application always carry a role claim.
+    # Reject missing/malformed claims and force re-authentication after role changes.
+    if (
+        not isinstance(token_role, str)
+        or not token_role.strip()
+        or token_role.strip().lower() != normalized_role
+    ):
         raise HTTPException(
             status_code=status.HTTP_403_FORBIDDEN,
-            detail="Rôle modifié. Veuillez vous reconnecter.",
+            detail="Rôle modifié ou absent. Veuillez vous reconnecter.",
+        )
+
+    # auth_version is incremented whenever a security-sensitive account field
+    # changes. Enforce it on every authenticated request so old access tokens
+    # are invalidated immediately, not merely when their short TTL expires.
+    token_auth_version = payload.get("auth_version")
+    current_auth_version = int(user.auth_version or 0)
+    if (
+        isinstance(token_auth_version, bool)
+        or not isinstance(token_auth_version, int)
+        or token_auth_version != current_auth_version
+    ):
+        raise HTTPException(
+            status_code=status.HTTP_401_UNAUTHORIZED,
+            detail="Session révoquée ou état de sécurité modifié. Veuillez vous reconnecter.",
+            headers={"WWW-Authenticate": "Bearer"},
         )
 
     return user
@@ -95,12 +119,12 @@ async def get_current_user(
 
 def require_role(*allowed_roles: str):
     """Dépendance simple basée sur le rôle."""
-    allowed_values = {role.lower() for role in allowed_roles}
+    allowed_values = {role.strip().lower() for role in allowed_roles if role and role.strip()}
 
     async def dependency(
         current_user: User = Depends(get_current_user),
     ) -> User:
-        user_role = (current_user.role or "").lower()
+        user_role = (current_user.role or "").strip().lower()
         if user_role not in allowed_values:
             raise HTTPException(
                 status_code=status.HTTP_403_FORBIDDEN,
@@ -120,7 +144,7 @@ def require_permission(module: str, action: str = "read"):
     async def dependency(
         current_user: User = Depends(get_current_user),
     ) -> User:
-        user_role = (current_user.role or "").lower()
+        user_role = (current_user.role or "").strip().lower()
         if not role_has_permission(user_role, module, action):
             raise HTTPException(
                 status_code=status.HTTP_403_FORBIDDEN,

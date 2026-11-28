@@ -1,23 +1,47 @@
 # backend/app/main.py
-from contextlib import asynccontextmanager
+import asyncio
+from contextlib import asynccontextmanager, suppress
+
+from sqlalchemy import text
 
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 
 from app.core.config import settings
-from app.core.database import Base, engine
+from app.core.database import AsyncSessionLocal, Base, engine
 from app.api.v1.router import api_router
 from app.api.v1.endpoints.auth import router as auth_router
+from app.services.security_logger import audit_outbox_worker
+from app.services.auth_rate_limiter import auth_rate_limit_cleanup_worker
+from app.services.mfa_encryption import assert_no_plaintext_mfa_secrets
 
 
 @asynccontextmanager
 async def lifespan(app: FastAPI):
-    from app.models import user, security_log, risk  # noqa: F401
+    from app.models import user, security_log, audit_outbox, risk, asset, supplier, refresh_token_session, auth_rate_limit_bucket, action_verification, iso_control_evidence  # noqa: F401
 
-    async with engine.begin() as conn:
-        await conn.run_sync(Base.metadata.create_all)
-    print("✅ PGCC | tables créées/vérifiées (Phase 2)")
-    yield
+    if settings.ENVIRONMENT.lower() == "development":
+        async with engine.begin() as conn:
+            await conn.execute(text("CREATE EXTENSION IF NOT EXISTS vector"))
+            await conn.run_sync(Base.metadata.create_all)
+        print("PGCC | development schema ensured via create_all")
+    else:
+        print("PGCC | production schema must be managed through Alembic migrations")
+        async with AsyncSessionLocal() as db:
+            await assert_no_plaintext_mfa_secrets(db)
+            # Fail startup if the distributed auth limiter migration is missing.
+            await db.execute(text("SELECT bucket_key FROM auth_rate_limit_buckets LIMIT 0"))
+    audit_worker = asyncio.create_task(audit_outbox_worker())
+    rate_limit_cleanup_worker = asyncio.create_task(auth_rate_limit_cleanup_worker())
+    try:
+        yield
+    finally:
+        audit_worker.cancel()
+        rate_limit_cleanup_worker.cancel()
+        with suppress(asyncio.CancelledError):
+            await audit_worker
+        with suppress(asyncio.CancelledError):
+            await rate_limit_cleanup_worker
     print("🛑 PGCC | arrêt")
 
 
@@ -55,11 +79,17 @@ async def root():
 
 @app.get("/health", include_in_schema=False)
 async def health():
+    try:
+        async with engine.connect() as conn:
+            await conn.execute(text("SELECT 1"))
+        db_status = "connected"
+    except Exception:
+        db_status = "unavailable"
     return {
-        "status": "healthy",
+        "status": "healthy" if db_status == "connected" else "degraded",
         "service": "pgcc-backend",
         "phase": 4,
         "environment": settings.ENVIRONMENT,
         "ai_enabled": settings.AI_ENABLED,
-        "db": "branchée",
+        "db": db_status,
     }

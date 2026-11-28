@@ -18,6 +18,20 @@
             <input v-model="newAction.title" placeholder="Titre de l'action corrective..." required />
             <textarea v-model="newAction.description" rows="2" placeholder="Détails techniques..."></textarea>
             
+            <div class="iso-action-link">
+              <label>Contrôle ISO 27002 (optionnel)
+                <select v-model="newAction.iso_control_ref" @change="loadControlAssessments(newAction.iso_control_ref)">
+                  <option value="">Aucun contrôle ISO lié</option>
+                  <option v-for="control in isoControls" :key="control.ref_code" :value="control.ref_code">{{ control.ref_code }} — {{ control.title }}</option>
+                </select>
+              </label>
+              <label v-if="newAction.iso_control_ref">Évaluation ISO associée (optionnel)
+                <select v-model="newAction.iso_assessment_id">
+                  <option value="">Lien au contrôle uniquement</option>
+                  <option v-for="assessment in isoAssessments" :key="assessment.id" :value="assessment.id">{{ assessment.implementation_status }} · {{ assessment.maturity_level }}/5 · {{ formatIsoAssessmentDate(assessment.assessed_at) }}</option>
+                </select>
+              </label>
+            </div>
             <div class="form-row">
               <!-- ✅ VALEURS FRANÇAISES POUR MATCHER LE BACKEND -->
               <select v-model="newAction.priority">
@@ -29,7 +43,7 @@
               
               <input type="date" v-model="newAction.due_date" />
               
-              <input v-model="newAction.assigned_to" placeholder="Responsable (ex: DI)" />
+              <select v-model="newAction.assigned_to"><option value="">Non assignée</option><option v-for="user in assignees" :key="user.id" :value="user.email">{{ user.full_name }}{{ user.department ? " — " + user.department : "" }}</option></select>
             </div>
             
             <button @click="addAction" :disabled="saving" class="btn-primary">
@@ -39,7 +53,13 @@
 
           <!-- Liste des Actions Existantes -->
           <div class="actions-list">
-            <h3>Tâches en cours ({{ filteredActions.length }})</h3>
+            <h3>Actions ({{ filteredActions.length }})</h3>
+            <div class="action-filters" role="group" aria-label="Filtrer les actions">
+              <button type="button" :class="{ active: actionFilter === 'all' }" @click="actionFilter = 'all'">Toutes ({{ riskActions.length }})</button>
+              <button type="button" :class="{ active: actionFilter === 'open' }" @click="actionFilter = 'open'">Ouvertes ({{ riskActions.filter(a => a.status !== 'Terminé').length }})</button>
+              <button type="button" :class="{ active: actionFilter === 'overdue' }" @click="actionFilter = 'overdue'">En retard ({{ overdueActions.length }})</button>
+              <button type="button" :class="{ active: actionFilter === 'done' }" @click="actionFilter = 'done'">Terminées ({{ riskActions.filter(a => a.status === 'Terminé').length }})</button>
+            </div>
             
             <div v-if="loading" class="loading-state">Chargement...</div>
             
@@ -53,6 +73,7 @@
                 <div class="task-content">
                   <strong>{{ act.title }}</strong>
                   <p v-if="act.description">{{ act.description }}</p>
+                  <p v-if="act.iso_control_id" class="iso-action-tag">ISO 27002 · {{ isoControls.find(control => control.control_id === act.iso_control_id)?.ref_code || ('#' + act.iso_control_id) }}{{ act.iso_assessment_id ? ' · Évaluation liée' : '' }}</p>
                   <div class="meta-info">
                     <!-- ✅ BADGES BASÉS SUR LES CHAÎNES RÉELLES -->
                     <span class="badge-status" :class="getStatusClass(act.status)">
@@ -64,9 +85,36 @@
                     </span>
                   </div>
                 </div>
+                <div v-if="act.status === 'Terminé'" class="verification-inline">
+                  <button type="button" class="verification-toggle" @click="openVerification(act)">Vérification d'efficacité · {{ verificationHistory[act.id]?.length || 0 }}</button>
+                  <div v-if="verificationActionId === act.id" class="verification-form">
+                    <article v-for="record in (verificationHistory[act.id] || [])" :key="record.id" class="verification-record">
+                      <strong>{{ verificationOutcomeLabel(record.outcome) }}</strong> · {{ formatIsoAssessmentDate(record.verified_at) }}
+                      <p>{{ record.notes }}</p>
+                    </article>
+                    <label>Résultat
+                      <select v-model="verificationForm.outcome">
+                        <option value="Effective">Efficace</option>
+                        <option value="Ineffective">Inefficace</option>
+                        <option value="Follow-up required">Suivi complémentaire requis</option>
+                      </select>
+                    </label>
+                    <label>Document de vérification (optionnel)
+                      <select v-model="verificationForm.evidence_document_id">
+                        <option value="">Aucun document</option>
+                        <option v-for="doc in verificationDocuments" :key="doc.id" :value="doc.id">{{ doc.title }} — {{ doc.filename }}</option>
+                      </select>
+                    </label>
+                    <label>Observations
+                      <textarea v-model="verificationForm.notes" rows="2" maxlength="10000" placeholder="Résultat de la vérification, preuve de l'efficacité..."></textarea>
+                    </label>
+                    <p v-if="verificationError" class="verification-error">{{ verificationError }}</p>
+                    <button type="button" class="btn-primary" @click="saveVerification(act.id)" :disabled="verificationSaving || !verificationForm.notes.trim()">{{ verificationSaving ? 'Enregistrement...' : 'Enregistrer la vérification' }}</button>
+                  </div>
+                </div>
                 
                 <div class="task-actions">
-                  <button @click="toggleStatus(act)" class="icon-btn done" title="Marquer terminé">✅</button>
+                  <button @click="toggleStatus(act)" class="icon-btn done" :disabled="act.status === 'Terminé'" :title="act.status === 'Terminé' ? 'Action clôturée' : act.status === 'En cours' ? 'Marquer terminé' : act.status === 'Bloqué' ? 'Reprendre l’action' : 'Démarrer l’action'">{{ act.status === 'Terminé' ? '✔️' : '▶️' }}</button>
                   <button @click="editAction(act)" class="icon-btn edit" title="Modifier">✏️</button>
                   <button @click="deleteAction(act.id)" class="icon-btn del" title="Supprimer">🗑️</button>
                 </div>
@@ -95,6 +143,16 @@ const emit = defineEmits(['close']);
 const loading = ref(false);
 const saving = ref(false);
 const actions = ref([]);
+const assignees = ref([]);
+const isoControls = ref([]);
+const isoAssessments = ref([]);
+const verificationActionId = ref(null);
+const verificationHistory = ref({});
+const verificationDocuments = ref([]);
+const verificationForm = ref({ outcome: 'Effective', notes: '', evidence_document_id: '' });
+const verificationSaving = ref(false);
+const verificationError = ref('');
+
 
 // Formulaire création
 const newAction = reactive({
@@ -102,18 +160,102 @@ const newAction = reactive({
   description: '',
   priority: 'Moyenne', // ✅ Valeur par défaut française
   due_date: null,
-  assigned_to: ''
+  assigned_to: '',
+  iso_control_ref: '',
+  iso_assessment_id: ''
 });
 
 // Filtrage (afficher seulement celles liées au risque actuel)
-const filteredActions = computed(() => 
-  actions.value.filter(a => a.risk_id === props.riskId)
-);
+const actionFilter = ref("all");
+const riskActions = computed(() => actions.value.filter(a => a.risk_id === props.riskId));
+const overdueActions = computed(() => riskActions.value.filter(a => a.status !== "Terminé" && isOverdue(a.due_date)));
+const filteredActions = computed(() => {
+  if (actionFilter.value === "overdue") return overdueActions.value;
+  if (actionFilter.value === "open") return riskActions.value.filter(a => a.status !== "Terminé");
+  if (actionFilter.value === "done") return riskActions.value.filter(a => a.status === "Terminé");
+  return riskActions.value;
+});
 
 // Charger les actions quand le panel s'ouvre ou que le riskId change
 watch([() => props.isOpen, () => props.riskId], ([open, id]) => {
-  if (open && id) loadActions(id);
+  if (open && id) { loadActions(id); loadAssignees(); loadIsoControls(); }
 }, { immediate: true });
+
+async function loadIsoControls() {
+  try {
+    const { data } = await apiClient.get('/compliance/matrix');
+    isoControls.value = Array.isArray(data?.rows) ? data.rows : [];
+  } catch (err) {
+    console.warn('ISO controls unavailable for action linkage', err);
+    isoControls.value = [];
+  }
+}
+async function loadControlAssessments(refCode) {
+  newAction.iso_assessment_id = '';
+  isoAssessments.value = [];
+  if (!refCode) return;
+  try {
+    const { data } = await apiClient.get(`/compliance/controls/${encodeURIComponent(refCode)}/assessments`);
+    isoAssessments.value = Array.isArray(data) ? data : [];
+  } catch (err) {
+    console.warn('ISO assessments unavailable', err);
+  }
+}
+function formatIsoAssessmentDate(value) {
+  return value ? new Date(value).toLocaleDateString('fr-FR') : '—';
+}
+function verificationOutcomeLabel(outcome) {
+  return {
+    Effective: 'Efficace',
+    Ineffective: 'Inefficace',
+    'Follow-up required': 'Suivi complémentaire requis',
+  }[outcome] || outcome;
+}
+
+async function openVerification(action) {
+  verificationActionId.value = action.id;
+  verificationError.value = '';
+  verificationForm.value = { outcome: 'Effective', notes: '', evidence_document_id: '' };
+  try {
+    const [historyResponse, documentsResponse] = await Promise.all([
+      apiClient.get(`/actions/${action.id}/verifications`),
+      apiClient.get('/documents/'),
+    ]);
+    verificationHistory.value = { ...verificationHistory.value, [action.id]: Array.isArray(historyResponse.data) ? historyResponse.data : [] };
+    verificationDocuments.value = Array.isArray(documentsResponse.data) ? documentsResponse.data : [];
+  } catch (error) {
+    verificationError.value = error.response?.data?.detail || "Impossible de charger la vérification.";
+  }
+}
+async function saveVerification(actionId) {
+  verificationSaving.value = true;
+  verificationError.value = '';
+  try {
+    const payload = {
+      outcome: verificationForm.value.outcome,
+      notes: verificationForm.value.notes.trim(),
+      evidence_document_id: verificationForm.value.evidence_document_id || null,
+    };
+    await apiClient.post(`/actions/${actionId}/verifications`, payload);
+    const { data } = await apiClient.get(`/actions/${actionId}/verifications`);
+    verificationHistory.value = { ...verificationHistory.value, [actionId]: Array.isArray(data) ? data : [] };
+    verificationForm.value = { outcome: 'Effective', notes: '', evidence_document_id: '' };
+  } catch (error) {
+    verificationError.value = error.response?.data?.detail || "Échec de l'enregistrement.";
+  } finally {
+    verificationSaving.value = false;
+  }
+}
+
+async function loadAssignees() {
+  try {
+    const { data } = await apiClient.get("/actions/assignees");
+    assignees.value = Array.isArray(data) ? data : [];
+  } catch (err) {
+    console.error("Erreur chargement responsables des actions:", err);
+    assignees.value = [];
+  }
+}
 
 async function loadActions(riskId) {
   loading.value = true;
@@ -135,14 +277,18 @@ async function addAction() {
   try {
     const payload = {
       ...newAction,
+      title: newAction.title.trim(),
+      description: newAction.description.trim() || null,
       risk_id: props.riskId,
+      iso_control_ref: newAction.iso_control_ref || null,
+      iso_assessment_id: newAction.iso_assessment_id || null,
       due_date: newAction.due_date ? new Date(newAction.due_date).toISOString() : null
     };
     
     await apiClient.post('/actions/', payload);
     
     // Reset form & Reload list
-    Object.assign(newAction, { title:'', description:'', priority:'Moyenne', due_date:null, assigned_to:'' });
+    Object.assign(newAction, { title:'', description:'', priority:'Moyenne', due_date:null, assigned_to:'', iso_control_ref:'', iso_assessment_id:'' });
     await loadActions(props.riskId);
   } catch (err) {
     alert(err.response?.data?.detail || "Erreur lors de l'ajout.");
@@ -152,17 +298,14 @@ async function addAction() {
 }
 
 async function toggleStatus(action) {
-  // Cycle simple basé sur les CHAÎNES FRANÇAISES réelles
-  let nextStatus = 'En cours';
-  if (action.status === 'À faire') nextStatus = 'En cours';
-  else if (action.status === 'En cours') nextStatus = 'Terminé';
-  else if (action.status === 'Terminé') nextStatus = 'À faire'; // Undo
-  
+  // Respect the backend lifecycle: completed actions cannot be reopened.
+  if (action.status === 'Terminé') return;
+  const nextStatus = action.status === 'En cours' ? 'Terminé' : 'En cours';
   try {
     await apiClient.put(`/actions/${action.id}`, { status: nextStatus });
     await loadActions(props.riskId);
   } catch (err) {
-    alert("Erreur mise à jour statut.");
+    alert(err.response?.data?.detail || "Transition de statut impossible.");
   }
 }
 
@@ -203,7 +346,11 @@ function formatDate(isoStr) {
 
 function isOverdue(isoStr) {
   if (!isoStr) return false;
-  return new Date(isoStr) < new Date();
+  const due = new Date(isoStr);
+  if (Number.isNaN(due.getTime())) return false;
+  // A date-only deadline remains valid through the end of that calendar day.
+  due.setHours(23, 59, 59, 999);
+  return due < new Date();
 }
 </script>
 
@@ -231,11 +378,30 @@ function isOverdue(isoStr) {
 .quick-add-form input, .quick-add-form textarea, .quick-add-form select {
   width: 100%; padding: 0.5rem; margin-bottom: 0.5rem; border: 1px solid #cbd5e1; border-radius: 6px; font-size: 0.9rem;
 }
+.iso-action-link { display:grid; grid-template-columns:1fr 1fr; gap:.5rem; margin:.5rem 0; }
+.iso-action-link label { display:grid; gap:.3rem; font-size:.85rem; color:#475569; font-weight:600; }
+.iso-action-link select { width:100%; padding:.5rem; border:1px solid #cbd5e1; border-radius:6px; background:white; }
+.iso-action-tag { display:inline-block; margin:.35rem 0; padding:.2rem .5rem; background:#ede9fe; color:#5b21b6; border-radius:999px; font-size:.75rem; font-weight:600; }
+@media (max-width:600px) { .iso-action-link { grid-template-columns:1fr; } }
 .form-row { display: grid; grid-template-columns: 1fr 1fr 1fr; gap: 0.5rem; margin-bottom: 0.5rem; }
 .btn-primary { background: #0ea5e9; color: white; border: none; padding: 0.6rem 1.2rem; border-radius: 6px; cursor: pointer; font-weight: 600; width: 100%; }
 .btn-primary:disabled { opacity: 0.6; }
 
+/* Action filters */
+.action-filters { display: flex; gap: .4rem; flex-wrap: wrap; margin: .5rem 0 1rem; }
+.action-filters button { border: 1px solid #cbd5e1; background: white; color: #334155; border-radius: 999px; padding: .35rem .7rem; cursor: pointer; font-size: .8rem; }
+.action-filters button.active { background: #0f172a; color: white; border-color: #0f172a; }
+.action-filters button:hover { border-color: #64748b; }
+
 /* Task List */
+.verification-inline { margin-top:.6rem; }
+.verification-toggle { background:#f1f5f9; border:1px solid #cbd5e1; color:#334155; border-radius:6px; padding:.35rem .6rem; cursor:pointer; font-size:.8rem; }
+.verification-form { display:grid; gap:.5rem; padding:.7rem; margin-top:.4rem; border:1px solid #dbeafe; border-radius:8px; background:#f8fafc; }
+.verification-form label { display:grid; gap:.25rem; font-size:.8rem; color:#475569; font-weight:600; }
+.verification-form select,.verification-form textarea { width:100%; padding:.45rem; border:1px solid #cbd5e1; border-radius:6px; font:inherit; }
+.verification-record { padding:.5rem; border-bottom:1px solid #e2e8f0; font-size:.8rem; }
+.verification-record p { margin:.25rem 0; white-space:pre-wrap; }
+.verification-error { color:#b91c1c; font-size:.8rem; }
 .task-ul { list-style: none; padding: 0; margin: 0; }
 .task-li {
   display: flex; justify-content: space-between; align-items: flex-start;
@@ -258,6 +424,7 @@ function isOverdue(isoStr) {
 .deadline.overdue { color: #ef4444; font-weight: bold; }
 
 .task-actions { display: flex; gap: 0.5rem; }
+.icon-btn:disabled { cursor: not-allowed; opacity: .35; }
 .icon-btn { background: none; border: none; cursor: pointer; font-size: 1.1rem; padding: 0.2rem; opacity: 0.7; transition: all 0.2s; }
 .icon-btn:hover { opacity: 1; transform: scale(1.1); }
 .icon-btn.done:hover { color: #22c55e; }

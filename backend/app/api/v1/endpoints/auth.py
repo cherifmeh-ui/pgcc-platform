@@ -1,9 +1,10 @@
 # backend/app/api/v1/endpoints/auth.py
 from datetime import datetime, timedelta, timezone
-from typing import Optional
+import hashlib
+from typing import Annotated, Optional
 
 import jwt
-from fastapi import APIRouter, Depends, HTTPException, Header, Request, status
+from fastapi import APIRouter, Cookie, Depends, HTTPException, Header, Request, Response, status
 #                                                    ^^^^^^^ AJOUTÉ
 from pydantic import BaseModel, EmailStr, Field
 from sqlalchemy import select, update
@@ -23,11 +24,16 @@ from app.core.security import (
     hash_backup_codes,
     hash_password,
     verify_backup_code,
+    consume_backup_code,
     verify_mfa,
     verify_password,
 )
 from app.models.user import User
-from app.services.security_logger import log_action
+from app.models.refresh_token_session import RefreshTokenSession
+from app.services.security_logger import enqueue_audit_event, log_action
+from app.services.auth_session_policy import refresh_denial_reason
+from app.services.auth_rate_limiter import enforce_auth_rate_limit
+from app.services.mfa_encryption import encrypt_mfa_secret, get_mfa_secret, MFASecretDecryptionError
 
 router = APIRouter(prefix="/auth", tags=["Authentification"])
 
@@ -41,6 +47,7 @@ class PreAuthTokenResponse(BaseModel):
     mfa_required: bool
     pre_auth_token: str
     email: str
+    mfa_enabled: bool
 
 
 class StartEnrollmentResponse(BaseModel):
@@ -51,7 +58,7 @@ class StartEnrollmentResponse(BaseModel):
 
 class ConfirmMfaRequest(BaseModel):
     pre_auth_token: str
-    mfa_code: str = Field(min_length=6, max_length=6)
+    mfa_code: str = Field(min_length=6, max_length=32)
 
 
 class ChangePasswordRequest(BaseModel):
@@ -60,19 +67,99 @@ class ChangePasswordRequest(BaseModel):
     confirm_password: str = Field(min_length=12, max_length=255)
 
 
-class RefreshRequest(BaseModel):
-    refresh_token: str
+class ChangePasswordRequiredResponse(BaseModel):
+    change_password_required: bool = True
+    change_password_token: str
+    backup_codes: list[str] = Field(default_factory=list)
+    user: dict
 
 
 class TokenPairResponse(BaseModel):
     access_token: str
-    refresh_token: str
     token_type: str = "bearer"
     user: dict
 
 
 def _now():
     return datetime.now(timezone.utc)
+
+
+def _mfa_confirmed_at_epoch(user: User) -> int | None:
+    value = user.mfa_confirmed_at
+    if value is None:
+        return None
+    if value.tzinfo is None:
+        value = value.replace(tzinfo=timezone.utc)
+    return int(value.timestamp())
+
+def _assert_workflow_token_current(data: dict, user: User) -> None:
+    """Reject short-lived workflow tokens issued before an account security change."""
+    token_version = data.get("auth_version")
+    if (
+        isinstance(token_version, bool)
+        or not isinstance(token_version, int)
+        or token_version != int(user.auth_version or 0)
+        or data.get("role") != (user.role or "").strip().lower()
+    ):
+        raise HTTPException(
+            status_code=status.HTTP_401_UNAUTHORIZED,
+            detail="Jeton de parcours invalide après une modification du compte. Reconnectez-vous.",
+        )
+
+
+REFRESH_COOKIE_NAME = "pgcc_refresh"
+REFRESH_COOKIE_PATH = "/api/v1/auth"
+
+
+def _set_refresh_cookie(response: Response, token: str) -> None:
+    response.set_cookie(
+        key=REFRESH_COOKIE_NAME,
+        value=token,
+        max_age=settings.REFRESH_TOKEN_EXPIRE_DAYS * 24 * 60 * 60,
+        httponly=True,
+        secure=settings.ENVIRONMENT.lower() != "development",
+        samesite="strict",
+        path=REFRESH_COOKIE_PATH,
+    )
+
+
+def _clear_refresh_cookie(response: Response) -> None:
+    response.delete_cookie(
+        key=REFRESH_COOKIE_NAME,
+        path=REFRESH_COOKIE_PATH,
+        httponly=True,
+        secure=settings.ENVIRONMENT.lower() != "development",
+        samesite="strict",
+    )
+
+
+def _require_trusted_cookie_origin(request: Request) -> None:
+    origin = request.headers.get("origin")
+    allowed = {item.rstrip("/") for item in settings.cors_origins_list}
+    if not origin or origin.rstrip("/") not in allowed:
+        raise HTTPException(status_code=403, detail="Origine non autorisée pour une session cookie.")
+
+
+
+def _refresh_jti_hash(token_data: dict) -> str:
+    jti = token_data.get("jti")
+    if not isinstance(jti, str) or not jti:
+        raise HTTPException(status_code=401, detail="Refresh token invalide.")
+    return hashlib.sha256(jti.encode("utf-8")).hexdigest()
+
+
+async def _persist_refresh_session(db: AsyncSession, user: User, token: str) -> str:
+    token_data = decode_token(token, expected_type="refresh")
+    token_hash = _refresh_jti_hash(token_data)
+    expires_epoch = token_data.get("exp")
+    if isinstance(expires_epoch, bool) or not isinstance(expires_epoch, (int, float)):
+        raise HTTPException(status_code=401, detail="Refresh token invalide.")
+    try:
+        expires_at = datetime.fromtimestamp(expires_epoch, tz=timezone.utc)
+    except (OverflowError, OSError, ValueError):
+        raise HTTPException(status_code=401, detail="Refresh token invalide.")
+    db.add(RefreshTokenSession(user_id=user.id, token_jti_hash=token_hash, expires_at=expires_at))
+    return token_hash
 
 
 @router.post("/login", response_model=PreAuthTokenResponse)
@@ -86,8 +173,9 @@ async def login(
     Retourne un pre_auth_token si le mot de passe est correct.
     """
     email = payload.email.lower()
+    await enforce_auth_rate_limit(db, request, "login", subject=email)
 
-    result = await db.execute(select(User).where(User.email == email))
+    result = await db.execute(select(User).where(User.email == email).with_for_update())
     user = result.scalar_one_or_none()
 
     if not user:
@@ -139,23 +227,30 @@ async def login(
             user.locked_until = _now() + timedelta(minutes=settings.LOGIN_LOCK_MINUTES)
             user.failed_login_attempts = 0
 
-        await db.commit()
-
-        await log_action(
-            user_email=user.email,
-            action="LOGIN_FAILED",
-            resource="auth",
-            details="Mot de passe incorrect",
-            event_type="AUTH",
-            request=request,
-        )
+        try:
+            await enqueue_audit_event(
+                db,
+                user_email=user.email,
+                action="LOGIN_FAILED",
+                resource="auth",
+                resource_id=str(user.id),
+                details="Mot de passe incorrect",
+                event_type="AUTH",
+                request=request,
+            )
+            await db.commit()
+        except Exception:
+            await db.rollback()
+            raise
 
         raise HTTPException(
             status_code=status.HTTP_401_UNAUTHORIZED,
             detail="Email ou mot de passe incorrect.",
         )
 
-    pre_auth_token = create_pre_auth_token(subject=user.email, role=user.role)
+    pre_auth_token = create_pre_auth_token(
+        subject=user.email, role=user.role, auth_version=user.auth_version
+    )
 
     await log_action(
         user_email=user.email,
@@ -170,6 +265,7 @@ async def login(
         mfa_required=True,
         pre_auth_token=pre_auth_token,
         email=user.email,
+        mfa_enabled=user.mfa_enabled,
     )
 
 
@@ -183,6 +279,7 @@ async def start_enrollment(
     Démarre l'enrôlement MFA pour un utilisateur pré-authentifié.
     Génère un secret, le sauvegarde sur l'user (sans activer MFA), et retourne l'URI QR.
     """
+    await enforce_auth_rate_limit(db, request, "mfa_enrollment")
     token = credentials.replace("Bearer ", "")
     try:
         data = decode_token(token, expected_type="pre_auth")
@@ -190,19 +287,39 @@ async def start_enrollment(
         raise HTTPException(status_code=401, detail="Pre-auth token invalide.")
 
     email = data.get("sub")
-    result = await db.execute(select(User).where(User.email == email))
+    if not isinstance(email, str) or not email:
+        raise HTTPException(status_code=401, detail="Jeton invalide.")
+    await enforce_auth_rate_limit(
+        db, request, "mfa_enrollment", subject=email, include_ip=False
+    )
+    result = await db.execute(
+        select(User).where(User.email == email).with_for_update()
+    )
     user = result.scalar_one_or_none()
 
     if not user:
         raise HTTPException(status_code=401, detail="Utilisateur non trouvé.")
+    _assert_workflow_token_current(data, user)
 
-    # Si déjà activé, inutile de ré-enrôler
+    # Enrôlement uniquement pour les comptes sans MFA actif.
     if user.mfa_enabled:
         raise HTTPException(status_code=400, detail="MFA déjà activé.")
+    if not user.is_active:
+        raise HTTPException(status_code=403, detail="Compte désactivé.")
 
     secret = generate_mfa_secret()
-    user.mfa_secret = secret
-    await db.commit()
+    try:
+        user.mfa_secret = encrypt_mfa_secret(secret)
+        await enqueue_audit_event(
+            db, user_email=user.email, action="MFA_ENROLLMENT_STARTED",
+            resource="auth", resource_id=str(user.id),
+            details="MFA enrollment secret generated for pre-authenticated user.",
+            event_type="AUTH", request=request,
+        )
+        await db.commit()
+    except Exception:
+        await db.rollback()
+        raise
 
     uri = get_mfa_uri(secret, user.email)
 
@@ -213,16 +330,18 @@ async def start_enrollment(
     )
 
 
-@router.post("/confirm-mfa", response_model=TokenPairResponse)
+@router.post("/confirm-mfa", response_model=TokenPairResponse | ChangePasswordRequiredResponse)
 async def confirm_mfa(
     payload: ConfirmMfaRequest,
     request: Request,
+    response: Response,
     db: AsyncSession = Depends(get_db),
 ):
     """
     Valide le code TOTP contre le secret généré précédemment.
     Active définitivement le MFA, génère les codes de secours, et délivre les tokens finaux.
     """
+    await enforce_auth_rate_limit(db, request, "mfa_confirm")
     try:
         data = decode_token(payload.pre_auth_token, expected_type="pre_auth")
     except Exception:
@@ -234,65 +353,153 @@ async def confirm_mfa(
     email = data.get("sub")
     if not email:
         raise HTTPException(status_code=401, detail="Jeton invalide.")
+    await enforce_auth_rate_limit(
+        db, request, "mfa_confirm", subject=email, include_ip=False
+    )
 
-    result = await db.execute(select(User).where(User.email == email))
+    # Lock the user row during MFA verification so a recovery code cannot be
+    # consumed concurrently by two requests (one-time-use guarantee).
+    result = await db.execute(
+        select(User).where(User.email == email).with_for_update()
+    )
     user = result.scalar_one_or_none()
 
     if not user:
         raise HTTPException(status_code=401, detail="Utilisateur non trouvé.")
+    _assert_workflow_token_current(data, user)
 
     if not user.mfa_secret:
         raise HTTPException(
             status_code=400,
             detail="Aucune procédure d'enrôlement MFA active. Appelez /start-enrollment d'abord.",
         )
-
-    if not verify_mfa(user.mfa_secret, payload.mfa_code):
-        await log_action(
-            user_email=user.email,
-            action="MFA_FAILED",
-            resource="auth",
-            details="Code MFA invalide lors de la confirmation",
-            event_type="AUTH",
-            request=request,
+    if not user.is_active:
+        raise HTTPException(status_code=403, detail="Compte désactivé.")
+    if user.is_locked:
+        raise HTTPException(
+            status_code=status.HTTP_423_LOCKED,
+            detail="Compte temporairement verrouillé après plusieurs échecs MFA.",
         )
+
+    try:
+        mfa_secret = get_mfa_secret(user)
+    except MFASecretDecryptionError:
+        raise HTTPException(
+            status_code=503,
+            detail="Secret MFA indisponible. Contactez l'administrateur.",
+        )
+
+    valid_totp = verify_mfa(mfa_secret, payload.mfa_code)
+    remaining_backup_codes = None
+    if not valid_totp and user.mfa_enabled:
+        remaining_backup_codes = consume_backup_code(payload.mfa_code, user.backup_codes_hashed)
+
+    if not valid_totp and remaining_backup_codes is None:
+        user.failed_login_attempts = (user.failed_login_attempts or 0) + 1
+        locked = user.failed_login_attempts >= settings.LOGIN_MAX_ATTEMPTS
+        if locked:
+            user.locked_until = _now() + timedelta(minutes=settings.LOGIN_LOCK_MINUTES)
+            user.failed_login_attempts = 0
+        try:
+            await enqueue_audit_event(
+                db,
+                user_email=user.email,
+                action="MFA_FAILED",
+                resource="auth",
+                resource_id=str(user.id),
+                details="Code MFA invalide" + ("; compte verrouillé temporairement" if locked else ""),
+                event_type="AUTH",
+                request=request,
+            )
+            await db.commit()
+        except Exception:
+            await db.rollback()
+            raise
+        if locked:
+            raise HTTPException(
+                status_code=status.HTTP_423_LOCKED,
+                detail="Compte temporairement verrouillé après plusieurs échecs MFA.",
+            )
         raise HTTPException(status_code=401, detail="Code MFA invalide.")
 
-    # ACTIVATION DÉFINITIVE
-    backup_codes = generate_backup_codes(10)
-    hashed_backups = hash_backup_codes(backup_codes)
+    # MFA existant : un code de secours consommé ne doit jamais être réutilisable.
+    if user.mfa_enabled and remaining_backup_codes is not None:
+        user.backup_codes_hashed = remaining_backup_codes
 
-    user.mfa_enabled = True
-    user.mfa_confirmed_at = _now()
-    user.backup_codes_hashed = hashed_backups
+    # Enrôlement initial : activer MFA et générer les codes de secours une seule fois.
+    backup_codes = []
+    if not user.mfa_enabled:
+        backup_codes = generate_backup_codes(10)
+        user.backup_codes_hashed = hash_backup_codes(backup_codes)
+        user.mfa_enabled = True
+        user.mfa_confirmed_at = _now()
+
     user.last_login_at = _now()
     user.failed_login_attempts = 0
     user.locked_until = None
 
-    await db.commit()
+    if user.must_change_password:
+        try:
+            await db.flush()
+            await enqueue_audit_event(
+                db, user_email=user.email, action="MFA_SUCCESS_PASSWORD_CHANGE_REQUIRED",
+                resource="auth", resource_id=str(user.id),
+                details="MFA succeeded; mandatory password change required.",
+                event_type="AUTH", request=request,
+            )
+            await db.commit()
+        except Exception:
+            await db.rollback()
+            raise
+        change_password_token = create_change_password_token(
+            subject=user.email, role=user.role, auth_version=user.auth_version
+        )
+        return ChangePasswordRequiredResponse(
+            change_password_token=change_password_token,
+            backup_codes=backup_codes,
+            user={
+                "email": user.email,
+                "full_name": user.full_name,
+                "role": user.role,
+                "must_change_password": True,
+                "mfa_enabled": True,
+            },
+        )
 
-    access_token = create_access_token(subject=user.email, role=user.role)
-    refresh_token = create_refresh_token(subject=user.email)
-
-    await log_action(
-        user_email=user.email,
-        action="MFA_ENROLLED_AND_LOGIN_SUCCESS",
-        resource="auth",
-        details="MFA activé et connexion réussie",
-        event_type="AUTH",
-        request=request,
+    # Flush security-sensitive User changes first so the before_update
+    # listener increments auth_version before it is embedded in the new JWT.
+    await db.flush()
+    access_token = create_access_token(subject=user.email, role=user.role, auth_version=user.auth_version)
+    refresh_token = create_refresh_token(
+        subject=user.email,
+        role=user.role,
+        mfa_enabled=user.mfa_enabled,
+        auth_version=user.auth_version,
+        mfa_confirmed_at=_mfa_confirmed_at_epoch(user),
     )
+    try:
+        await _persist_refresh_session(db, user, refresh_token)
+        await enqueue_audit_event(
+            db, user_email=user.email, action="MFA_ENROLLED_AND_LOGIN_SUCCESS",
+            resource="auth", resource_id=str(user.id),
+            details="MFA enrollment completed and login succeeded.",
+            event_type="AUTH", request=request,
+        )
+        await db.commit()
+    except Exception:
+        await db.rollback()
+        raise
 
+    _set_refresh_cookie(response, refresh_token)
     return TokenPairResponse(
         access_token=access_token,
-        refresh_token=refresh_token,
         user={
             "email": user.email,
             "full_name": user.full_name,
             "role": user.role,
             "must_change_password": user.must_change_password,
             "mfa_enabled": True,
-            "backup_codes": backup_codes, # Affiché UNE SEULE FOIS
+            **({"backup_codes": backup_codes} if backup_codes else {}), # Initial enrollment only
         }
     )
 
@@ -301,12 +508,14 @@ async def confirm_mfa(
 async def change_password(
     payload: ChangePasswordRequest,
     request: Request,
+    response: Response,
     db: AsyncSession = Depends(get_db),
 ):
     """
     Permet à un utilisateur contraint de changer son mot de passe.
     Utilise le change_password_token délivré après MFA si must_change_password était true.
     """
+    await enforce_auth_rate_limit(db, request, "password_change")
     if payload.new_password != payload.confirm_password:
         raise HTTPException(
             status_code=400,
@@ -316,40 +525,66 @@ async def change_password(
     try:
         data = decode_token(payload.change_password_token, expected_type="change_password")
     except Exception:
-        # Fallback : tenter de décoder comme access token (cas où user est déjà connecté mais veut changer mdp)
-        try:
-             data = decode_token(payload.change_password_token, expected_type="access")
-        except:
-             raise HTTPException(status_code=401, detail="Token invalide ou expiré.")
+        raise HTTPException(status_code=401, detail="Token invalide ou expiré.")
 
     email = data.get("sub")
-    result = await db.execute(select(User).where(User.email == email))
+    if not isinstance(email, str) or not email:
+        raise HTTPException(status_code=401, detail="Token invalide.")
+    await enforce_auth_rate_limit(
+        db, request, "password_change", subject=email, include_ip=False
+    )
+    result = await db.execute(select(User).where(User.email == email).with_for_update())
     user = result.scalar_one_or_none()
 
     if not user:
         raise HTTPException(status_code=401, detail="Utilisateur non trouvé.")
 
-    user.password_hash = hash_password(payload.new_password)
-    user.must_change_password = False
-    user.password_changed_at = _now()
+    if not user.is_active:
+        raise HTTPException(status_code=403, detail="Compte désactivé.")
+    _assert_workflow_token_current(data, user)
+    if not user.must_change_password:
+        raise HTTPException(
+            status_code=403,
+            detail="Ce token est réservé au changement obligatoire du mot de passe.",
+        )
 
-    access_token = create_access_token(subject=user.email, role=user.role)
-    refresh_token = create_refresh_token(subject=user.email)
+    try:
+        user.password_hash = hash_password(payload.new_password)
+        user.must_change_password = False
+        user.password_changed_at = _now()
 
-    await db.commit()
+        # Password changes invalidate all previously issued refresh sessions.
+        await db.execute(
+            update(RefreshTokenSession)
+            .where(RefreshTokenSession.user_id == user.id, RefreshTokenSession.revoked_at.is_(None))
+            .values(revoked_at=user.password_changed_at)
+        )
 
-    await log_action(
-        user_email=user.email,
-        action="PASSWORD_CHANGED",
-        resource="auth",
-        details="Mot de passe changé avec succès",
-        event_type="AUTH",
-        request=request,
-    )
+        # Persist the security-state version bump before minting replacement tokens.
+        await db.flush()
+        access_token = create_access_token(subject=user.email, role=user.role, auth_version=user.auth_version)
+        refresh_token = create_refresh_token(
+            subject=user.email,
+            role=user.role,
+            mfa_enabled=user.mfa_enabled,
+            auth_version=user.auth_version,
+            mfa_confirmed_at=_mfa_confirmed_at_epoch(user),
+        )
+        await _persist_refresh_session(db, user, refresh_token)
+        await enqueue_audit_event(
+            db, user_email=user.email, action="PASSWORD_CHANGED",
+            resource="auth", resource_id=str(user.id),
+            details="Password changed; previous refresh sessions revoked and a new session issued.",
+            event_type="AUTH", request=request,
+        )
+        await db.commit()
+    except Exception:
+        await db.rollback()
+        raise
 
+    _set_refresh_cookie(response, refresh_token)
     return TokenPairResponse(
         access_token=access_token,
-        refresh_token=refresh_token,
         user={
             "email": user.email,
             "full_name": user.full_name,
@@ -362,45 +597,210 @@ async def change_password(
 
 @router.post("/refresh", response_model=TokenPairResponse)
 async def refresh_tokens(
-    payload: RefreshRequest,
+    request: Request,
+    response: Response,
     db: AsyncSession = Depends(get_db),
+    refresh_cookie: Annotated[str | None, Cookie(alias=REFRESH_COOKIE_NAME)] = None,
 ):
-    """
-    Échange un refresh_token valide contre un nouvel access_token + refresh_token.
-    """
+    """Rotate a persisted refresh session exactly once; reject replay."""
+    _require_trusted_cookie_origin(request)
+    await enforce_auth_rate_limit(db, request, "refresh")
+    refresh_token = refresh_cookie
+    if not refresh_token:
+        _clear_refresh_cookie(response)
+        raise HTTPException(status_code=401, detail="Refresh token absent.")
     try:
-        data = decode_token(payload.refresh_token, expected_type="refresh")
+        data = decode_token(refresh_token, expected_type="refresh")
     except Exception:
-        raise HTTPException(
-            status_code=status.HTTP_401_UNAUTHORIZED,
-            detail="Refresh token invalide ou expiré.",
-        )
+        _clear_refresh_cookie(response)
+        raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="Refresh token invalide ou expiré.")
 
     email = data.get("sub")
     if not email:
+        _clear_refresh_cookie(response)
         raise HTTPException(status_code=401, detail="Token invalide.")
+    await enforce_auth_rate_limit(
+        db, request, "refresh", subject=email, include_ip=False
+    )
 
-    result = await db.execute(select(User).where(User.email == email))
+    result = await db.execute(select(User).where(User.email == email).with_for_update())
     user = result.scalar_one_or_none()
-
     if not user:
+        _clear_refresh_cookie(response)
         raise HTTPException(status_code=401, detail="Utilisateur non trouvé.")
 
-    if not user.is_active:
-        raise HTTPException(status_code=403, detail="Compte désactivé.")
+    expected_role = (user.role or "").strip().lower()
+    expected_mfa_confirmed_at = _mfa_confirmed_at_epoch(user)
+    token_auth_version = data.get("auth_version")
+    current_auth_version = int(user.auth_version or 0)
+    if (
+        not isinstance(data.get("role"), str)
+        or data["role"].strip().lower() != expected_role
+        or not isinstance(data.get("mfa_enabled"), bool)
+        or data["mfa_enabled"] is not bool(user.mfa_enabled)
+        or data.get("mfa_confirmed_at") != expected_mfa_confirmed_at
+        or isinstance(token_auth_version, bool)
+        or not isinstance(token_auth_version, int)
+        or token_auth_version != current_auth_version
+    ):
+        now = _now()
+        try:
+            await db.execute(
+                update(RefreshTokenSession)
+                .where(RefreshTokenSession.user_id == user.id, RefreshTokenSession.revoked_at.is_(None))
+                .values(revoked_at=now)
+            )
+            await enqueue_audit_event(
+                db, user_email=user.email, action="REFRESH_SESSION_POLICY_CHANGED",
+                resource="auth", resource_id=str(user.id),
+                details="Refresh token role/MFA/auth-version snapshot differs from current account security state.",
+                event_type="AUTH", request=request,
+            )
+            await db.commit()
+        except Exception:
+            await db.rollback()
+            raise
+        _clear_refresh_cookie(response)
+        raise HTTPException(
+            status_code=401,
+            detail="L'état de sécurité du compte a changé. Veuillez vous reconnecter.",
+        )
 
-    # Régénérer les tokens
-    access_token = create_access_token(subject=user.email, role=user.role)
-    refresh_token = create_refresh_token(subject=user.email)
+    denial_reason = refresh_denial_reason(
+        is_active=user.is_active,
+        is_locked=user.is_locked,
+        must_change_password=user.must_change_password,
+        role=user.role,
+        mfa_enabled=user.mfa_enabled,
+        password_changed_at=user.password_changed_at,
+        token_issued_at=data.get("iat"),
+    )
+    if denial_reason:
+        # Revoke all sessions when the account is no longer eligible to refresh.
+        try:
+            await db.execute(
+                update(RefreshTokenSession)
+                .where(RefreshTokenSession.user_id == user.id, RefreshTokenSession.revoked_at.is_(None))
+                .values(revoked_at=_now())
+            )
+            await enqueue_audit_event(
+                db, user_email=user.email, action="REFRESH_DENIED_SESSIONS_REVOKED",
+                resource="auth", resource_id=str(user.id),
+                details=f"Refresh denied and active sessions revoked: {denial_reason}",
+                event_type="AUTH", request=request,
+            )
+            await db.commit()
+        except Exception:
+            await db.rollback()
+            raise
+        _clear_refresh_cookie(response)
+        denial_status = status.HTTP_423_LOCKED if user.is_locked else status.HTTP_403_FORBIDDEN if not user.is_active or user.must_change_password else status.HTTP_401_UNAUTHORIZED
+        raise HTTPException(status_code=denial_status, detail=denial_reason)
 
+    token_hash = _refresh_jti_hash(data)
+    session_result = await db.execute(
+        select(RefreshTokenSession).where(RefreshTokenSession.token_jti_hash == token_hash).with_for_update()
+    )
+    session = session_result.scalar_one_or_none()
+    now = _now()
+    if session is None or session.user_id != user.id or session.expires_at <= now:
+        _clear_refresh_cookie(response)
+        raise HTTPException(status_code=401, detail="Session refresh invalide ou expirée.")
+    if session.revoked_at is not None:
+        # Reuse of a revoked token revokes the user's active refresh sessions.
+        try:
+            await db.execute(
+                update(RefreshTokenSession)
+                .where(RefreshTokenSession.user_id == user.id, RefreshTokenSession.revoked_at.is_(None))
+                .values(revoked_at=now)
+            )
+            await enqueue_audit_event(
+                db, user_email=user.email, action="REFRESH_TOKEN_REUSE_DETECTED",
+                resource="auth", resource_id=str(user.id),
+                details="A revoked refresh token was replayed; all active sessions were revoked.",
+                event_type="AUTH", request=request,
+            )
+            await db.commit()
+        except Exception:
+            await db.rollback()
+            raise
+        _clear_refresh_cookie(response)
+        raise HTTPException(status_code=401, detail="Réutilisation d'un refresh token détectée. Sessions révoquées.")
+
+    access_token = create_access_token(subject=user.email, role=user.role, auth_version=user.auth_version)
+    refresh_token = create_refresh_token(
+        subject=user.email,
+        role=user.role,
+        mfa_enabled=user.mfa_enabled,
+        auth_version=user.auth_version,
+        mfa_confirmed_at=_mfa_confirmed_at_epoch(user),
+    )
+    try:
+        new_hash = await _persist_refresh_session(db, user, refresh_token)
+        session.revoked_at = now
+        session.replaced_by_jti_hash = new_hash
+        await enqueue_audit_event(
+            db, user_email=user.email, action="REFRESH_TOKEN_ROTATED",
+            resource="auth", resource_id=str(session.id),
+            details="Refresh session rotated successfully.",
+            event_type="AUTH", request=request,
+        )
+        await db.commit()
+    except Exception:
+        await db.rollback()
+        raise
+
+    _set_refresh_cookie(response, refresh_token)
     return TokenPairResponse(
         access_token=access_token,
-        refresh_token=refresh_token,
-        user={
-            "email": user.email,
-            "full_name": user.full_name,
-            "role": user.role,
-            "must_change_password": user.must_change_password,
-            "mfa_enabled": user.mfa_enabled,
-        }
+        user={"email": user.email, "full_name": user.full_name, "role": user.role,
+              "must_change_password": user.must_change_password, "mfa_enabled": user.mfa_enabled},
     )
+
+
+@router.post("/logout", status_code=status.HTTP_204_NO_CONTENT)
+async def logout(
+    request: Request,
+    response: Response,
+    db: AsyncSession = Depends(get_db),
+    refresh_cookie: Annotated[str | None, Cookie(alias=REFRESH_COOKIE_NAME)] = None,
+):
+    """Revoke the presented refresh session, audit it, and clear its cookie."""
+    _require_trusted_cookie_origin(request)
+    refresh_token = refresh_cookie
+    if not refresh_token:
+        _clear_refresh_cookie(response)
+        return None
+    try:
+        data = decode_token(refresh_token, expected_type="refresh")
+    except Exception:
+        _clear_refresh_cookie(response)
+        return None
+
+    token_hash = _refresh_jti_hash(data)
+    result = await db.execute(
+        select(RefreshTokenSession)
+        .where(RefreshTokenSession.token_jti_hash == token_hash)
+        .with_for_update()
+    )
+    session = result.scalar_one_or_none()
+    if session is None or session.revoked_at is not None:
+        _clear_refresh_cookie(response)
+        return None
+
+    user_result = await db.execute(select(User.email).where(User.id == session.user_id))
+    user_email = user_result.scalar_one_or_none()
+    try:
+        session.revoked_at = _now()
+        await enqueue_audit_event(
+            db, user_email=user_email, action="REFRESH_SESSION_LOGOUT",
+            resource="auth", resource_id=str(session.id),
+            details="Refresh session revoked by logout.",
+            event_type="AUTH", request=request,
+        )
+        await db.commit()
+    except Exception:
+        await db.rollback()
+        raise
+    _clear_refresh_cookie(response)
+    return None

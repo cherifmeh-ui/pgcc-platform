@@ -7,7 +7,7 @@
       <p class="subtitle">Vue consolidée des risques SI, applications critiques et conformité CTF.</p>
       
       <div class="actions-row">
-        <button @click="fetchAllRisks" :disabled="loading" class="action-btn secondary">
+        <button @click="refreshDashboard" :disabled="loading" class="action-btn secondary">
           {{ loading ? 'Actualisation...' : '🔄 Actualiser les données' }}
         </button>
         <button @click="generateReport" :disabled="generatingReport" class="action-btn primary">
@@ -46,22 +46,44 @@
     </section>
 
     <!-- SECTION 2 : SUIVI DES PLANS D'ACTION (NOUVEAU) -->
-    <section class="pac-kpi-section" v-if="reportData && reportData.pac_stats.total > 0">
+    <section class="pac-kpi-section" v-if="actionsLoaded && actionStats.total > 0">
       <h2>Suivi des Plans d'Action Correctifs</h2>
       <div class="kpi-grid">
         <div class="kpi-card overdue-alert">
-          <span class="kpi-value">{{ reportData.pac_stats.overdue }}</span>
-          <span class="kpi-label">Tâches En Retard<br/>(Deadline dépassée)</span>
+          <span class="kpi-value">{{ actionStats.overdue }}</span>
+          <span class="kpi-label">Actions en retard<br/>(Deadline dépassée)</span>
         </div>
         <div class="kpi-card progress-active">
-          <span class="kpi-value">{{ reportData.pac_stats.in_progress }}</span>
-          <span class="kpi-label">Tâches En Cours<br/>(Traitement actif)</span>
+          <span class="kpi-value">{{ actionStats.inProgress }}</span>
+          <span class="kpi-label">Actions en cours<br/>(Traitement actif)</span>
+        </div>
+        <div class="kpi-card blocked-alert">
+          <span class="kpi-value">{{ actionStats.blocked }}</span>
+          <span class="kpi-label">Actions bloquées</span>
         </div>
         <div class="kpi-card success-rate">
-          <span class="kpi-value">{{ reportData.pac_completion_rate }}%</span>
-          <span class="kpi-label">Taux de Réalisation<br/>(Terminé / Total)</span>
+          <span class="kpi-value">{{ actionStats.completionRate }}%</span>
+          <span class="kpi-label">Taux de réalisation<br/>(Terminé / Total)</span>
         </div>
       </div>
+    </section>
+
+    <!-- Pilotage TPRM partagé RSSI / Direction Générale -->
+    <section class="tprm-dashboard" v-if="canReadTprm">
+      <div class="tprm-heading"><div><h2>Pilotage des risques fournisseurs (TPRM)</h2><p>Vue consolidée pour le RSSI et la Direction Générale — sans recalcul automatique des risques.</p></div><div class="tprm-actions"><button class="action-btn secondary" @click="loadTprmDashboard" :disabled="tprmLoading">{{tprmLoading?'Actualisation…':'Actualiser TPRM'}}</button><button class="action-btn primary" @click="printTprmReport">Exporter le rapport PDF</button></div></div>
+      <p v-if="tprmError" class="error-banner">{{tprmError}}</p>
+      <div v-if="tprmOverview" class="kpi-grid">
+        <div class="kpi-card"><span class="kpi-value">{{tprmOverview.suppliers.total_active}}</span><span class="kpi-label">Fournisseurs actifs</span></div>
+        <div class="kpi-card overdue-alert"><span class="kpi-value">{{tprmOverview.suppliers.critical_without_current_assessment}}</span><span class="kpi-label">Critiques sans évaluation à jour</span></div>
+        <div class="kpi-card"><span class="kpi-value">{{tprmOverview.access.overdue_reviews}}</span><span class="kpi-label">Revues d'accès en retard</span></div>
+        <div class="kpi-card"><span class="kpi-value">{{tprmOverview.contracts.with_missing_security_clauses}}</span><span class="kpi-label">Contrats avec lacunes SSI</span></div>
+        <div class="kpi-card"><span class="kpi-value">{{tprmOverview.contracts.expiring_within_90_days}}</span><span class="kpi-label">Contrats à échéance sous 90 jours</span></div>
+      </div>
+      <div class="grid-layout" v-if="tprmOverview">
+        <div class="card"><h3>Évolution mensuelle</h3><p v-if="!tprmTrends?.comparison_available" class="tprm-muted">Deux instantanés mensuels sont nécessaires pour comparer les indicateurs.</p><ul v-else class="tprm-list"><li v-for="metric in tprmTrends.metrics.filter(m=>m.trend==='deteriorating'||m.trend==='improving')" :key="metric.key"><strong>{{metric.label}}</strong><span :class="metric.trend">{{metric.trend==='deteriorating'?'Dégradation':'Amélioration'}} ({{metric.delta>0?'+':''}}{{metric.delta}})</span></li><li v-if="!tprmTrends.metrics.some(m=>m.trend==='deteriorating'||m.trend==='improving')">Aucune évolution défavorable ou favorable détectée sur les indicateurs comparables.</li></ul></div>
+        <div class="card"><h3>Fournisseurs concentrant les risques</h3><div v-if="tprmConcentration.length" class="tprm-table-wrap"><table class="risks-preview-table"><thead><tr><th>Fournisseur</th><th>Risques liés</th><th>Niveau maximal</th><th>Accès privilégiés</th></tr></thead><tbody><tr v-for="item in tprmConcentration.slice(0,5)" :key="item.supplier_id"><td><strong>{{item.supplier_code}}</strong><br/><small>{{item.supplier_name}}</small></td><td>{{item.linked_risk_count}}</td><td>{{item.highest_linked_risk_level??'Non coté'}}</td><td>{{item.active_privileged_accesses}}</td></tr></tbody></table></div><p v-else class="tprm-muted">Aucun risque fournisseur lié n'est recensé.</p></div>
+      </div>
+      <p class="tprm-muted">Les évolutions et concentrations sont des aides à la priorisation. Toute décision de traitement ou d'acceptation reste soumise à validation humaine.</p>
     </section>
 
     <!-- Section 3: Graphiques Chart.js -->
@@ -171,6 +193,23 @@ import {
 ChartJS.register(Title, Tooltip, Legend, ArcElement, CategoryScale, LinearScale, BarElement);
 
 const authStore = useAuthStore();
+const canReadTprm = computed(() => authStore.canAccessModule('suppliers','read') && authStore.canAccessModule('risks','read'));
+const tprmOverview=ref(null),tprmTrends=ref(null),tprmConcentration=ref([]),tprmLoading=ref(false),tprmError=ref('');
+function printTprmReport(){window.print()}
+async function loadTprmDashboard(){
+  if(!canReadTprm.value)return;
+  tprmLoading.value=true;tprmError.value='';
+  try{
+    const [overview,trends,concentration]=await Promise.all([
+      apiClient.get('/suppliers/overview/risk'),
+      apiClient.get('/suppliers/overview/trends',{params:{limit:12}}),
+      apiClient.get('/suppliers/overview/concentration',{params:{limit:5}})
+    ]);
+    tprmOverview.value=overview.data;tprmTrends.value=trends.data;tprmConcentration.value=concentration.data;
+  }catch(err){tprmError.value=err.response?.data?.detail||'Chargement du pilotage TPRM impossible.'}
+  finally{tprmLoading.value=false}
+}
+
 
 // --- État Local UI ---
 const loading = ref(false);
@@ -178,6 +217,8 @@ const generatingReport = ref(false);
 const apiError = ref(null);
 const recentRisks = ref([]);
 const reportData = ref(null); // Données du endpoint /reports/dg-summary
+const actionsLoaded = ref(false);
+const actionStats = reactive({ total: 0, overdue: 0, inProgress: 0, blocked: 0, done: 0, completionRate: 0 });
 
 // Calcul des stats depuis la liste complète (pour les KPIs rapides sans appel IA)
 const stats = reactive({
@@ -280,6 +321,37 @@ async function fetchAllRisks() {
   }
 }
 
+async function refreshDashboard() {
+  await Promise.all([fetchAllRisks(), fetchActionStats()]);
+}
+
+async function fetchActionStats() {
+  try {
+    const { data } = await apiClient.get('/actions/');
+    if (!Array.isArray(data)) throw new Error("Format invalide");
+    const now = new Date();
+    const total = data.length;
+    const done = data.filter(a => a.status === "Terminé").length;
+    actionStats.total = total;
+    actionStats.done = done;
+    actionStats.inProgress = data.filter(a => a.status === "En cours").length;
+    actionStats.blocked = data.filter(a => a.status === "Bloqué").length;
+    actionStats.overdue = data.filter(a => {
+      if (a.status === "Terminé" || !a.due_date) return false;
+      const due = new Date(a.due_date);
+      if (Number.isNaN(due.getTime())) return false;
+      due.setHours(23, 59, 59, 999);
+      return due < now;
+    }).length;
+    actionStats.completionRate = total ? Math.round((done / total) * 100) : 0;
+  } catch (err) {
+    console.error("Erreur chargement indicateurs plans d'action:", err);
+    actionStats.total = 0;
+  } finally {
+    actionsLoaded.value = true;
+  }
+}
+
 async function generateReport() {
   generatingReport.value = true;
   apiError.value = null;
@@ -323,7 +395,7 @@ function formatDate(isoString) {
   }
 }
 
-onMounted(fetchAllRisks);
+onMounted(() => { fetchAllRisks(); fetchActionStats(); loadTprmDashboard(); });
 </script>
 
 <style scoped>
@@ -373,7 +445,8 @@ h1 { color: #0f172a; font-size: 1.8rem; margin-bottom: 0.25rem; }
 .pac-kpi-section { margin-bottom: 2rem; }
 .overdue-alert .kpi-value { color: #ef4444; } /* Rouge vif */
 .progress-active .kpi-value { color: #f97316; } /* Orange */
-.success-rate .kpi-value { color: #22c55e; } /* Vert */
+.success-rate .kpi-value { color: #22c55e; }
+.blocked-alert .kpi-value { color: #dc2626; } /* Vert */
 
 /* Charts */
 .chart-card { height: 350px; display: flex; flex-direction: column; }
@@ -393,6 +466,7 @@ h1 { color: #0f172a; font-size: 1.8rem; margin-bottom: 0.25rem; }
 .tag-app { background: #dbeafe; color: #1d4ed8; padding: 0.3rem 0.6rem; border-radius: 4px; font-size: 0.85rem; font-weight: 500; }
 
 /* Recent Risks Table */
+.tprm-dashboard{margin:1.5rem 0;padding:1.25rem;background:#fff;border:1px solid #e2e8f0;border-radius:12px}.tprm-heading{display:flex;justify-content:space-between;align-items:center;gap:1rem}.tprm-actions{display:flex;gap:.5rem;flex-wrap:wrap}.tprm-heading h2{font-size:1.3rem;color:#334155;margin:0 0 .35rem}.tprm-heading p,.tprm-muted{font-size:.85rem;color:#64748b}.tprm-list{list-style:none;padding:0;margin:0}.tprm-list li{display:flex;justify-content:space-between;gap:1rem;padding:.65rem 0;border-bottom:1px solid #e2e8f0}.tprm-list .deteriorating{color:#b91c1c;font-weight:600}.tprm-list .improving{color:#166534;font-weight:600}.tprm-table-wrap{overflow-x:auto}.tprm-dashboard .kpi-grid{margin-top:1rem}.tprm-dashboard .grid-layout{margin-top:1rem}.tprm-dashboard .card h3{font-size:1rem;margin:0 0 .75rem;color:#334155}
 .recent-risks-section { background: white; border-radius: 12px; padding: 1.5rem; box-shadow: 0 2px 8px rgba(0,0,0,0.08); margin-top: 2rem;}
 .loading-state { display: flex; align-items: center; justify-content: center; gap: 0.5rem; padding: 2rem; color: #64748b; }
 .spinner-small { width: 20px; height: 20px; border: 3px solid #e2e8f0; border-top-color: #0ea5e9; border-radius: 50%; animation: spin 0.8s linear infinite; }
@@ -406,4 +480,5 @@ h1 { color: #0f172a; font-size: 1.8rem; margin-bottom: 0.25rem; }
 .badge.high { background: #f97316; }
 .badge.medium { background: #eab308; }
 .badge.low { background: #22c55e; }
+@media print{body *{visibility:hidden!important}.tprm-dashboard,.tprm-dashboard *{visibility:visible!important}.tprm-dashboard{position:absolute;left:0;top:0;width:100%;margin:0;padding:0;border:0;box-shadow:none}.tprm-dashboard button{display:none!important}.tprm-dashboard .grid-layout{grid-template-columns:1fr 1fr}.tprm-dashboard .kpi-grid{grid-template-columns:repeat(3,1fr)}.tprm-dashboard .card{break-inside:avoid;box-shadow:none;border:1px solid #cbd5e1}}
 </style>

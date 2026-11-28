@@ -3,17 +3,36 @@ from typing import List
 from uuid import UUID
 
 from fastapi import APIRouter, Depends, HTTPException, Request, status
-from sqlalchemy import select
+from pydantic import BaseModel, ConfigDict
+from sqlalchemy import select, func
+from sqlalchemy.exc import IntegrityError
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.api.deps import require_permission
 from app.core.database import get_db
 from app.models.risk import Risk
+from app.models.asset import Asset, AssetRiskLink
+from app.models.supplier import SupplierRiskLink
+from app.models.action_item import ActionItem
 from app.models.user import User
 from app.schemas.risk import RiskCreate, RiskResponse, RiskUpdate
-from app.services.security_logger import log_action
+from app.services.security_logger import enqueue_audit_event, log_action  # log_action retained for test/integration patch compatibility
+from app.services.risk_scoring import calculate_risk_level
+from app.utils.rbac import role_has_permission
 
 router = APIRouter(prefix="/risks", tags=["Risques SI"])
+
+
+class RiskAssetResponse(BaseModel):
+    id: UUID
+    reference: str
+    name: str
+    asset_type: str
+    criticality: str
+    lifecycle_status: str
+    relationship_context: str | None = None
+
+    model_config = ConfigDict(from_attributes=True)
 
 
 @router.get("/", response_model=List[RiskResponse])
@@ -39,6 +58,7 @@ async def list_risks(
             status=risk.status,
             treatment_plan=risk.treatment_plan,
             created_at=risk.created_at.isoformat() if risk.created_at else None,
+            updated_at=risk.updated_at.isoformat() if risk.updated_at else None,
         )
         for risk in risks
     ]
@@ -51,30 +71,48 @@ async def create_risk(
     db: AsyncSession = Depends(get_db),
     current_user: User = require_permission("risks", "create"),
 ):
-    existing = await db.execute(select(Risk).where(Risk.ref == risk_data.ref))
+    normalized_ref = risk_data.ref.strip().lower()
+    existing = await db.execute(
+        select(Risk.id).where(func.lower(func.btrim(Risk.ref)) == normalized_ref)
+    )
     if existing.scalar_one_or_none():
         raise HTTPException(
-            status_code=status.HTTP_400_BAD_REQUEST,
-            detail=f"Le risque {risk_data.ref} existe déjà.",
+            status_code=status.HTTP_409_CONFLICT,
+            detail=f"La référence de risque {risk_data.ref} existe déjà.",
         )
 
     data = risk_data.model_dump()
+    if data.get("owner_id") is not None:
+        owner_result = await db.execute(select(User.id).where(User.id == data["owner_id"], User.is_active.is_(True)))
+        if owner_result.scalar_one_or_none() is None:
+            raise HTTPException(status_code=400, detail="Le propriétaire du risque n'existe pas ou son compte est inactif.")
     # CALCUL BACKEND DU NIVEAU DE RISQUE (source de vérité)
-    data["risk_level"] = data["impact"] * data["likelihood"]
+    data["risk_level"] = calculate_risk_level(data["impact"], data["likelihood"])
 
     new_risk = Risk(**data)
     db.add(new_risk)
-    await db.commit()
+    try:
+        await db.flush()
+        await enqueue_audit_event(
+            db,
+            user_email=current_user.email,
+            action="CREATE",
+            resource="risks",
+            resource_id=new_risk.ref,
+            details=f"Risque créé: {new_risk.title} (Niveau: {new_risk.risk_level})",
+            request=request,
+        )
+        await db.commit()
+    except IntegrityError as exc:
+        await db.rollback()
+        raise HTTPException(
+            status_code=status.HTTP_409_CONFLICT,
+            detail="Référence de risque déjà utilisée ou contrainte d'intégrité invalide.",
+        ) from exc
+    except Exception:
+        await db.rollback()
+        raise
     await db.refresh(new_risk)
-
-    await log_action(
-        user_email=current_user.email,
-        action="CREATE",
-        resource="risks",
-        resource_id=new_risk.ref,
-        details=f"Risque créé: {new_risk.title} (Niveau: {new_risk.risk_level})",
-        request=request,
-    )
 
     return RiskResponse(
         id=new_risk.id,
@@ -90,6 +128,7 @@ async def create_risk(
         status=new_risk.status,
         treatment_plan=new_risk.treatment_plan,
         created_at=new_risk.created_at.isoformat() if new_risk.created_at else None,
+        updated_at=new_risk.updated_at.isoformat() if new_risk.updated_at else None,
     )
 
 
@@ -101,7 +140,7 @@ async def update_risk(
     db: AsyncSession = Depends(get_db),
     current_user: User = require_permission("risks", "update"),
 ):
-    result = await db.execute(select(Risk).where(Risk.id == risk_id))
+    result = await db.execute(select(Risk).where(Risk.id == risk_id).with_for_update())
     risk = result.scalar_one_or_none()
 
     if not risk:
@@ -112,19 +151,31 @@ async def update_risk(
 
     update_data = risk_data.model_dump(exclude_unset=True)
 
+    # Validate the effective state, not only fields present in a partial update.
+    effective_status = update_data.get("status", risk.status)
+    effective_treatment_plan = update_data.get("treatment_plan", risk.treatment_plan)
+    if effective_status in {"En traitement", "Traité", "Accepté"} and not (effective_treatment_plan or "").strip():
+        raise HTTPException(
+            status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
+            detail="Un risque en traitement, traité ou accepté doit comporter un plan ou une justification documentée.",
+        )
+
+    if "owner_id" in update_data and update_data["owner_id"] is not None:
+        owner_result = await db.execute(select(User.id).where(User.id == update_data["owner_id"], User.is_active.is_(True)))
+        if owner_result.scalar_one_or_none() is None:
+            raise HTTPException(status_code=400, detail="Le propriétaire du risque n'existe pas.")
+
     # RECALCULER LE NIVEAU SI IMPACT OU LIKELIHOOD CHANGENT
     if "impact" in update_data or "likelihood" in update_data:
         risk.impact = update_data.pop("impact", risk.impact)
         risk.likelihood = update_data.pop("likelihood", risk.likelihood)
-        risk.risk_level = risk.impact * risk.likelihood
+        risk.risk_level = calculate_risk_level(risk.impact, risk.likelihood)
 
     for field, value in update_data.items():
         setattr(risk, field, value)
 
-    await db.commit()
-    await db.refresh(risk)
-
-    await log_action(
+    await enqueue_audit_event(
+        db,
         user_email=current_user.email,
         action="UPDATE",
         resource="risks",
@@ -132,6 +183,8 @@ async def update_risk(
         details=f"Risque modifié: {risk.title}",
         request=request,
     )
+    await db.commit()
+    await db.refresh(risk)
 
     return RiskResponse(
         id=risk.id,
@@ -147,6 +200,7 @@ async def update_risk(
         status=risk.status,
         treatment_plan=risk.treatment_plan,
         created_at=risk.created_at.isoformat() if risk.created_at else None,
+        updated_at=risk.updated_at.isoformat() if risk.updated_at else None,
     )
 
 
@@ -157,7 +211,7 @@ async def delete_risk(
     db: AsyncSession = Depends(get_db),
     current_user: User = require_permission("risks", "delete"),
 ):
-    result = await db.execute(select(Risk).where(Risk.id == risk_id))
+    result = await db.execute(select(Risk).where(Risk.id == risk_id).with_for_update())
     risk = result.scalar_one_or_none()
 
     if not risk:
@@ -169,10 +223,37 @@ async def delete_risk(
     risk_ref = risk.ref
     risk_title = risk.title
 
-    await db.delete(risk)
-    await db.commit()
+    # Preserve both corrective-action history and asset-risk traceability.
+    action_count_result = await db.execute(
+        select(func.count(ActionItem.id)).where(ActionItem.risk_id == risk.id)
+    )
+    if action_count_result.scalar_one() > 0:
+        raise HTTPException(
+            status_code=status.HTTP_409_CONFLICT,
+            detail="Ce risque possède des plans d'action associés. La suppression est refusée afin de préserver la traçabilité. Utilisez une procédure d'archivage.",
+        )
 
-    await log_action(
+    asset_link_count_result = await db.execute(
+        select(func.count(AssetRiskLink.id)).where(AssetRiskLink.risk_id == risk.id)
+    )
+    if asset_link_count_result.scalar_one() > 0:
+        raise HTTPException(
+            status_code=status.HTTP_409_CONFLICT,
+            detail="Ce risque est associé à un ou plusieurs actifs. Supprimez explicitement les associations ou utilisez une procédure d'archivage.",
+        )
+
+    supplier_link_count_result = await db.execute(
+        select(func.count(SupplierRiskLink.id)).where(SupplierRiskLink.risk_id == risk.id)
+    )
+    if supplier_link_count_result.scalar_one() > 0:
+        raise HTTPException(
+            status_code=status.HTTP_409_CONFLICT,
+            detail="Ce risque est associé à un ou plusieurs fournisseurs. Supprimez explicitement les associations ou utilisez une procédure d'archivage.",
+        )
+
+    await db.delete(risk)
+    await enqueue_audit_event(
+        db,
         user_email=current_user.email,
         action="DELETE",
         resource="risks",
@@ -180,5 +261,50 @@ async def delete_risk(
         details=f"Risque supprimé: {risk_title}",
         request=request,
     )
+    await db.commit()
 
     return {"message": f"Risque {risk_ref} supprimé"}
+
+
+@router.get("/owners")
+async def list_risk_owners(
+    db: AsyncSession = Depends(get_db),
+    current_user: User = require_permission("risks", "read"),
+):
+    """Return minimal active-user data for assigning risk ownership."""
+    result = await db.execute(
+        select(User.id, User.full_name, User.department)
+        .where(User.is_active.is_(True))
+        .order_by(User.full_name.asc())
+    )
+    return [
+        {"id": str(user.id), "full_name": user.full_name, "department": user.department}
+        for user in result.all()
+    ]
+
+
+@router.get("/{risk_id}/assets", response_model=List[RiskAssetResponse])
+async def list_risk_assets(
+    risk_id: UUID,
+    db: AsyncSession = Depends(get_db),
+    current_user: User = require_permission("risks", "read"),
+):
+    if not role_has_permission((current_user.role or "").strip().lower(), "assets", "read"):
+        raise HTTPException(status_code=403, detail="Accès refusé : permission assets:read requise.")
+    risk_result = await db.execute(select(Risk.id).where(Risk.id == risk_id))
+    if risk_result.scalar_one_or_none() is None:
+        raise HTTPException(status_code=404, detail="Risque introuvable")
+    result = await db.execute(
+        select(Asset, AssetRiskLink.relationship_context)
+        .join(AssetRiskLink, AssetRiskLink.asset_id == Asset.id)
+        .where(AssetRiskLink.risk_id == risk_id)
+        .order_by(Asset.name.asc())
+    )
+    return [
+        RiskAssetResponse(
+            id=asset.id, reference=asset.reference, name=asset.name,
+            asset_type=asset.asset_type, criticality=asset.criticality,
+            lifecycle_status=asset.lifecycle_status, relationship_context=context,
+        )
+        for asset, context in result.all()
+    ]

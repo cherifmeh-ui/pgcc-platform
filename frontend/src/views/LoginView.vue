@@ -63,8 +63,8 @@
         <input 
           id="totp-code"
           v-model="totpCode" 
-          maxlength="6" 
-          pattern="\d{6}" 
+          maxlength="6"
+          pattern="\\d{6}" 
           placeholder="123456" 
           inputmode="numeric"
           autofocus
@@ -85,36 +85,46 @@
         <a href="#" @click.prevent="goBackToCredentials" class="back-link">← Retour</a>
       </div>
 
-      <!-- ÉTAPE 3 : VÉRIFICATION MFA (Compte déjà configuré) -->
+      <!-- Vérification MFA pour comptes déjà enrôlés -->
       <div v-else-if="step === 'verify-mfa'" class="mfa-verify">
         <h2>Vérification en deux étapes</h2>
-        <p>Votre compte est sécurisé par MFA.<br/>Entrez le code depuis votre application :</p>
-
-        <label for="verify-totp">Code de vérification</label>
-        <input 
+        <p>Votre compte est sécurisé par MFA.<br/>Entrez le code depuis votre application ou un code de secours :</p>
+        <label for="verify-totp">Code TOTP ou code de secours</label>
+        <input
           id="verify-totp"
-          v-model="totpCode" 
-          maxlength="6" 
-          pattern="\d{6}" 
-          placeholder="123456" 
-          inputmode="numeric"
+          v-model="totpCode"
+          maxlength="32"
+          placeholder="123456 ou code de secours"
+          inputmode="text"
           autofocus
           :disabled="isLoading"
           @keyup.enter="verifyExistingMfa"
         />
-
-        <button 
-          @click="verifyExistingMfa" 
-          :disabled="!totpCode || totpCode.length !== 6 || isLoading" 
-          class="primary-btn"
-        >
+        <button @click="verifyExistingMfa" :disabled="!totpCode || totpCode.trim().length < 6 || isLoading" class="primary-btn">
           {{ isLoading ? 'Vérification...' : 'Valider et se connecter' }}
         </button>
-
         <p v-if="errorMessage" class="error-msg">{{ errorMessage }}</p>
-        
         <a href="#" @click.prevent="goBackToCredentials" class="back-link">← Changer d'email</a>
       </div>
+
+      <!-- Changement obligatoire du mot de passe après MFA -->
+      <form v-else-if="step === 'change-password'" @submit.prevent="changePassword" class="auth-form">
+        <h2>Changement obligatoire du mot de passe</h2>
+        <p>Votre compte doit définir un nouveau mot de passe avant d'accéder à la plateforme.</p>
+        <div v-if="backupCodes.length" class="backup-codes">
+          <strong>Codes de secours MFA — sauvegardez-les maintenant</strong>
+          <p>Ils ne seront affichés qu'une seule fois. Conservez-les dans un endroit sûr.</p>
+          <ul><li v-for="code in backupCodes" :key="code"><code>{{ code }}</code></li></ul>
+        </div>
+        <label for="new-password">Nouveau mot de passe</label>
+        <input id="new-password" v-model="newPassword" type="password" minlength="12" maxlength="255" autocomplete="new-password" required :disabled="isLoading"/>
+        <label for="confirm-new-password">Confirmer le mot de passe</label>
+        <input id="confirm-new-password" v-model="confirmPassword" type="password" minlength="12" maxlength="255" autocomplete="new-password" required :disabled="isLoading"/>
+        <button type="submit" :disabled="isLoading || newPassword.length < 12 || !confirmPassword" class="primary-btn">
+          {{ isLoading ? 'Modification...' : 'Changer le mot de passe et continuer' }}
+        </button>
+        <p v-if="errorMessage" class="error-msg">{{ errorMessage }}</p>
+      </form>
     </div>
   </div>
 </template>
@@ -137,6 +147,10 @@ const password = ref('');
 const totpCode = ref('');
 const provisioningUri = ref('');
 const mfaSecret = ref('');
+const changePasswordToken = ref('');
+const newPassword = ref('');
+const confirmPassword = ref('');
+const backupCodes = ref([]);
 const isLoading = ref(false);
 const errorMessage = ref(null);
 
@@ -179,7 +193,16 @@ async function handleLogin() {
     // Donc on force 'verify-mfa' pour tester le flow principal du RSSI.
     // Pour un vrai nouvel utilisateur, il faudrait appeler /start-enrollment ici.
     
-    step.value = 'verify-mfa'; 
+    if (data.mfa_enabled) {
+      step.value = 'verify-mfa';
+    } else {
+      const enrollRes = await apiClient.post('/auth/start-enrollment', {}, {
+        headers: { Authorization: `Bearer ${currentPreAuthToken}` },
+      });
+      provisioningUri.value = enrollRes.data.provisioning_uri;
+      mfaSecret.value = enrollRes.data.secret;
+      step.value = 'setup-mfa';
+    }
 
   } catch (err) {
     errorMessage.value = err.response?.data?.detail || 'Erreur de connexion. Vérifiez vos identifiants.';
@@ -199,26 +222,14 @@ async function confirmMfaEnrollment() {
   errorMessage.value = null;
 
   try {
-    // 1. Démarrer l'enrollment (génère secret côté serveur)
-    const enrollRes = await apiClient.post('/auth/start-enrollment', {}, {
-      headers: { Authorization: `Bearer ${currentPreAuthToken}` },
-    });
-    
-    // Mise à jour UI avec le QR reçu
-    provisioningUri.value = enrollRes.data.provisioning_uri;
-    mfaSecret.value = enrollRes.data.secret;
-    
-    // 2. Confirmer avec le code saisi
+    // Le secret/QR est déjà obtenu au passage login pour un compte non enrôlé.
+    // Confirmer avec le code saisi.
     const confirmRes = await apiClient.post('/auth/confirm-mfa', {
       pre_auth_token: currentPreAuthToken,
       mfa_code: totpCode.value,
     });
 
-    // Succès -> Sauvegarde session & redirection
-    authStore.setSession(confirmRes.data);
-    await authStore.fetchPermissions();
-    
-    router.replace(route.query.redirect || '/dashboard');
+    await handleMfaSuccess(confirmRes.data);
 
   } catch (err) {
     errorMessage.value = err.response?.data?.detail || 'Échec activation MFA.';
@@ -233,7 +244,7 @@ async function confirmMfaEnrollment() {
  * car le secret est déjà en base.
  */
 async function verifyExistingMfa() {
-  if (!totpCode.value || totpCode.value.length !== 6) return;
+  if (!totpCode.value || totpCode.value.trim().length < 6) return;
 
   isLoading.value = true;
   errorMessage.value = null;
@@ -246,14 +257,41 @@ async function verifyExistingMfa() {
       mfa_code: totpCode.value,
     });
 
-    // Succès -> Sauvegarde session & redirection
-    authStore.setSession(res.data);
-    await authStore.fetchPermissions();
-    
-    router.replace(route.query.redirect || '/dashboard');
+    await handleMfaSuccess(res.data);
 
   } catch (err) {
     errorMessage.value = err.response?.data?.detail || 'Code MFA invalide ou expiré.';
+  } finally {
+    isLoading.value = false;
+  }
+}
+
+async function handleMfaSuccess(data) {
+  if (data.change_password_required) {
+    changePasswordToken.value = data.change_password_token;
+    backupCodes.value = data.backup_codes || [];
+    step.value = 'change-password';
+    return;
+  }
+  authStore.setSession(data);
+  await authStore.fetchPermissions();
+  router.replace(route.query.redirect || '/dashboard');
+}
+
+async function changePassword() {
+  isLoading.value = true;
+  errorMessage.value = null;
+  try {
+    const { data } = await apiClient.post('/auth/change-password', {
+      change_password_token: changePasswordToken.value,
+      new_password: newPassword.value,
+      confirm_password: confirmPassword.value,
+    });
+    authStore.setSession(data);
+    await authStore.fetchPermissions();
+    router.replace(route.query.redirect || '/dashboard');
+  } catch (err) {
+    errorMessage.value = err.response?.data?.detail || 'Échec du changement de mot de passe.';
   } finally {
     isLoading.value = false;
   }
@@ -263,11 +301,37 @@ function goBackToCredentials() {
   step.value = 'credentials';
   totpCode.value = '';
   errorMessage.value = null;
+  provisioningUri.value = '';
+  mfaSecret.value = '';
+  changePasswordToken.value = '';
+  newPassword.value = '';
+  confirmPassword.value = '';
+  backupCodes.value = [];
   currentPreAuthToken = null;
 }
 </script>
 
 <style scoped>
+.backup-codes {
+  background: #fff7ed;
+  border: 1px solid #fdba74;
+  border-radius: 8px;
+  padding: 0.75rem;
+  color: #9a3412;
+}
+.backup-codes p { font-size: 0.8rem; }
+.backup-codes ul {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 0.35rem;
+  list-style: none;
+  padding: 0;
+}
+.backup-codes code {
+  font-family: monospace;
+  font-weight: 700;
+  color: #7c2d12;
+}
 .login-wrapper {
   display: flex;
   justify-content: center;

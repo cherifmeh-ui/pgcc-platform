@@ -1,8 +1,9 @@
 # backend/app/api/v1/endpoints/apps.py
-from fastapi import APIRouter, Depends, HTTPException, status
-from pydantic import BaseModel, Field
+from fastapi import APIRouter, Depends, HTTPException, Request, status
+from pydantic import BaseModel, ConfigDict, Field
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy import select
+from sqlalchemy.exc import IntegrityError
 from typing import Optional, List
 from uuid import UUID
 
@@ -10,6 +11,7 @@ from app.api.deps import require_permission
 from app.core.database import get_db
 from app.models.application import Application
 from app.models.user import User
+from app.services.security_logger import log_action
 
 router = APIRouter(prefix="/apps", tags=["Applications Critiques"])
 
@@ -38,8 +40,7 @@ class AppUpdate(AppBase):
 
 class AppResponse(AppBase):
     id: UUID
-    class Config:
-        from_attributes = True
+    model_config = ConfigDict(from_attributes=True)
 
 
 @router.get("/", response_model=List[AppResponse])
@@ -54,6 +55,7 @@ async def list_applications(
 @router.post("/", response_model=AppResponse, status_code=status.HTTP_201_CREATED)
 async def create_application(
     data: AppCreate,
+    request: Request,
     db: AsyncSession = Depends(get_db),
     current_user: User = require_permission("apps", "create"),
 ):
@@ -61,6 +63,15 @@ async def create_application(
     db.add(app)
     await db.commit()
     await db.refresh(app)
+    await log_action(
+        user_email=current_user.email,
+        action="CREATE",
+        resource="applications",
+        resource_id=str(app.id),
+        details=f"Application created: {app.name[:100]}",
+        event_type="APPLICATION",
+        request=request,
+    )
     return app
 
 
@@ -68,6 +79,7 @@ async def create_application(
 async def update_application(
     app_id: UUID,
     data: AppUpdate,
+    request: Request,
     db: AsyncSession = Depends(get_db),
     current_user: User = require_permission("apps", "update"),
 ):
@@ -79,12 +91,22 @@ async def update_application(
         setattr(app, k, v)
     await db.commit()
     await db.refresh(app)
+    await log_action(
+        user_email=current_user.email,
+        action="UPDATE",
+        resource="applications",
+        resource_id=str(app.id),
+        details=f"Application updated: {app.name[:100]}",
+        event_type="APPLICATION",
+        request=request,
+    )
     return app
 
 
 @router.delete("/{app_id}", status_code=status.HTTP_204_NO_CONTENT)
 async def delete_application(
     app_id: UUID,
+    request: Request,
     db: AsyncSession = Depends(get_db),
     current_user: User = require_permission("apps", "delete"),
 ):
@@ -92,5 +114,22 @@ async def delete_application(
     app = result.scalar_one_or_none()
     if not app:
         raise HTTPException(status_code=404, detail="Application non trouvée")
+    app_name = app.name[:100]
     await db.delete(app)
-    await db.commit()
+    try:
+        await db.commit()
+    except IntegrityError:
+        await db.rollback()
+        raise HTTPException(
+            status_code=409,
+            detail="Cette application est encore référencée par des actifs; détachez ou réaffectez-les avant suppression.",
+        )
+    await log_action(
+        user_email=current_user.email,
+        action="DELETE",
+        resource="applications",
+        resource_id=str(app_id),
+        details=f"Application deleted: {app_name}",
+        event_type="APPLICATION",
+        request=request,
+    )

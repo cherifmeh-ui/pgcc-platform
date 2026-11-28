@@ -6,6 +6,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.api.deps import require_permission
 from app.core.database import get_db
+from app.core.config import settings
 from app.models.user import User
 from app.services.ai_service import ai_service
 from app.services.security_logger import log_action
@@ -66,7 +67,7 @@ async def rewrite_for_dg(
         logger.exception(f"Erreur critique endpoint AI Rewrite: {e}")
         raise HTTPException(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-            detail=f"Erreur interne lors de la génération IA: {str(e)}"
+            detail="Service IA indisponible ou erreur de génération."
         )
 
 
@@ -109,5 +110,42 @@ async def suggest_iso_measures(
         logger.exception(f"Erreur critique endpoint AI Controls: {e}")
         raise HTTPException(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-            detail=f"Erreur interne lors de la suggestion de contrôles: {str(e)}"
+            detail="Service IA indisponible ou erreur de génération des contrôles."
         )
+
+class GenerateRequest(BaseModel):
+    prompt: str = Field(min_length=1, max_length=8000)
+    model: str = Field(default="phi3:latest", min_length=1, max_length=100)
+
+
+@router.post("/generate")
+async def generate_text(
+    payload: GenerateRequest,
+    request: Request,
+    current_user: User = require_permission("ai_assistant", "use"),
+):
+    """Endpoint de génération utilisé par les vues IA; réservé aux permissions IA."""
+    if not settings.AI_ENABLED or settings.AI_PROVIDER != "ollama":
+        raise HTTPException(status_code=status.HTTP_503_SERVICE_UNAVAILABLE, detail="Assistant IA désactivé ou non configuré.")
+
+    allowed_models = {settings.OLLAMA_MODEL, settings.OLLAMA_FALLBACK_MODEL, "phi3:latest"}
+    if payload.model not in allowed_models:
+        raise HTTPException(status_code=400, detail="Modèle IA non autorisé.")
+
+    try:
+        result = await ai_service.generate_text(payload.prompt, model=payload.model)
+        await log_action(
+            user_email=current_user.email,
+            action="AI_GENERATE",
+            resource="ai",
+            details="Génération de texte via Assistant IA",
+            event_type="AI_ASSISTANCE",
+            request=request,
+        )
+        return {"success": True, "response": result}
+    except RuntimeError as exc:
+        logger.warning("AI generation unavailable: %s", exc)
+        raise HTTPException(status_code=status.HTTP_503_SERVICE_UNAVAILABLE, detail=str(exc))
+    except Exception:
+        logger.exception("AI generation failed")
+        raise HTTPException(status_code=500, detail="Erreur lors de la génération IA.")

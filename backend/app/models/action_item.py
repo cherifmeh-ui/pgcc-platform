@@ -1,5 +1,5 @@
 # backend/app/models/action_item.py
-from sqlalchemy import Column, String, ForeignKey, DateTime, Text, Enum as SQLEnum, func
+from sqlalchemy import Column, String, ForeignKey, DateTime, Text, Enum as SQLEnum, func, Integer
 from sqlalchemy.dialects.postgresql import UUID as PG_UUID
 from sqlalchemy.orm import relationship  # ⬅️ IMPORT CRUCIAL AJOUTÉ
 import enum
@@ -26,10 +26,14 @@ class ActionItem(Base):
 
     id = Column(PG_UUID(as_uuid=True), primary_key=True, default=uuid4)
     
+    # Optional traceability to an ISO 27002 control assessment
+    iso_control_id = Column(Integer, ForeignKey("iso_controls.id", ondelete="RESTRICT"), nullable=True, index=True)
+    iso_assessment_id = Column(PG_UUID(as_uuid=True), ForeignKey("iso_control_assessments.id", ondelete="RESTRICT"), nullable=True, index=True)
+
     # Lien vers le risque parent
     risk_id = Column(
         PG_UUID(as_uuid=True), 
-        ForeignKey("risks.id", ondelete="CASCADE"), 
+        ForeignKey("risks.id", ondelete="RESTRICT", name="fk_action_items_risk_id_risks_restrict"), 
         nullable=False,
         index=True
     )

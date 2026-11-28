@@ -5,13 +5,39 @@
     <div class="header-section">
       <div class="title-area">
         <h1>Matrice de Conformité ISO 27002:2022</h1>
-        <p class="subtitle">Couverture normative calculée dynamiquement depuis vos registres de risques et plans d'action.</p>
+        <p class="subtitle">Indicateur déclaratif : les liens risques/actions ne constituent pas une preuve de conformité. Chaque contrôle doit être évalué et justifié.</p>
       </div>
       
-      <!-- Badge Score Global Style Solid Block -->
-      <div class="global-score-badge" :class="getScoreClass(matrixData?.overall_score)">
-        <span class="score-val">{{ matrixData?.overall_score || 0 }}%</span>
-        <span class="score-lbl">COUVERTURE GLOBALE</span>
+      <!-- Indicateurs déclaratifs et évaluations formelles -->
+      <div class="compliance-kpi-grid">
+        <div class="global-score-badge" :class="getScoreClass(matrixData?.overall_score)">
+          <span class="score-val">{{ matrixData?.overall_score || 0 }}%</span>
+          <span class="score-lbl">COUVERTURE DÉCLARÉE</span>
+        </div>
+        <div class="compliance-kpi-card">
+          <strong>{{ matrixData?.evaluated_count || 0 }}/{{ matrixData?.total_controls || 0 }}</strong>
+          <span>Contrôles évalués</span>
+        </div>
+        <div class="compliance-kpi-card">
+          <strong>{{ matrixData?.applicable_count || 0 }}</strong>
+          <span>Contrôles applicables évalués</span>
+        </div>
+        <div class="compliance-kpi-card">
+          <strong>{{ matrixData?.average_maturity ?? '—' }}/5</strong>
+          <span>Maturité moyenne</span>
+        </div>
+        <div class="compliance-kpi-card">
+          <strong>{{ matrixData?.maturity_score ?? '—' }}%</strong>
+          <span>Score de maturité évaluée</span>
+        </div>
+        <div class="compliance-kpi-card">
+          <strong>{{ matrixData?.verified_evidence_count || 0 }}/{{ matrixData?.evidence_count || 0 }}</strong>
+          <span>Preuves vérifiées</span>
+        </div>
+        <div class="compliance-kpi-card">
+          <strong>{{ matrixData?.expired_evidence_count || 0 }}</strong>
+          <span>Preuves expirées</span>
+        </div>
       </div>
     </div>
 
@@ -37,6 +63,7 @@
 
     <!-- Filtres Modernes -->
     <div class="filters-bar card-modern">
+      <input v-model.trim="filterSearch" type="search" class="filter-select modern" placeholder="🔎 Rechercher référence ou contrôle..." aria-label="Rechercher un contrôle ISO" />
       <select v-model="filterDomain" class="filter-select modern">
         <option value="">📂 Tous les Domaines</option>
         <option v-for="d in domains" :key="d" :value="d">{{ d }}</option>
@@ -44,9 +71,9 @@
       
       <select v-model="filterStatus" class="filter-select modern">
         <option value="">🚦 Tous les Statuts</option>
-        <option value="Couvert">✅ Couvert</option>
-        <option value="Partiel">🟡 Partiel</option>
-        <option value="Non Couvert">❌ Non Couvert</option>
+        <option value="Déclaré couvert">⚠️ Déclaré couvert</option>
+        <option value="À vérifier">🟡 À vérifier</option>
+        <option value="Non évalué">⚪ Non évalué</option>
       </select>
     </div>
 
@@ -56,7 +83,7 @@
     </div>
 
     <!-- Table Grid Moderne -->
-    <div v-else-if="matrixData" class="table-container card-modern">
+    <div v-else-if="matrixData" class="table-container card-modern">\n      <div class="compliance-table-toolbar"><span>{{ filteredRows.length }} contrôle(s)</span><button type="button" class="btn-export" @click="exportMatrixCsv" :disabled="filteredRows.length === 0">Exporter CSV</button></div>\n      <p class="methodology-note">{{ matrixData.methodology }}</p>
       <table class="iso-table modern">
         <thead>
           <tr>
@@ -65,10 +92,15 @@
             <th>Domaine</th>
             <th>Statut</th>
             <th>Liens Risques</th>
+            <th>Actions liées</th>
+            <th>Preuves</th>
             <th>Action IA</th>
           </tr>
         </thead>
         <tbody>
+          <tr v-if="filteredRows.length === 0">
+            <td colspan="8" class="empty-filter-state">Aucun contrôle ne correspond aux filtres sélectionnés.</td>
+          </tr>
           <tr v-for="row in filteredRows" :key="row.ref_code" class="table-row-hover">
             <td><code class="ref-code">{{ row.ref_code }}</code></td>
             <td class="title-cell">{{ row.title }}</td>
@@ -78,9 +110,15 @@
               </span>
             </td>
             <td>
-              <span class="status-badge modern" :class="getStatusClass(row.status)">
-                {{ getStatusIcon(row.status) }} {{ row.status }}
-              </span>
+              <div class="status-cell">
+                <span class="status-badge modern" :class="getStatusClass(row.status)">
+                  {{ getStatusIcon(row.status) }} {{ row.status }}
+                </span>
+                <span v-if="row.latest_assessment_status" class="assessment-status-tag">
+                  {{ row.latest_assessment_status }} · {{ row.latest_assessment_maturity }}/5
+                </span>
+                <span v-else class="assessment-status-tag muted">Aucune évaluation formelle</span>
+              </div>
             </td>
             <td class="links-count">
               <span v-if="row.linked_risks_count > 0" class="link-pill active">
@@ -88,7 +126,19 @@
               </span>
               <span v-else class="link-pill inactive">—</span>
             </td>
+            <td class="links-count">
+              <span v-if="row.linked_actions_count" class="link-pill active">🛠️ {{ row.linked_actions_count }}</span>
+              <span v-else class="link-pill inactive">—</span>
+            </td>
+            <td class="links-count">
+              <span v-if="row.evidence_count" class="link-pill active">📎 {{ row.verified_evidence_count }}/{{ row.evidence_count }}</span>
+              <span v-else class="link-pill inactive">—</span>
+              <span v-if="row.expired_evidence_count" class="expired-warning">{{ row.expired_evidence_count }} expirée(s)</span>
+            </td>
             <td>
+              <button @click="openAssessment(row)" class="btn-assess modern" title="Évaluer et consulter l'historique">
+                📝 Évaluer
+              </button>
               <button @click="askAiGapAnalysis(row)" class="btn-ai-gap modern" title="Analyser l'écart avec l'IA">
                 ✨ Justifier
               </button>
@@ -99,6 +149,105 @@
     </div>
     
     <div v-else class="error-state card-modern">Impossible de charger la matrice.</div>
+
+    <!-- Modal d'évaluation formelle ISO -->
+    <Teleport to="body">
+      <div v-if="showAssessmentPanel" class="modal-overlay" @click.self="closeAssessment">
+        <div class="ai-modal-card assessment-modal">
+          <div class="modal-header">
+            <div class="header-icon">📝</div>
+            <div class="header-text">
+              <h2>Évaluation du contrôle</h2>
+              <p class="control-ref">{{ selectedControl?.ref_code }} — {{ selectedControl?.title }}</p>
+            </div>
+            <button @click="closeAssessment" class="close-btn">×</button>
+          </div>
+          <div class="assessment-form">
+            <label>Applicabilité
+              <select v-model="assessmentForm.applicability">
+                <option>Applicable</option><option>Non applicable</option>
+              </select>
+            </label>
+            <label>État d'implémentation
+              <select v-model="assessmentForm.implementation_status">
+                <option>Non démarré</option><option>En cours</option><option>Partiellement implémenté</option><option>Implémenté</option>
+              </select>
+            </label>
+            <label>Niveau de maturité (0 à 5)
+              <input v-model.number="assessmentForm.maturity_level" type="number" min="0" max="5" />
+            </label>
+            <label>Justification <textarea v-model="assessmentForm.justification" rows="3" maxlength="10000" placeholder="Décrire la situation, la mise en œuvre et les éléments vérifiés"></textarea></label>
+            <label>Écart identifié / mesures à prévoir <textarea v-model="assessmentForm.gap_description" rows="3" maxlength="10000" placeholder="Écart, actions ou justification de non-applicabilité"></textarea></label>
+            <div v-if="assessmentError" class="alert-error-box">{{ assessmentError }}</div>
+            <button class="primary-action-btn" @click="saveAssessment" :disabled="assessmentSaving || !assessmentForm.justification.trim()">
+              {{ assessmentSaving ? 'Enregistrement...' : 'Enregistrer une évaluation' }}
+            </button>
+          </div>
+          <section class="assessment-history">
+            <h3>Historique des évaluations</h3>
+            <div v-if="assessmentLoading" class="loading-state">Chargement...</div>
+            <div v-else-if="assessmentHistory.length === 0" class="empty-filter-state">Aucune évaluation formelle enregistrée.</div>
+            <article v-for="entry in assessmentHistory" :key="entry.id" class="assessment-history-item">
+              <div class="assessment-history-head"><strong>{{ entry.implementation_status }} · Maturité {{ entry.maturity_level }}/5</strong><span>{{ new Date(entry.assessed_at).toLocaleString() }}</span></div>
+              <p><strong>{{ entry.applicability }}</strong> — {{ entry.justification }}</p>
+              <p v-if="entry.gap_description">{{ entry.gap_description }}</p>
+            </article>
+          </section>
+          <section class="assessment-evidence">
+            <h3>Preuves documentaires</h3>
+            <div class="evidence-form">
+              <label>Document source
+                <select v-model="evidenceForm.document_id">
+                  <option value="">Sélectionner un document</option>
+                  <option v-for="doc in availableDocuments" :key="doc.id" :value="doc.id">{{ doc.title }} — {{ doc.filename }}</option>
+                </select>
+              </label>
+              <label>Évaluation associée (optionnel)
+                <select v-model="evidenceForm.assessment_id">
+                  <option value="">Preuve liée au contrôle uniquement</option>
+                  <option v-for="entry in assessmentHistory" :key="entry.id" :value="entry.id">{{ entry.implementation_status }} · {{ entry.maturity_level }}/5 · {{ formatDate(entry.assessed_at) }}</option>
+                </select>
+              </label>
+              <label>Responsable de la preuve
+                <input v-model="evidenceForm.evidence_owner" maxlength="150" placeholder="Direction / responsable" />
+              </label>
+              <label>Date de collecte
+                <input v-model="evidenceForm.collected_at" type="date" />
+              </label>
+              <label>Valide jusqu'au
+                <input v-model="evidenceForm.valid_until" type="date" />
+              </label>
+              <label>Notes
+                <textarea v-model="evidenceForm.notes" rows="2" maxlength="10000" placeholder="Contexte, vérification, référence..."></textarea>
+              </label>
+              <div v-if="evidenceError" class="alert-error-box">{{ evidenceError }}</div>
+              <button class="primary-action-btn" @click="saveEvidence" :disabled="evidenceSaving || !evidenceForm.document_id">
+                {{ evidenceSaving ? 'Association...' : 'Associer la preuve au contrôle' }}
+              </button>
+            </div>
+            <div v-if="evidenceLoading" class="loading-state">Chargement des preuves...</div>
+            <div v-else-if="controlEvidence.length === 0" class="empty-filter-state">Aucune preuve associée.</div>
+            <article v-for="evidence in controlEvidence" :key="evidence.id" class="assessment-history-item evidence-item">
+              <div class="assessment-history-head">
+                <strong>{{ evidence.document_title }} — {{ evidence.document_filename }}</strong>
+                <span :class="['evidence-status', evidence.verification_status.toLowerCase()]">{{ evidence.verification_status }}</span>
+              </div>
+              <p>Responsable : {{ evidence.evidence_owner || 'Non renseigné' }} · Collectée : {{ formatDate(evidence.collected_at) }}</p>
+              <p v-if="evidence.valid_until">Validité : {{ formatDate(evidence.valid_until) }} <span v-if="evidence.is_expired" class="expired-warning">Expirée</span></p>
+              <p v-if="evidence.notes">{{ evidence.notes }}</p>
+              <p class="evidence-hash">SHA-256 : {{ evidence.sha256 }}</p>
+              <div class="evidence-actions">
+                <button class="secondary-action-btn" @click="downloadEvidenceDocument(evidence.document_id)">Télécharger</button>
+                <button v-if="evidence.verification_status !== 'Verified'" class="secondary-action-btn" @click="verifyEvidence(evidence.id, 'Verified')">Valider</button>
+                <button v-if="evidence.verification_status !== 'Rejected'" class="secondary-action-btn" @click="verifyEvidence(evidence.id, 'Rejected')">Rejeter</button>
+                <button v-if="evidence.verification_status !== 'Pending'" class="secondary-action-btn" @click="verifyEvidence(evidence.id, 'Pending')">Réinitialiser</button>
+                <button class="secondary-action-btn danger" @click="removeEvidence(evidence.id)">Retirer la preuve</button>
+              </div>
+            </article>
+          </section>
+        </div>
+      </div>
+    </Teleport>
 
     <!-- Modal IA Gap Analysis (REDESIGN ÉLÉGANT) -->
     <Teleport to="body">
@@ -169,6 +318,20 @@ const loading = ref(true);
 const matrixData = ref(null);
 const filterDomain = ref('');
 const filterStatus = ref('');
+const filterSearch = ref('');
+const showAssessmentPanel = ref(false);
+const selectedControl = ref(null);
+const assessmentHistory = ref([]);
+const assessmentLoading = ref(false);
+const assessmentSaving = ref(false);
+const assessmentError = ref('');
+const assessmentForm = ref({ applicability: 'Applicable', implementation_status: 'Non démarré', maturity_level: 0, justification: '', gap_description: '' });
+const availableDocuments = ref([]);
+const controlEvidence = ref([]);
+const evidenceLoading = ref(false);
+const evidenceSaving = ref(false);
+const evidenceError = ref('');
+const evidenceForm = ref({ document_id: '', evidence_owner: '', collected_at: new Date().toISOString().slice(0, 10), valid_until: '', notes: '' });
 
 // État IA
 const showAiPanel = ref(false);
@@ -188,7 +351,9 @@ const filteredRows = computed(() => {
   return matrixData.value.rows.filter(r => {
     const matchDomain = !filterDomain.value || r.domain === filterDomain.value;
     const matchStatus = !filterStatus.value || r.status === filterStatus.value;
-    return matchDomain && matchStatus;
+    const query = filterSearch.value.toLocaleLowerCase();
+    const matchSearch = !query || r.ref_code.toLocaleLowerCase().includes(query) || r.title.toLocaleLowerCase().includes(query) || r.domain.toLocaleLowerCase().includes(query);
+    return matchDomain && matchStatus && matchSearch;
   });
 });
 
@@ -206,20 +371,168 @@ function getDomainCount(domainName) {
 
 function getStatusClass(status) {
   switch(status) {
-    case 'Couvert': return 'st-covered';
-    case 'Partiel': return 'st-partial';
-    case 'Non Couvert': return 'st-uncovered';
+    case 'Déclaré couvert': return 'st-declared';
+    case 'À vérifier': return 'st-partial';
+    case 'Non évalué': return 'st-uncovered';
     default: return '';
   }
 }
 
 function getStatusIcon(status) {
   switch(status) {
-    case 'Couvert': return '✅';
-    case 'Partiel': return '🟡';
-    case 'Non Couvert': return '❌';
+    case 'Déclaré couvert': return '⚠️';
+    case 'À vérifier': return '🟡';
+    case 'Non évalué': return '⚪';
     default: return '•';
   }
+}
+
+function formatDate(value) {
+  if (!value) return '—';
+  return new Date(value).toLocaleDateString();
+}
+async function loadEvidence(refCode) {
+  evidenceLoading.value = true;
+  try {
+    const { data } = await apiClient.get(`/compliance/controls/${encodeURIComponent(refCode)}/evidence`);
+    controlEvidence.value = Array.isArray(data) ? data : [];
+  } catch (error) {
+    evidenceError.value = error.response?.data?.detail || "Impossible de charger les preuves.";
+    controlEvidence.value = [];
+  } finally {
+    evidenceLoading.value = false;
+  }
+}
+async function loadDocuments() {
+  try {
+    const { data } = await apiClient.get('/documents/');
+    availableDocuments.value = Array.isArray(data) ? data : [];
+  } catch (error) {
+    evidenceError.value = error.response?.data?.detail || "Impossible de charger la bibliothèque documentaire.";
+  }
+}
+async function saveEvidence() {
+  if (!selectedControl.value || !evidenceForm.value.document_id) return;
+  evidenceSaving.value = true;
+  evidenceError.value = '';
+  try {
+    const payload = {
+      document_id: evidenceForm.value.document_id,
+      assessment_id: evidenceForm.value.assessment_id || null,
+      evidence_owner: evidenceForm.value.evidence_owner.trim() || null,
+      collected_at: evidenceForm.value.collected_at ? new Date(evidenceForm.value.collected_at + 'T00:00:00Z').toISOString() : null,
+      valid_until: evidenceForm.value.valid_until ? new Date(evidenceForm.value.valid_until + 'T23:59:59Z').toISOString() : null,
+      notes: evidenceForm.value.notes.trim() || null,
+    };
+    await apiClient.post(`/compliance/controls/${encodeURIComponent(selectedControl.value.ref_code)}/evidence`, payload);
+    evidenceForm.value = { document_id: '', assessment_id: '', evidence_owner: '', collected_at: new Date().toISOString().slice(0, 10), valid_until: '', notes: '' };
+    await loadEvidence(selectedControl.value.ref_code);
+  } catch (error) {
+    evidenceError.value = error.response?.data?.detail || "Échec de l'association de la preuve.";
+  } finally {
+    evidenceSaving.value = false;
+  }
+}
+async function verifyEvidence(id, verification_status) {
+  evidenceError.value = '';
+  try {
+    await apiClient.patch(`/compliance/evidence/${id}/verify`, { verification_status });
+    await loadEvidence(selectedControl.value.ref_code);
+  } catch (error) {
+    evidenceError.value = error.response?.data?.detail || "Impossible de modifier le statut de vérification.";
+  }
+}
+async function removeEvidence(evidenceId) {
+  if (!window.confirm('Retirer cette association de preuve du contrôle ISO ? Le document source ne sera pas supprimé.')) return;
+  evidenceError.value = '';
+  try {
+    await apiClient.delete(`/compliance/evidence/${evidenceId}`);
+    await loadEvidence(selectedControl.value.ref_code);
+  } catch (error) {
+    evidenceError.value = error.response?.data?.detail || "Impossible de retirer cette preuve.";
+  }
+}
+async function downloadEvidenceDocument(documentId) {
+  try {
+    const response = await apiClient.get(`/documents/${documentId}/download`, { responseType: 'blob' });
+    const blobUrl = URL.createObjectURL(response.data);
+    const link = document.createElement('a');
+    link.href = blobUrl;
+    link.download = 'preuve-documentaire';
+    document.body.appendChild(link);
+    link.click();
+    link.remove();
+    URL.revokeObjectURL(blobUrl);
+  } catch (error) {
+    evidenceError.value = error.response?.data?.detail || "Téléchargement impossible.";
+  }
+}
+
+async function openAssessment(row) {
+  selectedControl.value = row;
+  showAssessmentPanel.value = true;
+  assessmentError.value = '';
+  assessmentForm.value = { applicability: 'Applicable', implementation_status: 'Non démarré', maturity_level: 0, justification: '', gap_description: '' };
+  assessmentLoading.value = true;
+  evidenceError.value = '';
+  evidenceForm.value = { document_id: '', evidence_owner: '', collected_at: new Date().toISOString().slice(0, 10), valid_until: '', notes: '' };
+  try {
+    const [assessmentResponse] = await Promise.all([
+      apiClient.get(`/compliance/controls/${encodeURIComponent(row.ref_code)}/assessments`),
+      loadDocuments(),
+      loadEvidence(row.ref_code),
+    ]);
+    assessmentHistory.value = Array.isArray(assessmentResponse.data) ? assessmentResponse.data : [];
+  } catch (error) {
+    assessmentError.value = error.response?.data?.detail || "Impossible de charger l'historique.";
+    assessmentHistory.value = [];
+  } finally {
+    assessmentLoading.value = false;
+  }
+}
+function closeAssessment() {
+  showAssessmentPanel.value = false;
+  selectedControl.value = null;
+}
+async function saveAssessment() {
+  if (!selectedControl.value || !assessmentForm.value.justification.trim()) return;
+  assessmentSaving.value = true;
+  assessmentError.value = '';
+  try {
+    const payload = { ...assessmentForm.value, justification: assessmentForm.value.justification.trim(), gap_description: assessmentForm.value.gap_description.trim() || null };
+    const { data } = await apiClient.post(`/compliance/controls/${encodeURIComponent(selectedControl.value.ref_code)}/assessments`, payload);
+    assessmentHistory.value = [data, ...assessmentHistory.value];
+    assessmentForm.value = { applicability: 'Applicable', implementation_status: 'Non démarré', maturity_level: 0, justification: '', gap_description: '' };
+    // Refresh matrix KPIs and latest assessment badges without closing the modal.
+    const matrixResponse = await apiClient.get('/compliance/matrix');
+    matrixData.value = matrixResponse.data;
+  } catch (error) {
+    assessmentError.value = error.response?.data?.detail || "Échec de l'enregistrement de l'évaluation.";
+  } finally {
+    assessmentSaving.value = false;
+  }
+}
+
+function exportMatrixCsv() {
+  const headers = ['Référence', 'Titre', 'Domaine', 'Statut déclaratif', 'Risques liés', 'Actions liées', 'Statut évaluation', 'Maturité', 'Applicabilité', 'Preuves', 'Preuves vérifiées', 'Preuves expirées'];
+  const escapeCsv = (value) => {
+    let text = String(value ?? '');
+    if (/^[=+@\-]/.test(text)) text = "'" + text;
+    return '"' + text.replace(/"/g, '""') + '"';
+  };
+  const lines = [headers, ...filteredRows.value.map(row => [
+    row.ref_code, row.title, row.domain, row.status, row.linked_risks_count, row.linked_actions_count || 0, row.latest_assessment_status || '', row.latest_assessment_maturity ?? '', row.latest_assessment_applicability || '', row.evidence_count || 0, row.verified_evidence_count || 0, row.expired_evidence_count || 0
+  ])].map(row => row.map(escapeCsv).join(';'));
+  const csv = '\uFEFF' + lines.join('\r\n');
+  const blob = new Blob([csv], { type: 'text/csv;charset=utf-8;' });
+  const url = URL.createObjectURL(blob);
+  const link = document.createElement('a');
+  link.href = url;
+  link.download = 'pgcc-matrice-conformite-iso27002.csv';
+  document.body.appendChild(link);
+  link.click();
+  link.remove();
+  URL.revokeObjectURL(url);
 }
 
 function getScoreClass(score) {
@@ -308,6 +621,40 @@ onMounted(fetchMatrix);
 </script>
 
 <style scoped>
+.compliance-kpi-grid { display:grid; grid-template-columns:repeat(auto-fit,minmax(150px,1fr)); gap:1rem; align-items:stretch; }
+.compliance-kpi-card { background:#fff; border:1px solid #e2e8f0; border-radius:12px; padding:1rem; display:flex; flex-direction:column; justify-content:center; gap:.4rem; }
+.compliance-kpi-card strong { font-size:1.45rem; color:#0f172a; }
+.compliance-kpi-card span { font-size:.82rem; color:#64748b; }
+.status-cell { display:flex; flex-direction:column; align-items:flex-start; gap:.4rem; }
+.assessment-status-tag { font-size:.75rem; color:#0f766e; background:#f0fdfa; border:1px solid #99f6e4; border-radius:6px; padding:.2rem .45rem; }
+.assessment-status-tag.muted { color:#64748b; background:#f8fafc; border-color:#e2e8f0; }
+.btn-assess { border:1px solid #0f766e; background:#ecfdf5; color:#065f46; padding:.4rem .65rem; border-radius:7px; cursor:pointer; margin-right:.35rem; }
+.assessment-evidence { border-top:1px solid #e2e8f0; margin-top:1rem; padding-top:1rem; }
+.evidence-form { display:grid; gap:.7rem; }
+.evidence-form label { display:grid; gap:.3rem; font-weight:600; color:#334155; }
+.evidence-form input,.evidence-form select,.evidence-form textarea { width:100%; border:1px solid #cbd5e1; border-radius:8px; padding:.6rem; font:inherit; }
+.evidence-status { border-radius:6px; padding:.2rem .45rem; font-size:.8rem; font-weight:600; }
+.evidence-status.verified { background:#dcfce7; color:#166534; }
+.evidence-status.pending { background:#fef3c7; color:#92400e; }
+.evidence-status.rejected { background:#fee2e2; color:#991b1b; }
+.expired-warning { color:#b91c1c; font-weight:700; }
+.evidence-hash { font-size:.75rem; word-break:break-all; color:#64748b; }
+.evidence-actions .danger { color:#b91c1c; border-color:#fecaca; background:#fff1f2; }
+.evidence-actions { display:flex; gap:.5rem; flex-wrap:wrap; }
+.assessment-modal { max-height:90vh; overflow-y:auto; width:min(760px,95vw); }
+.assessment-form { display:grid; gap:.8rem; }
+.assessment-form label { display:grid; gap:.35rem; color:#334155; font-weight:600; }
+.assessment-form input,.assessment-form select,.assessment-form textarea { width:100%; border:1px solid #cbd5e1; border-radius:8px; padding:.65rem; font:inherit; }
+.assessment-history { border-top:1px solid #e2e8f0; margin-top:1.2rem; padding-top:1rem; }
+.assessment-history-item { border:1px solid #e2e8f0; border-radius:8px; padding:.75rem; margin:.5rem 0; }
+.assessment-history-head { display:flex; justify-content:space-between; gap:.5rem; flex-wrap:wrap; }
+.assessment-history-head span { color:#64748b; font-size:.85rem; }
+.compliance-table-toolbar { display:flex; justify-content:space-between; align-items:center; gap:1rem; margin-bottom:1rem; color:#64748b; font-size:.9rem; }
+.btn-export { border:1px solid #cbd5e1; background:#fff; color:#334155; padding:.5rem .8rem; border-radius:8px; cursor:pointer; font-weight:600; }
+.btn-export:hover:not(:disabled) { background:#f1f5f9; }
+.btn-export:disabled { opacity:.5; cursor:not-allowed; }
+.empty-filter-state { text-align: center !important; padding: 2rem !important; color: #64748b; font-style: italic; }
+.methodology-note { margin: 0 0 1rem; padding: 0.75rem 1rem; border-left: 4px solid #f59e0b; background: #fffbeb; color: #92400e; font-size: 0.9rem; line-height: 1.5; }
 /* Styles Page Principale (Inchangés) */
 .iso-page { padding: 2rem; max-width: 1400px; margin: 0 auto; background: #f8fafc; min-height: 100vh; }
 .header-section { display: flex; justify-content: space-between; align-items: flex-start; margin-bottom: 2rem; gap: 2rem; }
@@ -338,7 +685,7 @@ onMounted(fetchMatrix);
 .domain-tag { display: inline-block; padding: 0.25rem 0.6rem; border-radius: 12px; font-size: 0.75rem; font-weight: 600; text-transform: capitalize; }
 .tag-orga { background: #dbeafe; color: #1d4ed8; } .tag-pers { background: #ede9fe; color: #6d28d9; } .tag-phys { background: #ffedd5; color: #c2410c; } .tag-tech { background: #fce7f3; color: #be185d; }
 .status-badge.modern { display: inline-flex; align-items: center; gap: 0.4rem; padding: 0.3rem 0.8rem; border-radius: 20px; font-size: 0.8rem; font-weight: 700; }
-.st-covered { background: #dcfce7; color: #166534; } .st-partial { background: #fef3c7; color: #92400e; } .st-uncovered { background: #fee2e2; color: #991b1b; }
+.st-declared { background: #fef3c7; color: #92400e; } .st-partial { background: #fef3c7; color: #92400e; } .st-uncovered { background: #fee2e2; color: #991b1b; }
 .links-count .link-pill { padding: 0.2rem 0.5rem; border-radius: 12px; font-size: 0.8rem; font-weight: 600; }
 .active { background: #eff6ff; color: #1d4ed8; } .inactive { color: #94a3b8; }
 .btn-ai-gap.modern { background: #ede9fe; color: #6d28d9; border: none; padding: 0.4rem 0.8rem; border-radius: 6px; cursor: pointer; font-weight: 600; font-size: 0.85rem; transition: all 0.2s; }

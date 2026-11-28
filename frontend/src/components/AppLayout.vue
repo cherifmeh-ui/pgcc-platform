@@ -46,6 +46,8 @@ const allMenuItems = [
   { path: '/dashboard', label: 'Tableau de bord', module: 'dashboard' },
   { path: '/risks', label: 'Registre des risques', module: 'risks' },
   { path: '/apps', label: 'Applications critiques', module: 'apps' },
+  { path: '/assets', label: 'Cartographie', module: 'assets' },
+  { path: '/suppliers', label: 'Fournisseurs', module: 'suppliers' },
   { path: '/compliance', label: 'Conformité ISO', module: 'iso27002' },
   { path: '/documents', label: 'Bibliothèque Docs', module: 'documents' },
 ];

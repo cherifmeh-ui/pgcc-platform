@@ -24,12 +24,21 @@
 
     <!-- Tableau des Documents -->
     <div v-else-if="!loading" class="table-container card-modern">
+      <div class="document-filters">
+        <input v-model="searchQuery" type="search" placeholder="Rechercher titre, fichier, auteur..." aria-label="Rechercher dans les documents" />
+        <select v-model="typeFilter" aria-label="Filtrer par type"><option value="">Tous les types</option><option v-for="type in documentTypes" :key="type" :value="type">{{ type }}</option></select>
+        <select v-model="indexFilter" aria-label="Filtrer par indexation"><option value="">Tous les statuts</option><option value="indexed">Indexés</option><option value="pending">À indexer</option></select>
+        <span class="filter-count">{{ filteredDocuments.length }} / {{ documents.length }}</span>
+      </div>
       <table class="docs-table modern">
         <thead>
           <tr>
             <th>Type</th>
+            <th>Classification</th>
             <th>Titre</th>
             <th>Fichier Original</th>
+            <th>Version</th>
+            <th>Auteur / Direction</th>
             <th>Taille</th>
             <th>Statut Indexation</th>
             <th>Date</th>
@@ -37,10 +46,13 @@
           </tr>
         </thead>
         <tbody>
-          <tr v-for="doc in documents" :key="doc.id" class="table-row-hover">
+          <tr v-for="doc in filteredDocuments" :key="doc.id" class="table-row-hover">
             <td><span class="type-badge" :class="'badge-' + normalizeType(doc.doc_type)">{{ doc.doc_type }}</span></td>
+            <td><span class="classification-badge" :class="'classification-' + String(doc.classification || 'RESTRICTED').toLowerCase()">{{ doc.classification || 'RESTRICTED' }}</span></td>
             <td class="title-cell"><strong>{{ doc.title }}</strong></td>
             <td><code>{{ doc.filename }}</code></td>
+            <td>{{ doc.version || '—' }}</td>
+            <td>{{ doc.author || '—' }}</td>
             <td>{{ formatSize(doc.file_size_kb) }}</td>
             <td>
               <span v-if="doc.is_indexed" class="status-pill indexed">✅ Prêt IA</span>
@@ -49,15 +61,31 @@
             <td>{{ formatDate(doc.created_at) }}</td>
             <td class="actions-cell">
               <!-- Bouton Télécharger -->
+              <button @click="previewDoc(doc)" class="action-btn" title="Prévisualiser">👁️</button>
               <button @click="downloadDoc(doc)" class="action-btn dl" title="Télécharger">⬇️</button>
+              <button v-if="canUpdate && !doc.is_indexed" @click="indexDoc(doc)" :disabled="indexingId === doc.id" class="action-btn" title="Indexer pour l’Assistant IA">{{ indexingId === doc.id ? "⏳" : "🧠" }}</button>
               <!-- Bouton Supprimer -->
               <button v-if="canDelete" @click="deleteDoc(doc.id)" class="action-btn del" title="Supprimer">🗑️</button>
             </td>
           </tr>
+        <tr v-if="filteredDocuments.length === 0"><td colspan="10" class="no-results">Aucun document ne correspond aux filtres.</td></tr>
         </tbody>
       </table>
     </div>
 
+    <Teleport to="body">
+      <div v-if="previewOpen" class="modal-overlay" @click.self="previewOpen = false">
+        <div class="preview-modal-card">
+          <div class="modal-header">
+            <div><h2>{{ previewData?.title || "Prévisualisation" }}</h2><small>{{ previewData?.filename }} · {{ previewData?.version || "Sans version" }}</small></div>
+            <button @click="previewOpen = false" class="close-btn" aria-label="Fermer">×</button>
+          </div>
+          <div v-if="previewLoading" class="loading-state">Chargement du contenu…</div>
+          <pre v-else class="preview-content">{{ previewData?.preview || "Aucun texte extrait." }}</pre>
+          <p v-if="previewData?.truncated" class="preview-warning">La prévisualisation est limitée à 20 000 caractères.</p>
+        </div>
+      </div>
+    </Teleport>
     <!-- Loading State -->
     <div v-if="loading" class="loading-state card-modern">Chargement de la bibliothèque...</div>
 
@@ -151,6 +179,19 @@ import apiClient from '@/services/api';
 const authStore = useAuthStore();
 const loading = ref(false);
 const documents = ref([]);
+const searchQuery = ref("");
+const typeFilter = ref("");
+const indexFilter = ref("");
+const documentTypes = computed(() => [...new Set(documents.value.map(doc => doc.doc_type).filter(Boolean))].sort());
+const filteredDocuments = computed(() => {
+  const query = searchQuery.value.trim().toLocaleLowerCase();
+  return documents.value.filter(doc => {
+    const matchesQuery = !query || [doc.title, doc.filename, doc.author, doc.doc_type].some(value => String(value || "").toLocaleLowerCase().includes(query));
+    const matchesType = !typeFilter.value || doc.doc_type === typeFilter.value;
+    const matchesIndex = !indexFilter.value || (indexFilter.value === "indexed" ? doc.is_indexed : !doc.is_indexed);
+    return matchesQuery && matchesType && matchesIndex;
+  });
+});
 const showUploadModal = ref(false);
 const uploading = ref(false);
 const isDragging = ref(false);
@@ -173,6 +214,11 @@ const formData = reactive({
 // Permissions
 const canCreate = computed(() => authStore.canAccessModule('documents', 'create'));
 const canDelete = computed(() => authStore.canAccessModule('documents', 'delete'));
+const canUpdate = computed(() => authStore.canAccessModule('documents', 'update'));
+const indexingId = ref(null);
+const previewOpen = ref(false);
+const previewLoading = ref(false);
+const previewData = ref(null);
 
 // Helpers UI
 function normalizeType(type) {
@@ -242,19 +288,19 @@ function handleDrop(event) {
 
 function validateAndSetFile(file) {
   const allowedTypes = ['application/pdf', 'application/vnd.openxmlformats-officedocument.wordprocessingml.document'];
-  
   if (!allowedTypes.includes(file.type) && !file.name.match(/\.(pdf|docx)$/i)) {
-    alert("Format non supporté. Utilisez uniquement PDF ou DOCX.");
+    showMessage("Format non supporté. Utilisez uniquement PDF ou DOCX.", "error");
     return;
   }
-  
+  if (file.size > 10 * 1024 * 1024) {
+    showMessage("Le fichier dépasse la limite de 10 Mo.", "error");
+    selectedFile.value = null;
+    selectedFileName.value = "";
+    return;
+  }
   selectedFile.value = file;
   selectedFileName.value = file.name;
-  
-  // Auto-fill title if empty
-  if (!formData.title) {
-    formData.title = file.name.replace(/\.[^/.]+$/, ""); // Remove extension
-  }
+  if (!formData.title) formData.title = file.name.replace(/\.[^/.]+$/, "");
 }
 
 async function handleUpload() {
@@ -274,10 +320,11 @@ async function handleUpload() {
       headers: { 'Content-Type': 'multipart/form-data' }
     });
 
-    // SUCCESS PATH
+    // Capture the title before closeModal resets the form.
+    const uploadedTitle = formData.title;
     closeModal();
-    await loadDocuments(); // Rafraîchir la liste immédiatement
-    showMessage(`✅ Document "${formData.title}" importé avec succès !`, "success");
+    await loadDocuments();
+    showMessage(`Document "${uploadedTitle}" importé avec succès !`, "success");
     
   } catch (err) {
     console.error(err);
@@ -303,6 +350,34 @@ async function handleUpload() {
   }
 }
 
+async function previewDoc(doc) {
+  previewOpen.value = true;
+  previewLoading.value = true;
+  previewData.value = null;
+  try {
+    const response = await apiClient.get("/documents/" + doc.id + "/preview");
+    previewData.value = response.data;
+  } catch (err) {
+    previewOpen.value = false;
+    showMessage(err.response?.data?.detail || "Prévisualisation impossible.", "error");
+  } finally {
+    previewLoading.value = false;
+  }
+}
+
+async function indexDoc(doc) {
+  indexingId.value = doc.id;
+  try {
+    const response = await apiClient.post(`/documents/${doc.id}/index`);
+    await loadDocuments();
+    showMessage(response.data?.message || "Document indexé pour l'Assistant IA.", "success");
+  } catch (err) {
+    showMessage(err.response?.data?.detail || "Échec de l'indexation du document.", "error");
+  } finally {
+    indexingId.value = null;
+  }
+}
+
 async function deleteDoc(id) {
   if (!confirm("Supprimer définitivement ce document ? Cette action est irréversible.")) return;
   try {
@@ -314,10 +389,22 @@ async function deleteDoc(id) {
   }
 }
 
-function downloadDoc(doc) {
-  // Si tu stockes le blob en base, tu peux générer un lien temporaire ou utiliser fetch
-  // Pour MVP, on affiche juste une info car le téléchargement direct nécessite un endpoint GET spécifique renvoyant StreamResponse
-  alert(`Le téléchargement de "${doc.filename}" sera activé dès que l'endpoint GET /documents/{id}/download sera codé.`);
+async function downloadDoc(doc) {
+  try {
+    const response = await apiClient.get(`/documents/${doc.id}/download`, {
+      responseType: 'blob',
+    });
+    const objectUrl = URL.createObjectURL(response.data);
+    const link = document.createElement('a');
+    link.href = objectUrl;
+    link.download = doc.filename || 'document';
+    document.body.appendChild(link);
+    link.click();
+    link.remove();
+    window.setTimeout(() => URL.revokeObjectURL(objectUrl), 1000);
+  } catch (err) {
+    showMessage(err.response?.data?.detail || "Téléchargement du document impossible.", "error");
+  }
 }
 
 onMounted(loadDocuments);
@@ -353,10 +440,20 @@ h1 { color: #0f172a; font-size: 1.8rem; margin-bottom: 0.25rem; }
 /* Table Styles */
 .card-modern { background: white; border-radius: 12px; box-shadow: 0 2px 8px rgba(0,0,0,0.08); overflow: hidden; }
 .table-container { width: 100%; }
+.document-filters { display: flex; gap: 0.75rem; align-items: center; padding: 1rem; border-bottom: 1px solid #e2e8f0; flex-wrap: wrap; }
+.document-filters input, .document-filters select { min-height: 40px; padding: 0.5rem 0.75rem; border: 1px solid #cbd5e1; border-radius: 8px; background: #fff; color: #334155; }
+.document-filters input { flex: 1; min-width: 220px; }
+.filter-count { color: #64748b; font-size: 0.85rem; margin-left: auto; }
+.no-results { text-align: center; padding: 2rem; color: #64748b; }
 .docs-table.modern { width: 100%; border-collapse: collapse; }
 .docs-table.modern th, .docs-table.modern td { padding: 1rem 1.5rem; text-align: left; border-bottom: 1px solid #f1f5f9; vertical-align: middle; }
 .docs-table.modern th { background: #f8fafc; font-weight: 600; color: #475569; font-size: 0.85rem; text-transform: uppercase; letter-spacing: 0.5px; position: sticky; top: 0; z-index: 10; }
 .table-row-hover:hover { background: #f8fafc; transition: background 0.2s; }
+
+
+.classification-badge { display: inline-block; padding: 0.25rem 0.55rem; border-radius: 10px; font-size: 0.7rem; font-weight: 700; letter-spacing: 0.02em; }
+.classification-internal { background: #dcfce7; color: #166534; }
+.classification-restricted { background: #fee2e2; color: #991b1b; }
 
 .type-badge { display: inline-block; padding: 0.25rem 0.6rem; border-radius: 12px; font-size: 0.75rem; font-weight: 700; text-transform: capitalize; }
 .badge-pssi { background: #dbeafe; color: #1d4ed8; } /* Bleu */
@@ -380,6 +477,9 @@ h1 { color: #0f172a; font-size: 1.8rem; margin-bottom: 0.25rem; }
 /* Modal Upload Styles */
 .modal-overlay { position: fixed; inset: 0; background: rgba(15, 23, 42, 0.6); backdrop-filter: blur(4px); z-index: 2000; display: flex; justify-content: center; align-items: center; }
 .upload-modal-card { background: white; width: 90%; max-width: 600px; border-radius: 16px; box-shadow: 0 25px 50px -12px rgba(0, 0, 0, 0.25); overflow: hidden; animation: slideUp 0.3s ease-out; }
+ .preview-modal-card { background: white; width: min(92vw, 1000px); max-height: 90vh; border-radius: 16px; overflow: hidden; display: flex; flex-direction: column; box-shadow: 0 25px 50px -12px rgba(0,0,0,.25); }
+.preview-content { overflow: auto; padding: 1.5rem; white-space: pre-wrap; word-break: break-word; font: inherit; line-height: 1.6; color: #334155; }
+.preview-warning { padding: 0 1.5rem 1rem; color: #92400e; }
 @keyframes slideUp { from { transform: translateY(20px); opacity: 0; } to { transform: translateY(0); opacity: 1; } }
 .modal-header { padding: 1.5rem 2rem; border-bottom: 1px solid #f1f5f9; display: flex; justify-content: space-between; align-items: center; background: #f8fafc; }
 .modal-header h2 { margin: 0; font-size: 1.25rem; color: #0f172a; }

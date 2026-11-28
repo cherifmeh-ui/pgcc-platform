@@ -1,0 +1,664 @@
+name: Backend checks
+
+on:
+  push:
+    branches: [main, "chore/**", "fix/**"]
+  pull_request:
+  workflow_dispatch:
+
+jobs:
+  backend:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+          cache: pip
+          cache-dependency-path: backend/requirements-dev.txt
+
+      - name: Install backend dependencies
+        run: python -m pip install --upgrade pip && pip install -r backend/requirements-dev.txt
+
+      - name: Compile Python modules
+        run: python -m compileall -q backend/app backend/scripts
+
+      - name: Run unit tests
+        env:
+          PYTHONPATH: backend
+          DATABASE_URL: postgresql+asyncpg://test:test@localhost/test
+          JWT_SECRET: test-secret-that-is-long-enough-for-ci-only
+        run: pytest -q backend/tests
+
+  frontend:
+    runs-on: ubuntu-latest
+    services:
+      postgres:
+        image: pgvector/pgvector:pg16
+        env:
+          POSTGRES_USER: pgcc_browser
+          POSTGRES_PASSWORD: pgcc_browser
+          POSTGRES_DB: pgcc_browser
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd "pg_isready -U pgcc_browser -d pgcc_browser"
+          --health-interval 10s
+          --health-timeout 5s
+          --health-retries 5
+    env:
+      ENVIRONMENT: development
+      DEBUG: "false"
+      DATABASE_URL: postgresql+asyncpg://pgcc_browser:pgcc_browser@localhost:5432/pgcc_browser
+      JWT_ALGORITHM: HS256
+      JWT_SECRET: pgcc-browser-refresh-integration-secret-2026
+      CORS_ORIGINS: http://localhost:4173
+      PYTHONPATH: backend
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Set up Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: "20"
+          cache: npm
+          cache-dependency-path: frontend/package-lock.json
+
+      - name: Install frontend dependencies
+        working-directory: frontend
+        run: npm ci
+
+      - name: Report frontend dependency advisories
+        working-directory: frontend
+        shell: bash
+        run: |
+          npm audit --json > /tmp/pgcc-npm-audit.json || true
+          node -e "const a=require('/tmp/pgcc-npm-audit.json'); if (a.error || !a.metadata) { console.error(a.error || 'npm audit metadata missing'); process.exit(2); } console.log(JSON.stringify(a.vulnerabilities || {}, null, 2)); const total=a.metadata.vulnerabilities?.total ?? 0; if (total > 0) { console.error(total + ' npm vulnerabilities detected'); process.exit(1); }"
+
+      - name: Run frontend unit tests
+        working-directory: frontend
+        run: npm test
+
+      - name: Set up Python for real backend browser integration
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+          cache: pip
+          cache-dependency-path: backend/requirements-dev.txt
+
+      - name: Install backend dependencies for browser integration
+        run: python -m pip install --upgrade pip && pip install -r backend/requirements-dev.txt
+
+      - name: Apply migrations for browser integration
+        working-directory: backend
+        run: alembic upgrade head
+
+      - name: Seed isolated PostgreSQL refresh session
+        shell: bash
+        run: |
+          python backend/scripts/seed_browser_refresh_test.py > /tmp/pgcc-browser-fixture.json
+          for browser in chromium firefox webkit; do
+            token=$(BROWSER="$browser" python -c "import json, os; print(json.load(open('/tmp/pgcc-browser-fixture.json'))['refresh_tokens'][os.environ['BROWSER']])")
+            test -n "$token"
+            echo "::add-mask::$token"
+            echo "PGCC_E2E_REFRESH_TOKEN_$(echo "$browser" | tr '[:lower:]' '[:upper:]')=$token" >> "$GITHUB_ENV"
+          done
+
+      - name: Start real FastAPI backend for browser integration
+        working-directory: backend
+        shell: bash
+        run: |
+          nohup python -m uvicorn app.main:app --host 127.0.0.1 --port 8000 > /tmp/pgcc-browser-backend.log 2>&1 &
+          for attempt in $(seq 1 60); do
+            if curl --fail --silent http://127.0.0.1:8000/health > /tmp/pgcc-browser-health.json; then
+              cat /tmp/pgcc-browser-health.json
+              exit 0
+            fi
+            sleep 2
+          done
+          cat /tmp/pgcc-browser-backend.log
+          exit 1
+
+      - name: Install ephemeral Playwright browser-test dependency
+        working-directory: frontend
+        run: npm install --no-save --package-lock=false @playwright/test
+
+      - name: Install Chromium for browser tests
+        working-directory: frontend
+        run: npx playwright install --with-deps chromium firefox webkit
+
+      - name: Run real-browser cross-tab refresh tests
+        working-directory: frontend
+        env:
+          VITE_API_PROXY_TARGET: http://127.0.0.1:8000
+        run: npx playwright test --config=playwright.config.js
+
+      - name: Build frontend
+        working-directory: frontend
+        run: npm run build
+
+  postgres-integration:
+    runs-on: ubuntu-latest
+    services:
+      postgres:
+        image: pgvector/pgvector:pg16
+        env:
+          POSTGRES_USER: pgcc_test
+          POSTGRES_PASSWORD: pgcc_test
+          POSTGRES_DB: pgcc_test
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd "pg_isready -U pgcc_test -d pgcc_test"
+          --health-interval 10s
+          --health-timeout 5s
+          --health-retries 5
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+          cache: pip
+          cache-dependency-path: backend/requirements-dev.txt
+      - name: Install backend dependencies
+        run: python -m pip install --upgrade pip && pip install -r backend/requirements-dev.txt
+      - name: Apply migrations to PostgreSQL
+        working-directory: backend
+        env:
+          DATABASE_URL: postgresql+asyncpg://pgcc_test:pgcc_test@localhost:5432/pgcc_test
+          JWT_SECRET: integration-test-secret-that-is-long-enough
+        run: alembic upgrade head
+      - name: Check SQLAlchemy model and PostgreSQL schema drift
+        working-directory: backend
+        env:
+          DATABASE_URL: postgresql+asyncpg://pgcc_test:pgcc_test@localhost:5432/pgcc_test
+          JWT_SECRET: integration-test-secret-that-is-long-enough
+        run: alembic check
+      - name: Verify legacy upgrade and migration downgrade path
+        working-directory: backend
+        env:
+          DATABASE_URL: postgresql+asyncpg://pgcc_test:pgcc_test@localhost:5432/pgcc_test
+          JWT_SECRET: integration-test-secret-that-is-long-enough
+        shell: bash
+        run: |
+          postgres_container=$(docker ps --filter ancestor=pgvector/pgvector:pg16 --format '{{.ID}}' | head -n1)
+          test -n "$postgres_container"
+          docker exec "$postgres_container" dropdb -U pgcc_test --if-exists pgcc_legacy_test
+          docker exec "$postgres_container" createdb -U pgcc_test pgcc_legacy_test
+          DATABASE_URL=postgresql+asyncpg://pgcc_test:pgcc_test@localhost:5432/pgcc_legacy_test alembic upgrade 0024_audit_outbox
+          # Simulate the deployed legacy CASCADE policy before migration 0031.
+          docker exec "$postgres_container" psql -U pgcc_test -d pgcc_legacy_test -v ON_ERROR_STOP=1 -c "ALTER TABLE action_items DROP CONSTRAINT IF EXISTS fk_action_items_risk_id_risks_restrict; ALTER TABLE action_items DROP CONSTRAINT IF EXISTS action_items_risk_id_fkey; ALTER TABLE action_items ADD CONSTRAINT action_items_risk_id_fkey FOREIGN KEY (risk_id) REFERENCES risks(id) ON DELETE CASCADE"
+          docker exec "$postgres_container" psql -U pgcc_test -d pgcc_legacy_test -v ON_ERROR_STOP=1 -c "INSERT INTO documents (id, title, doc_type, filename, file_data) VALUES (gen_random_uuid(), 'Phase 0 legacy digest fixture', 'PSSI', 'phase0-legacy-sha256-fixture.pdf', decode('255044462d6c6567616379', 'hex'))"
+          expected_legacy_digest=$(printf '%s' '%PDF-legacy' | sha256sum | awk '{print $1}')
+          DATABASE_URL=postgresql+asyncpg://pgcc_test:pgcc_test@localhost:5432/pgcc_legacy_test alembic upgrade head
+          actual_legacy_digest=$(docker exec "$postgres_container" psql -U pgcc_test -d pgcc_legacy_test -Atc "SELECT file_sha256 FROM documents WHERE filename = 'phase0-legacy-sha256-fixture.pdf'")
+          test "$actual_legacy_digest" = "$expected_legacy_digest"
+          delete_rule=$(docker exec "$postgres_container" psql -U pgcc_test -d pgcc_legacy_test -Atc "SELECT confdeltype FROM pg_constraint WHERE conname = 'fk_action_items_risk_id_risks_restrict'")
+          test "$delete_rule" = "r"
+          DATABASE_URL=postgresql+asyncpg://pgcc_test:pgcc_test@localhost:5432/pgcc_legacy_test alembic downgrade 0025_user_auth_version
+          DATABASE_URL=postgresql+asyncpg://pgcc_test:pgcc_test@localhost:5432/pgcc_legacy_test alembic upgrade head
+          actual_legacy_digest=$(docker exec "$postgres_container" psql -U pgcc_test -d pgcc_legacy_test -Atc "SELECT file_sha256 FROM documents WHERE filename = 'phase0-legacy-sha256-fixture.pdf'")
+          test "$actual_legacy_digest" = "$expected_legacy_digest"
+          delete_rule=$(docker exec "$postgres_container" psql -U pgcc_test -d pgcc_legacy_test -Atc "SELECT confdeltype FROM pg_constraint WHERE conname = 'fk_action_items_risk_id_risks_restrict'")
+          test "$delete_rule" = "r"
+          version=$(docker exec "$postgres_container" psql -U pgcc_test -d pgcc_legacy_test -Atc "SELECT version_num FROM alembic_version")
+          test "$version" = "0031_risk_action_restrict"
+      - name: Verify PostgreSQL backup and restore
+        shell: bash
+        run: |
+          postgres_container=$(docker ps --filter ancestor=pgvector/pgvector:pg16 --format '{{.ID}}' | head -n1)
+          test -n "$postgres_container"
+          docker exec "$postgres_container" psql -U pgcc_test -d pgcc_test -v ON_ERROR_STOP=1 -c "INSERT INTO auth_rate_limit_buckets (bucket_key, scope, window_started_at, attempts, updated_at) VALUES ('phase0-recovery-fixture', 'recovery:smoke', now(), 1, now()) ON CONFLICT (bucket_key) DO UPDATE SET attempts = EXCLUDED.attempts, updated_at = now()"
+          docker exec "$postgres_container" pg_dump -U pgcc_test -d pgcc_test --format=custom > /tmp/pgcc-phase0-recovery.dump
+          docker exec "$postgres_container" dropdb -U pgcc_test --if-exists pgcc_restore_test
+          docker exec "$postgres_container" createdb -U pgcc_test pgcc_restore_test
+          started_at=$(date +%s)
+          docker exec -i "$postgres_container" pg_restore --exit-on-error --no-owner --no-privileges -U pgcc_test -d pgcc_restore_test < /tmp/pgcc-phase0-recovery.dump
+          ended_at=$(date +%s)
+          echo "PostgreSQL restore duration: $((ended_at - started_at)) seconds"
+          restored_version=$(docker exec "$postgres_container" psql -U pgcc_test -d pgcc_restore_test -Atc "SELECT version_num FROM alembic_version")
+          restored_fixture=$(docker exec "$postgres_container" psql -U pgcc_test -d pgcc_restore_test -Atc "SELECT count(*) FROM auth_rate_limit_buckets WHERE bucket_key = 'phase0-recovery-fixture'")
+          test "$restored_version" = "0031_risk_action_restrict"
+          test "$restored_fixture" = "1"
+          docker exec "$postgres_container" dropdb -U pgcc_test pgcc_legacy_test
+          docker exec "$postgres_container" dropdb -U pgcc_test pgcc_restore_test
+      - name: Run PostgreSQL integration tests (sessions, asset graph, supplier-link, risk integrity and action retention, document/RAG lifecycle, classification ACL, upload uniqueness and audit-log append-only/durable outbox)
+        env:
+          PYTHONPATH: backend
+          DATABASE_URL: postgresql+asyncpg://pgcc_test:pgcc_test@localhost:5432/pgcc_test
+          PGCC_INTEGRATION_DATABASE_URL: postgresql+asyncpg://pgcc_test:pgcc_test@localhost:5432/pgcc_test
+          JWT_SECRET: integration-test-secret-that-is-long-enough
+        run: pytest -q backend/tests/test_refresh_rotation_postgres.py backend/tests/test_asset_relationships_postgres.py backend/tests/test_supplier_access_lifecycle_postgres.py backend/tests/test_document_rag_delete_postgres.py backend/tests/test_document_upload_concurrency_postgres.py backend/tests/test_document_access_policy_postgres.py backend/tests/test_mfa_encryption_postgres.py backend/tests/test_security_log_append_only_postgres.py backend/tests/test_audit_outbox_postgres.py backend/tests/test_admin_user_lifecycle_postgres.py backend/tests/test_auth_rate_limiter_postgres.py backend/tests/test_asset_lifecycle_postgres.py backend/tests/test_mfa_recovery_concurrency_postgres.py backend/tests/test_supplier_access_link_scope_postgres.py backend/tests/test_risk_integrity_postgres.py backend/tests/test_risk_action_restrict_postgres.py backend/tests/test_asset_inventory_quality_postgres.py backend/tests/test_asset_csv_import_postgres.py backend/tests/test_asset_inventory_pagination_postgres.py
+
+
+  compose-smoke:
+    runs-on: ubuntu-latest
+    timeout-minutes: 25
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+      - name: Prepare development environment
+        run: cp .env.example .env
+      - name: Validate Compose configuration
+        run: docker compose config --quiet
+      - name: Prepare production environment template
+        run: cp .env.production.example .env.production
+      - name: Validate hardened production Compose configuration
+        run: docker compose -f docker-compose.production.yaml --env-file .env.production config --quiet
+      - name: Build production frontend image
+        run: docker compose -f docker-compose.production.yaml --env-file .env.production build frontend
+      - name: Validate production Nginx TLS configuration
+        shell: bash
+        run: |
+          mkdir -p /tmp/pgcc-production-certs
+          openssl req -x509 -nodes -days 1 -newkey rsa:2048 \
+            -keyout /tmp/pgcc-production-certs/privkey.pem \
+            -out /tmp/pgcc-production-certs/fullchain.pem \
+            -subj "/CN=localhost"
+          image_id=$(docker image inspect pgcc-platform-frontend:latest --format "{{.Id}}")
+          test -n "$image_id"
+          # Use the image's root context to set the bind-mounted key group safely.
+          docker run --rm --user 0:0 -v /tmp/pgcc-production-certs:/certs:rw --entrypoint /bin/sh "$image_id" -c "chown 0:101 /certs/privkey.pem && chmod 640 /certs/privkey.pem"
+          test "$(stat -c '%a:%u:%g' /tmp/pgcc-production-certs/privkey.pem)" = "640:0:101"
+          docker run --rm -v /tmp/pgcc-production-certs:/etc/nginx/certs:ro --entrypoint /bin/sh "$image_id" -c "id; ls -la /etc/nginx/certs; nginx -t"
+      - name: Test production frontend on an isolated published network
+        shell: bash
+        run: |
+          image_id=$(docker image inspect pgcc-platform-frontend:latest --format "{{.Id}}")
+          docker network create --internal pgcc-production-smoke
+          cleanup() {
+            docker rm -f pgcc-production-frontend-smoke >/dev/null 2>&1 || true
+            docker network rm pgcc-production-smoke >/dev/null 2>&1 || true
+          }
+          trap cleanup EXIT
+          docker run -d --name pgcc-production-frontend-smoke \
+            --network pgcc-production-smoke \
+            -v /tmp/pgcc-production-certs:/etc/nginx/certs:ro \
+            --read-only \
+            --tmpfs /tmp:rw,noexec,nosuid,size=16m \
+            --tmpfs /var/cache/nginx:rw,noexec,nosuid,size=32m \
+            --cap-drop ALL --security-opt no-new-privileges:true \
+            "$image_id"
+          for attempt in {1..10}; do
+            if docker exec pgcc-production-frontend-smoke sh -c "kill -0 1" 2>/dev/null; then
+              break
+            fi
+            sleep 1
+          done
+          container_ip=$(docker inspect pgcc-production-frontend-smoke --format '{{range .NetworkSettings.Networks}}{{.IPAddress}}{{end}}')
+          test -n "$container_ip"
+          curl --insecure --fail --silent --show-error "https://$container_ip:8443/" -o /tmp/pgcc-production-index.html
+          test -s /tmp/pgcc-production-index.html
+          grep -q '<div id="app">' /tmp/pgcc-production-index.html
+          curl --insecure --silent --head "https://$container_ip:8443/" | grep -qi "^Strict-Transport-Security:"
+          redirect_status=$(curl --silent --output /dev/null --write-out "%{http_code}" "http://$container_ip:8080/")
+          test "$redirect_status" = "308"
+      - name: Build backend image
+        run: docker compose build backend
+      - name: Start complete development stack
+        run: docker compose up -d
+      - name: Verify API health and frontend proxy
+        shell: bash
+        run: |
+          for attempt in {1..60}; do
+            if curl --fail --silent http://localhost:8000/health | grep -q '"status":"healthy"'; then
+              break
+            fi
+            if [ "$attempt" -eq 60 ]; then
+              docker compose logs
+              exit 1
+            fi
+            sleep 2
+          done
+          for attempt in {1..60}; do
+            if curl --fail --silent http://localhost:5173/ >/dev/null; then
+              break
+            fi
+            if [ "$attempt" -eq 60 ]; then
+              docker compose logs
+              exit 1
+            fi
+            sleep 2
+          done
+          status=""
+          for attempt in {1..30}; do
+            status=$(curl --silent --output /dev/null --write-out "%{http_code}" http://localhost:5173/api/v1/me/profile || true)
+            if [ "$status" = "401" ]; then
+              break
+            fi
+            sleep 2
+          done
+          test "$status" = "401"
+      - name: Verify isolated parser extraction and network separation
+        shell: bash
+        run: |
+          docker inspect pgcc_parser --format '{{json .NetworkSettings.Networks}}' > /tmp/pgcc-parser-networks.json
+          grep -q 'parser_internal' /tmp/pgcc-parser-networks.json
+          ! grep -q 'pgcc_network' /tmp/pgcc-parser-networks.json
+          docker compose exec -T backend python - <<'PY'
+          import asyncio
+          from io import BytesIO
+          from docx import Document
+          from app.services.isolated_parser_client import extract_document_text
+
+          async def main():
+              document = Document()
+              document.add_paragraph("PGCC isolated parser integration check")
+              stream = BytesIO()
+              document.save(stream)
+              text, detected = await extract_document_text(stream.getvalue(), r"C:\\fakepath\\parser-check.docx")
+              assert detected == "DOCX"
+              assert "PGCC isolated parser integration check" in text
+              print("Parser isolé : extraction DOCX réussie via le client backend.")
+
+          asyncio.run(main())
+          PY
+      - name: Verify parser authentication and fail-closed outage handling
+        shell: bash
+        run: |
+          docker compose exec -T backend python - <<'PY'
+          import asyncio
+          import httpx
+          from app.services.isolated_parser_client import extract_document_text, ParserUnavailable
+
+          async def verify_authentication():
+              async with httpx.AsyncClient() as client:
+                  response = await client.post(
+                      'http://parser:8090/v1/extract',
+                      files={'file': ('unauthorized.pdf', b'%PDF-test', 'application/pdf')},
+                  )
+              assert response.status_code == 401, response.status_code
+
+          asyncio.run(verify_authentication())
+          PY
+          docker compose stop parser
+          docker compose exec -T backend python - <<'PY'
+          import asyncio
+          from app.services.isolated_parser_client import extract_document_text, ParserUnavailable
+
+          async def verify_outage():
+              try:
+                  await extract_document_text(b'%PDF-test', 'outage.pdf')
+              except ParserUnavailable:
+                  print('Parser indisponible : dépôt refusé (fail closed).')
+                  return
+              raise AssertionError('Le dépôt aurait dû être refusé.')
+
+          asyncio.run(verify_outage())
+          PY
+          docker compose start parser
+          for attempt in {1..30}; do
+            health=$(docker inspect --format='{{.State.Health.Status}}' pgcc_parser 2>/dev/null || true)
+            if [ "$health" = "healthy" ]; then exit 0; fi
+            sleep 2
+          done
+          docker compose logs parser
+          exit 1
+      - name: Start ClamAV and wait for fresh signature database
+        shell: bash
+        run: |
+          docker compose --profile antivirus up -d clamav
+          for attempt in {1..300}; do
+            health=$(docker inspect --format='{{.State.Health.Status}}' pgcc_clamav 2>/dev/null || true)
+            if [ "$health" = "healthy" ]; then
+              exit 0
+            fi
+            if [ "$health" = "unhealthy" ]; then
+              docker compose logs clamav
+              exit 1
+            fi
+            sleep 5
+          done
+          docker compose logs clamav
+          echo "ClamAV n'est pas devenu opérationnel dans le délai imparti."
+          exit 1
+      - name: Verify real ClamAV clean and EICAR verdicts
+        shell: bash
+        run: |
+          docker compose exec -T backend python - <<'PY'
+          import asyncio
+          from app.services.antivirus import scan_document_bytes, MalwareDetected
+
+          async def main():
+              await scan_document_bytes(b"PGCC ClamAV clean integration fixture")
+              eicar = (
+                  b"X5O!P%@AP[4\\PZX54(P^)7CC)7}$"
+                  b"EICAR-STANDARD-ANTIVIRUS-TEST-FILE!$H+H*"
+              )
+              try:
+                  await scan_document_bytes(eicar)
+              except MalwareDetected:
+                  print("ClamAV : fichier propre accepté, signature EICAR détectée.")
+                  return
+              raise AssertionError("ClamAV n'a pas détecté le fichier de test EICAR.")
+
+          asyncio.run(main())
+          PY
+      - name: Show stack logs on failure
+        if: failure()
+        run: docker compose logs
+      - name: Stop stack
+        if: always()
+        run: docker compose down --volumes --remove-orphans
+
+  production-runtime-smoke:
+    runs-on: ubuntu-latest
+    timeout-minutes: 25
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+      - name: Generate ephemeral production secrets and TLS certificate
+        shell: bash
+        run: |
+          cp .env.production.example .env.production
+          DB_PASSWORD=$(openssl rand -hex 24)
+          JWT_SECRET=$(openssl rand -hex 64)
+          MFA_KEY=$(python -c "import base64,secrets; print(base64.urlsafe_b64encode(secrets.token_bytes(32)).decode())")
+          HMAC_KEY=$(openssl rand -hex 32)
+          PARSER_TOKEN=$(openssl rand -hex 32)
+          for secret in "$DB_PASSWORD" "$JWT_SECRET" "$MFA_KEY" "$HMAC_KEY" "$PARSER_TOKEN"; do
+            echo "::add-mask::$secret"
+          done
+          sed -i "s|^POSTGRES_PASSWORD=.*|POSTGRES_PASSWORD=$DB_PASSWORD|" .env.production
+          sed -i "s|^DATABASE_URL=.*|DATABASE_URL=postgresql+asyncpg://pgcc_user:$DB_PASSWORD@postgres:5432/pgcc_prod|" .env.production
+          sed -i "s|^JWT_SECRET=.*|JWT_SECRET=$JWT_SECRET|" .env.production
+          sed -i "s|^MFA_ENCRYPTION_KEYS=.*|MFA_ENCRYPTION_KEYS=$MFA_KEY|" .env.production
+          sed -i "s|^AUTH_RATE_LIMIT_HMAC_KEY=.*|AUTH_RATE_LIMIT_HMAC_KEY=$HMAC_KEY|" .env.production
+          sed -i "s|^PARSER_SHARED_TOKEN=.*|PARSER_SHARED_TOKEN=$PARSER_TOKEN|" .env.production
+          mkdir -p certs
+          openssl req -x509 -nodes -days 1 -newkey rsa:2048 \
+            -keyout certs/privkey.pem -out certs/fullchain.pem -subj "/CN=localhost"
+          chmod 644 certs/fullchain.pem
+      - name: Build hardened production images
+        run: docker compose -p pgccprod -f docker-compose.production.yaml --env-file .env.production build
+      - name: Set least-privilege TLS key ownership
+        shell: bash
+        run: |
+          frontend_image=$(docker image inspect pgccprod-frontend:latest --format "{{.Id}}")
+          test -n "$frontend_image"
+          docker run --rm --user 0:0 -v "$PWD/certs:/certs:rw" --entrypoint /bin/sh "$frontend_image" -c "chown 0:101 /certs/privkey.pem && chmod 640 /certs/privkey.pem"
+          docker run --rm -v "$PWD/certs:/etc/nginx/certs:ro" --entrypoint /bin/sh "$frontend_image" -c "test \$(stat -c '%a:%u:%g' /etc/nginx/certs/privkey.pem) = 640:0:101 && nginx -t"
+      - name: Start production dependencies and wait for health
+        shell: bash
+        run: |
+          compose=(docker compose -p pgccprod -f docker-compose.production.yaml --env-file .env.production)
+          "${compose[@]}" up -d postgres parser clamav
+          for service in postgres parser clamav; do
+            ready=false
+            for attempt in {1..240}; do
+              container=$("${compose[@]}" ps -q "$service")
+              if [ -n "$container" ]; then
+                health=$(docker inspect --format='{{.State.Health.Status}}' "$container" 2>/dev/null || true)
+                if [ "$health" = "healthy" ]; then
+                  ready=true
+                  break
+                fi
+                if [ "$health" = "unhealthy" ]; then
+                  "${compose[@]}" logs "$service"
+                  exit 1
+                fi
+              fi
+              sleep 5
+            done
+            if [ "$ready" != true ]; then
+              "${compose[@]}" logs "$service"
+              echo "Le service de production $service n'est pas devenu sain."
+              exit 1
+            fi
+          done
+      - name: Apply production database migrations
+        run: docker compose -p pgccprod -f docker-compose.production.yaml --env-file .env.production run --rm --no-deps backend alembic upgrade head
+      - name: Start production backend and frontend
+        run: docker compose -p pgccprod -f docker-compose.production.yaml --env-file .env.production up -d backend frontend
+      - name: Verify production health, TLS, proxy and network isolation
+        shell: bash
+        run: |
+          compose=(docker compose -p pgccprod -f docker-compose.production.yaml --env-file .env.production)
+          for service in backend frontend; do
+            ready=false
+            for attempt in {1..60}; do
+              container=$("${compose[@]}" ps -q "$service")
+              health=$(docker inspect --format='{{.State.Health.Status}}' "$container" 2>/dev/null || true)
+              if [ "$health" = "healthy" ]; then
+                ready=true
+                break
+              fi
+              sleep 2
+            done
+            if [ "$ready" != true ]; then
+              "${compose[@]}" logs "$service"
+              exit 1
+            fi
+          done
+          frontend_ip=$(docker inspect "$("${compose[@]}" ps -q frontend)" --format '{{range .NetworkSettings.Networks}}{{.IPAddress}}{{end}}')
+          test "$frontend_ip" = "172.31.10.10"
+          curl --insecure --fail --silent --show-error "https://$frontend_ip:8443/" -o /tmp/pgcc-production-index.html
+          test -s /tmp/pgcc-production-index.html
+          grep -q '<div id="app">' /tmp/pgcc-production-index.html
+          curl --insecure --silent --head "https://$frontend_ip:8443/" | grep -qi "^Strict-Transport-Security:"
+          redirect_status=$(curl --silent --output /dev/null --write-out "%{http_code}" "http://$frontend_ip:8080/")
+          test "$redirect_status" = "308"
+          api_status=$(curl --insecure --silent --output /dev/null --write-out "%{http_code}" "https://$frontend_ip:8443/api/v1/me/profile")
+          test "$api_status" = "401"
+          python - <<'PY'
+          import json
+          import subprocess
+
+          def inspect(service):
+              container = subprocess.check_output(
+                  ["docker", "compose", "-p", "pgccprod", "-f", "docker-compose.production.yaml",
+                   "--env-file", ".env.production", "ps", "-q", service], text=True
+              ).strip()
+              assert container, service
+              networks = json.loads(subprocess.check_output(
+                  ["docker", "inspect", "--format", "{{json .NetworkSettings.Networks}}", container],
+                  text=True,
+              ))
+              bindings = json.loads(subprocess.check_output(
+                  ["docker", "inspect", "--format", "{{json .HostConfig.PortBindings}}", container],
+                  text=True,
+              ))
+              return set(networks), bindings
+
+          expected = {
+              "postgres": {"pgccprod_db_internal"},
+              "parser": {"pgccprod_parser_internal"},
+              "clamav": {"pgccprod_clamav_internal", "pgccprod_clamav_egress"},
+              "backend": {"pgccprod_app_internal", "pgccprod_db_internal",
+                          "pgccprod_parser_internal", "pgccprod_clamav_internal"},
+              "frontend": {"pgccprod_app_internal"},
+          }
+          for service, expected_networks in expected.items():
+              networks, bindings = inspect(service)
+              assert networks == expected_networks, (service, networks)
+              if service != "frontend":
+                  assert not bindings or all(not values for values in bindings.values()), (service, bindings)
+          print("Réseaux de production et absence de ports publics internes vérifiés.")
+          PY
+      - name: Verify production parser extraction, authentication and fail-closed behavior
+        shell: bash
+        run: |
+          compose=(docker compose -p pgccprod -f docker-compose.production.yaml --env-file .env.production)
+          "${compose[@]}" exec -T backend python - <<'PY'
+          import asyncio
+          import httpx
+          from io import BytesIO
+          from docx import Document
+          from app.services.isolated_parser_client import extract_document_text, ParserUnavailable
+
+          async def main():
+              document = Document()
+              document.add_paragraph("PGCC production parser integration check")
+              stream = BytesIO()
+              document.save(stream)
+              text, detected = await extract_document_text(stream.getvalue(), r"C:\\fakepath\\production-check.docx")
+              assert detected == "DOCX"
+              assert "PGCC production parser integration check" in text
+              async with httpx.AsyncClient() as client:
+                  unauthorized = await client.post(
+                      "http://parser:8090/v1/extract",
+                      files={"file": ("unauthorized.pdf", b"%PDF-test", "application/pdf")},
+                  )
+              assert unauthorized.status_code == 401
+              print("Parseur production : extraction DOCX et authentification validées.")
+
+          asyncio.run(main())
+          PY
+          "${compose[@]}" stop parser
+          "${compose[@]}" exec -T backend python - <<'PY'
+          import asyncio
+          from app.services.isolated_parser_client import extract_document_text, ParserUnavailable
+
+          async def main():
+              try:
+                  await extract_document_text(b"%PDF-test", "outage.pdf")
+              except ParserUnavailable:
+                  print("Parseur indisponible : dépôt refusé (fail closed).")
+                  return
+              raise AssertionError("Le dépôt aurait dû être refusé.")
+
+          asyncio.run(main())
+          PY
+          "${compose[@]}" start parser
+          for attempt in {1..30}; do
+            container=$("${compose[@]}" ps -q parser)
+            health=$(docker inspect --format='{{.State.Health.Status}}' "$container" 2>/dev/null || true)
+            if [ "$health" = "healthy" ]; then exit 0; fi
+            sleep 2
+          done
+          "${compose[@]}" logs parser
+          exit 1
+      - name: Verify production ClamAV clean and EICAR verdicts
+        shell: bash
+        run: |
+          docker compose -p pgccprod -f docker-compose.production.yaml --env-file .env.production exec -T backend python - <<'PY'
+          import asyncio
+          from app.services.antivirus import scan_document_bytes, MalwareDetected
+
+          async def main():
+              await scan_document_bytes(b"PGCC production ClamAV clean fixture")
+              eicar = (
+                  b"X5O!P%@AP[4\\PZX54(P^)7CC)7}$"
+                  b"EICAR-STANDARD-ANTIVIRUS-TEST-FILE!$H+H*"
+              )
+              try:
+                  await scan_document_bytes(eicar)
+              except MalwareDetected:
+                  print("ClamAV production : fichier sain accepté, EICAR détecté.")
+                  return
+              raise AssertionError("ClamAV n'a pas détecté EICAR.")
+
+          asyncio.run(main())
+          PY
+      - name: Show production stack logs on failure
+        if: failure()
+        run: docker compose -p pgccprod -f docker-compose.production.yaml --env-file .env.production logs || true
+      - name: Stop production stack
+        if: always()
+        run: docker compose -p pgccprod -f docker-compose.production.yaml --env-file .env.production down --volumes --remove-orphans || true

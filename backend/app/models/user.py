@@ -2,7 +2,7 @@
 import uuid
 from datetime import datetime, timezone
 
-from sqlalchemy import Boolean, Column, DateTime, Integer, String
+from sqlalchemy import Boolean, Column, DateTime, Integer, String, event, inspect
 from sqlalchemy.dialects.postgresql import JSONB, UUID
 
 from app.core.database import Base
@@ -34,6 +34,10 @@ class User(Base):
     mfa_confirmed_at = Column(DateTime(timezone=True), nullable=True)
     backup_codes_hashed = Column(JSONB, nullable=True)
 
+    # Incremented whenever a security-sensitive account property changes.
+    # Access and refresh tokens carry this value to invalidate old sessions.
+    auth_version = Column(Integer, nullable=False, default=0, server_default="0")
+
     # Anti brute-force
     failed_login_attempts = Column(Integer, default=0, nullable=False)
     locked_until = Column(DateTime(timezone=True), nullable=True)
@@ -59,3 +63,21 @@ class User(Base):
         if not self.locked_until:
             return False
         return self.locked_until > utcnow()
+
+_SECURITY_VERSION_FIELDS = (
+    "role",
+    "password_hash",
+    "must_change_password",
+    "is_active",
+    "mfa_enabled",
+    "mfa_confirmed_at",
+    "locked_until",
+    "password_changed_at",
+)
+
+
+@event.listens_for(User, "before_update")
+def bump_auth_version_on_security_change(mapper, connection, target):
+    state = inspect(target)
+    if any(state.attrs[field].history.has_changes() for field in _SECURITY_VERSION_FIELDS):
+        target.auth_version = int(target.auth_version or 0) + 1

@@ -1,11 +1,13 @@
 // frontend/src/stores/auth.js
 import { defineStore } from 'pinia';
-import apiClient from '@/services/api'; // ← Vérifie bien ce chemin (avec / après @)
+import apiClient, { setAccessToken } from '@/services/api';
+import { withCrossTabRefreshLock } from '@/services/refreshLock.js';
+
+let restorePromise = null;
 
 export const useAuthStore = defineStore('auth', {
   state: () => ({
-    accessToken: localStorage.getItem('pgcc_access_token') || null,
-    refreshToken: localStorage.getItem('pgcc_refresh_token') || null,
+    accessToken: null,
     user: null,
     role: localStorage.getItem('pgcc_user_role') || null,
     permissions: JSON.parse(localStorage.getItem('pgcc_permissions') || '{}'),
@@ -79,13 +81,55 @@ export const useAuthStore = defineStore('auth', {
 
     setSession(sessionData) {
       this.accessToken = sessionData.access_token;
-      this.refreshToken = sessionData.refresh_token;
+      setAccessToken(this.accessToken);
       this.user = sessionData.user;
       this.role = sessionData.user.role;
 
-      localStorage.setItem('pgcc_access_token', this.accessToken);
-      localStorage.setItem('pgcc_refresh_token', this.refreshToken);
+      // Remove legacy browser-readable bearer credentials during migration.
+      localStorage.removeItem('pgcc_access_token');
+      localStorage.removeItem('pgcc_refresh_token');
       localStorage.setItem('pgcc_user_role', this.role);
+    },
+
+    async restoreSession() {
+      if (this.accessToken) return true;
+      if (restorePromise) return restorePromise;
+
+      restorePromise = (async () => {
+        this.isLoading = true;
+        try {
+          const { data } = await withCrossTabRefreshLock(() =>
+            apiClient.post('/auth/refresh', null, { withCredentials: true })
+          );
+          this.accessToken = data.access_token;
+          setAccessToken(this.accessToken);
+          this.user = data.user;
+          this.role = data.user.role;
+          localStorage.removeItem('pgcc_access_token');
+          localStorage.removeItem('pgcc_refresh_token');
+          localStorage.setItem('pgcc_user_role', this.role);
+          await this.fetchPermissions();
+          return true;
+        } catch {
+          this.accessToken = null;
+          setAccessToken(null);
+          localStorage.removeItem('pgcc_access_token');
+          localStorage.removeItem('pgcc_refresh_token');
+          localStorage.removeItem('pgcc_user_role');
+          localStorage.removeItem('pgcc_permissions');
+          this.role = null;
+          this.permissions = {};
+          return false;
+        } finally {
+          this.isLoading = false;
+        }
+      })();
+
+      try {
+        return await restorePromise;
+      } finally {
+        restorePromise = null;
+      }
     },
 
     async fetchPermissions() {
@@ -99,9 +143,22 @@ export const useAuthStore = defineStore('auth', {
       }
     },
 
-    logout() {
+    async logout() {
+      try {
+        await apiClient.post('/auth/logout', null, { withCredentials: true });
+      } catch (err) {
+        // Local logout must succeed even if server revocation is unavailable.
+        console.warn('Révocation serveur de la session impossible:', err);
+      }
+      [
+        'pgcc_access_token',
+        'pgcc_refresh_token',
+        'pgcc_user_role',
+        'pgcc_permissions',
+      ].forEach((key) => localStorage.removeItem(key));
+      setAccessToken(null);
+      delete apiClient.defaults.headers.common['Authorization'];
       this.$reset();
-      localStorage.clear();
       window.location.href = '/login';
     },
   },

@@ -4,7 +4,8 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy import select, func, and_
 from pydantic import BaseModel
 from typing import List, Dict, Any
-import datetime # ⚠️ IMPORT EXPLICITE AJOUTÉ
+import datetime
+import logging
 
 from app.api.deps import require_permission
 from app.core.database import get_db
@@ -18,6 +19,8 @@ try:
     from app.services.ai_service import ai_service
 except ImportError:
     ai_service = None # Fallback si le module n'est pas trouvé
+
+logger = logging.getLogger(__name__)
 
 router = APIRouter(prefix="/reports", tags=["Rapports"])
 
@@ -180,8 +183,11 @@ async def generate_dg_summary(
             }
         )
 
-    except Exception as e_fatal:
-        import traceback
-        error_detail = traceback.format_exc()
-        print(f"💥 ERREUR FATALE REPORTS.PY:\n{error_detail}")
-        raise HTTPException(status_code=500, detail=f"Erreur interne lors de la génération du rapport: {str(e_fatal)}")
+    except Exception:
+        # Keep diagnostic details server-side; never expose database, stack,
+        # provider, or configuration errors through the API response.
+        logger.exception("DG report generation failed")
+        raise HTTPException(
+            status_code=500,
+            detail="Erreur interne lors de la génération du rapport.",
+        )
