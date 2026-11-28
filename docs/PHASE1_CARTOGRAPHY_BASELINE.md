@@ -55,7 +55,7 @@ Cette présence fonctionnelle ne vaut pas encore validation complète de chaque 
 
 ### P1-CARTO-001 — Documentation du lien Application/Asset contradictoire
 
-<badge>Résolu par revue documentaire — 28/11/2026</badge>
+**Statut : résolu par revue documentaire — 28/11/2026.**
 
 - La vérification de `docs/TARGET_DATA_MODEL.md` confirme désormais explicitement la relation Application 1:N Asset (une application peut référencer plusieurs actifs ; chaque actif référence au plus une application).
 - `docs/ASSET_INVENTORY_IMPLEMENTATION.md`, `docs/ASSET_DATA_MODEL_REVIEW.md` et la migration `0008_asset_application_cardinality` concordent : la contrainte unique historique sur `assets.application_id` est supprimée, tandis que la FK restrictive est conservée.
