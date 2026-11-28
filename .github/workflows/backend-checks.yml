@@ -61,6 +61,18 @@ jobs:
         working-directory: frontend
         run: npm test
 
+      - name: Install ephemeral Playwright browser-test dependency
+        working-directory: frontend
+        run: npm install --no-save --package-lock=false @playwright/test
+
+      - name: Install Chromium for browser tests
+        working-directory: frontend
+        run: npx playwright install --with-deps chromium
+
+      - name: Run real-browser cross-tab refresh test
+        working-directory: frontend
+        run: npx playwright test --config=playwright.config.js
+
       - name: Build frontend
         working-directory: frontend
         run: npm run build
