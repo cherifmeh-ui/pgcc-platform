@@ -346,3 +346,10 @@ Trois tests Node couvrent le verrou (sérialisation, API absente, libération ap
 ### Complément — restauration initiale de session
 
 La revue du store Pinia a révélé un second point d'entrée : `restoreSession()` appelait directement `/auth/refresh`, en dehors de l'intercepteur de renouvellement. Cet appel est maintenant lui aussi enveloppé dans le même verrou Web Locks. Ainsi, les rotations automatiques après 401 et la restauration au chargement de l'application partagent le même verrou inter-onglets. Cette correction est incluse dans le commit `af88df5` ; sa CI doit être vérifiée séparément.
+
+
+### Complément — test navigateur Chromium (28 novembre 2026)
+
+Un test Playwright multi-pages a été ajouté sur le module de verrou de production. Deux pages Chromium partagent le même contexte/cookie HttpOnly et tentent simultanément une rotation ; l'endpoint HTTP est intercepté et simulé. Le test contrôle que la deuxième rotation reçoit le cookie mis à jour après libération du verrou.
+
+Cette preuve est plus forte que le test unitaire du gestionnaire, mais elle reste **un test navigateur avec endpoint simulé**. Elle ne démontre pas encore l'intégration bout-en-bout avec le backend FastAPI/PostgreSQL. Les tests PostgreSQL du backend couvrent indépendamment la rotation concurrente et le rejeu. La CI du nouveau test doit être observée avant de qualifier ce contrôle de validé. Les scénarios réseau après commit et cycle de vie d'onglet restent ouverts.
