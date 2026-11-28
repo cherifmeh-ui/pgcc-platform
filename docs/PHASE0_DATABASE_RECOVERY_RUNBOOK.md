@@ -106,19 +106,24 @@ set -euo pipefail
 set +x
 umask 077
 
-: "${RESTORE_DATABASE_URL:?URL de la base de test requise}"
-: "${RESTORE_DATABASE_NAME:?Nom de la base de test requis}"
+: "${RESTORE_DATABASE_NAME:?Nom de la base isolée requis}"
+: "${RESTORE_DATABASE_URL:?DATABASE_URL pointant vers la base isolée restaurée requis}"
+: "${PGHOST:?Hôte PostgreSQL de test requis}"
+: "${PGPORT:?Port PostgreSQL de test requis}"
+: "${PGUSER:?Compte PostgreSQL de test requis}"
 
+# Authentification par .pgpass temporaire mode 0600 ou secret manager ;
+# ne pas placer le mot de passe dans les arguments de processus.
 pg_restore --list /secure-restore/pgcc.dump >/dev/null
-createdb --maintenance-db="$RESTORE_DATABASE_URL" "$RESTORE_DATABASE_NAME"
+createdb --maintenance-db=postgres "$RESTORE_DATABASE_NAME"
 pg_restore --exit-on-error --no-owner --no-privileges \
-  --dbname="$RESTORE_DATABASE_URL" /secure-restore/pgcc.dump
+  --dbname="$RESTORE_DATABASE_NAME" /secure-restore/pgcc.dump
 
-alembic -c backend/alembic.ini upgrade head
-alembic -c backend/alembic.ini check
+DATABASE_URL="$RESTORE_DATABASE_URL" alembic -c backend/alembic.ini upgrade head
+DATABASE_URL="$RESTORE_DATABASE_URL" alembic -c backend/alembic.ini check
 ```
 
-L'exemple doit être adapté à la méthode d'authentification PostgreSQL de l'environnement ; ne pas placer de mot de passe dans une URL passée en argument ou dans l'historique shell. Utiliser un fichier `.pgpass` temporaire protégé (mode 0600) ou le gestionnaire de secrets prévu par l'exploitation.
+L'exemple suppose que RESTORE_DATABASE_URL est injectée par le gestionnaire de secrets dans l'environnement du processus et cible précisément la base isolée créée. Les commandes libpq utilisent PGHOST/PGPORT/PGUSER et un fichier `.pgpass` temporaire protégé (mode 0600), ou le mécanisme de secret manager approuvé. Ne pas placer de mot de passe dans les arguments de processus ou l'historique shell. Vérifier explicitement que PGHOST/RESTORE_DATABASE_URL pointent vers l'instance de test et non la production.
 
 Les options `--no-owner --no-privileges` sont adaptées à une restauration de test sans reproduction des propriétaires/grants. Pour une reprise opérationnelle réelle, établir et valider séparément la stratégie de restauration des rôles, propriétaires, privilèges, extensions et paramètres PostgreSQL.
 
