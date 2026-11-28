@@ -1689,3 +1689,12 @@ Pour éviter de stocker un refresh token de remplacement chiffré et d'introduir
 Cette décision réduit la surface de stockage de secrets, au prix d'une déconnexion possible lors d'une perte de réponse après commit. Le test ci-dessus démontre ce comportement sur PostgreSQL/FastAPI et trois moteurs navigateur. La décision doit encore être confirmée par le propriétaire du service dans la revue humaine ; ce n'est pas une acceptation de risque opérationnel.
 
 **Limites restantes :** le workflow s'exécute dans une infrastructure GitHub Actions éphémère. Il ne remplace pas la recette sur le réseau, les domaines, les certificats, les secrets, les proxys et les navigateurs effectivement déployés à la CTF.
+
+
+### Durcissement final du verrou refresh — 28 novembre 2026
+
+- Le chemin refresh de l'intercepteur utilisait auparavant un appel Axios brut sans timeout, susceptible de conserver le Web Lock si la requête ne se terminait pas.
+- Il utilise désormais le client API commun, configuré avec un timeout de 15 secondes, comme le chemin restoreSession. L'erreur/timeout fait rejeter l'opération et libère le Web Lock.
+- CI sur le commit `b351a243a934db788499f352727a6b5587d443f1`, workflow `46158582424` : **5/5 jobs réussis**.
+- La matrice réelle FastAPI/PostgreSQL reste 6/6 sur Chromium, Firefox et WebKit, avec réponse perdue après commit et retry 401.
+- Limite : un gel complet du document par le système d'exploitation peut suspendre l'exécution des timers ; la validation d'un onglet longuement suspendu sur le parc CTF reste ouverte. Le timeout borne la requête quand le navigateur exécute normalement son event loop, ce n'est pas un TTL de Web Locks.
