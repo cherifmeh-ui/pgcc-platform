@@ -565,6 +565,16 @@ def test_asset_inventory_pagination_rejects_out_of_range_filters_before_database
     ("method", "path", "payload", "upload"),
     [
         (
+            "POST",
+            "/api/v1/assets/",
+            {
+                "reference": "AUTH-CREATE-001",
+                "name": "Forbidden create",
+                "asset_type": "hardware",
+            },
+            False,
+        ),
+        (
             "PATCH",
             "/api/v1/assets/00000000-0000-0000-0000-000000000041",
             {"name": "Forbidden update"},
@@ -603,6 +613,18 @@ def test_asset_inventory_pagination_rejects_out_of_range_filters_before_database
             {"risk_id": "00000000-0000-0000-0000-000000000043"},
             False,
         ),
+        (
+            "DELETE",
+            "/api/v1/assets/00000000-0000-0000-0000-000000000041/relationships/00000000-0000-0000-0000-000000000044",
+            None,
+            False,
+        ),
+        (
+            "DELETE",
+            "/api/v1/assets/00000000-0000-0000-0000-000000000041/risks/00000000-0000-0000-0000-000000000043",
+            None,
+            False,
+        ),
     ],
 )
 def test_non_admin_roles_cannot_mutate_assets_or_import_over_http(
@@ -623,6 +645,31 @@ def test_non_admin_roles_cannot_mutate_assets_or_import_over_http(
             json=payload,
             files=files,
         )
+
+    assert response.status_code == 403
+    db.execute.assert_not_awaited()
+    db.commit.assert_not_awaited()
+    db.flush.assert_not_awaited()
+
+
+@pytest.mark.parametrize(
+    "path",
+    [
+        "/api/v1/assets/",
+        "/api/v1/assets/import/template",
+        "/api/v1/assets/quality",
+        "/api/v1/assets/00000000-0000-0000-0000-000000000051",
+        "/api/v1/assets/00000000-0000-0000-0000-000000000051/impact",
+        "/api/v1/assets/00000000-0000-0000-0000-000000000051/relationships",
+        "/api/v1/assets/00000000-0000-0000-0000-000000000051/risks",
+    ],
+)
+def test_viewer_cannot_read_asset_inventory_or_relationship_details_over_http(path):
+    """Viewer is excluded from the Cartography read scope, including nested routes."""
+    db = AsyncMock()
+
+    with _client_for_role("viewer", db) as client:
+        response = client.get(path)
 
     assert response.status_code == 403
     db.execute.assert_not_awaited()
