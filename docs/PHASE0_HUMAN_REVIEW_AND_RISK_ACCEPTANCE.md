@@ -162,3 +162,16 @@ Le statut demeure **en attente d'un reviewer indépendant**. Aucune approbation 
 ### Suivi dédié — concurrence de refresh entre onglets
 
 Le point de revue statique est désormais suivi dans l'issue [#7 — Coordination du renouvellement de session entre onglets navigateur](https://github.com/cherifmeh-ui/pgcc-platform/issues/7). Cette issue est un gate Auth Phase 0 : elle reste ouverte jusqu'à l'implémentation, aux tests navigateur multi-onglets et à la preuve que le rejeu réel reste détecté.
+
+
+### Actualisation du périmètre PR — 28 novembre 2026
+
+Vérification GitHub du PR #1 après les derniers ajouts de tests :
+
+- HEAD observé : 0f02eaed389844f6f439b70b187d7bc35104fd2a.
+- Base/main : 91d47a8fe29b391245449b99b55e651fa444ccb8.
+- PR : 1 751 commits en avance, 0 en retard, 236 fichiers modifiés, 33 749 additions et 1 048 suppressions selon les métadonnées GitHub.
+- Le compare main...HEAD confirme 1 750 commits en avance sur le SHA précédent a1a1fd4 ; l'écart d'un commit correspond au dernier changement de test.
+- La PR demeure ouverte, Draft et non fusionnée. Aucune revue GitHub indépendante n'est enregistrée.
+
+**Conséquence pour la clôture :** le reviewer indépendant doit examiner le graphe d'historique et le diff complet, pas uniquement les changements Phase 0 récents. Le périmètre est trop large pour déclarer une approbation par simple inspection ciblée ; envisager une revue structurée par domaines et une stratégie de PR plus petite après analyse du graphe, sans réécrire l'historique ni toucher à main dans le cadre actuel.
