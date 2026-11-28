@@ -1184,8 +1184,7 @@ Le workflow PR 46162054458 sur le SHA 80659881ee3a1111296f3e5f86c8af18db12a6ae e
 
 Le parcours administrateur vérifie désormais aussi le retrait logique d'un
 actif : confirmation, requête DELETE et rechargement de l'inventaire.
-Le commit aaee2dd5cf7fedf1b5c87e0bf3df567de1d09068 est en cours de CI.
-Le résultat sera enregistré après la fin des workflows Push et PR.
+Le test a été corrigé dans le commit a1874e0c890e3479e41585887584c301ba7a9163. Le workflow Push 46164007103 sur ce SHA est terminé avec 5/5 jobs réussis, dont Production Runtime Smoke. Le job Frontend confirme 24/24 tests Playwright réussis sur Chromium, Firefox et WebKit, retrait logique inclus.
 
 ### Organisation de la sortie de Phase 1
 
