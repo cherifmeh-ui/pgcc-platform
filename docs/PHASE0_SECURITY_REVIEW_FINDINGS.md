@@ -330,3 +330,8 @@ Cette observation est une revue statique de source, pas une reproduction runtime
 ### Rappels d'exploitation
 
 Le fichier `docker-compose.production.yaml` exige les secrets et clés nécessaires, mais la recette doit encore confirmer les valeurs réelles, les CIDR de proxy, les certificats montés, les règles réseau, les alertes ClamAV/rate-limit et les seuils sur le trafic réel. Les tests CI utilisent des secrets et ressources éphémères.
+
+
+### Suivi dédié — concurrence de refresh entre onglets
+
+Le point de revue statique est désormais suivi dans l'issue [#7 — Coordination du renouvellement de session entre onglets navigateur](https://github.com/cherifmeh-ui/pgcc-platform/issues/7). Cette issue est un gate Auth Phase 0 : elle reste ouverte jusqu'à l'implémentation, aux tests navigateur multi-onglets et à la preuve que le rejeu réel reste détecté.
