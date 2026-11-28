@@ -122,6 +122,35 @@ async function mockPgccApi(page, role = 'admin') {
       return route.fulfill({ status: 200, contentType: 'application/json', body: JSON.stringify(graph) });
     }
 
+    if (path === '/assets/import/preview' && request.method() === 'POST') {
+      return route.fulfill({
+        status: 200,
+        contentType: 'application/json',
+        body: JSON.stringify({
+          rows_parsed: 1,
+          errors: [],
+          preview: [{
+            row: 2,
+            data: {
+              reference: 'AST-CSV-001',
+              name: 'Actif importé',
+              asset_type: 'hardware',
+              criticality: 'Moyenne',
+            },
+          }],
+          can_import: true,
+        }),
+      });
+    }
+
+    if (path === '/assets/import/confirm' && request.method() === 'POST') {
+      return route.fulfill({
+        status: 201,
+        contentType: 'application/json',
+        body: JSON.stringify({ imported: 1, message: '1 actifs importés avec succès.' }),
+      });
+    }
+
     return route.fulfill({ status: 200, contentType: 'application/json', body: '{}' });
   });
 }
@@ -163,4 +192,61 @@ test('viewer without assets scope is redirected away from Cartography', async ({
 
   await expect(page).toHaveURL(/\/dashboard$/);
   await expect(page.getByRole('link', { name: 'Cartographie' })).toHaveCount(0);
+});
+
+
+test('admin creates and updates an asset, then exports the filtered inventory', async ({ page }) => {
+  await mockPgccApi(page, 'admin');
+  await page.goto('/assets');
+
+  const createRequest = page.waitForRequest((request) =>
+    request.method() === 'POST' && new URL(request.url()).pathname.endsWith('/assets/')
+  );
+  await page.getByRole('button', { name: /Nouvel actif/ }).click();
+  await page.getByLabel('Référence *').fill('AST-NEW-001');
+  await page.getByLabel('Nom *').fill('Nouvel actif de test');
+  await page.locator('form.modal').getByRole('button', { name: 'Enregistrer' }).click();
+  const created = await createRequest;
+  expect(created.postDataJSON().reference).toBe('AST-NEW-001');
+  expect(created.postDataJSON().name).toBe('Nouvel actif de test');
+
+  const updateRequest = page.waitForRequest((request) =>
+    request.method() === 'PATCH' && new URL(request.url()).pathname.endsWith('/' + assetOne.id)
+  );
+  await page.getByRole('button', { name: 'Modifier' }).first().click();
+  await page.getByLabel('Nom *').fill('Serveur de production renommé');
+  await page.locator('form.modal').getByRole('button', { name: 'Enregistrer' }).click();
+  const updated = await updateRequest;
+  expect(updated.postDataJSON().name).toBe('Serveur de production renommé');
+
+  const downloadPromise = page.waitForEvent('download');
+  await page.getByRole('button', { name: 'Exporter CSV' }).click();
+  const download = await downloadPromise;
+  expect(download.suggestedFilename()).toBe('pgcc_assets_inventory.csv');
+});
+
+test('admin previews and confirms a CSV import without bypassing the preview step', async ({ page }) => {
+  await mockPgccApi(page, 'admin');
+  page.on('dialog', (dialog) => dialog.accept());
+  await page.goto('/assets');
+
+  await page.getByRole('button', { name: 'Importer CSV' }).click();
+  const previewRequest = page.waitForRequest((request) =>
+    request.method() === 'POST' && new URL(request.url()).pathname.endsWith('/assets/import/preview')
+  );
+  await page.locator('input[type="file"]').setInputFiles({
+    name: 'assets.csv',
+    mimeType: 'text/csv',
+    buffer: Buffer.from('reference,name,asset_type\nAST-CSV-001,Actif importé,hardware\n'),
+  });
+  await previewRequest;
+  await expect(page.getByText('AST-CSV-001')).toBeVisible();
+  await expect(page.getByRole('button', { name: 'Confirmer l’import' })).toBeEnabled();
+
+  const confirmRequest = page.waitForRequest((request) =>
+    request.method() === 'POST' && new URL(request.url()).pathname.endsWith('/assets/import/confirm')
+  );
+  await page.getByRole('button', { name: 'Confirmer l’import' }).click();
+  await confirmRequest;
+  await expect(page.getByRole('heading', { name: 'Cartographie des actifs' })).toBeVisible();
 });
