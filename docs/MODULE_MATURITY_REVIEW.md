@@ -897,3 +897,13 @@ acceptation des risques et revue humaine) seront regroupés dans la phase finale
 d'installation locale et de recette. Le statut « non testé sur l'environnement
 cible » reste explicite jusque-là. Le développement des phases fonctionnelles
 peut avancer sans déclarer ces gates validés.
+
+
+## État de progression actualisé — 28 novembre 2026
+
+- Phase 0 : les gates techniques automatisés continuent d'être renforcés ; la recette humaine et les contrôles d'infrastructure CTF sont reportés à l'étape finale d'installation/acceptation.
+- Phase 1 Cartographie : forte couverture backend/PostgreSQL et Playwright (24 tests sur trois moteurs) ; les derniers travaux portent sur le benchmark de volumétrie, la sémantique métier des relations, la matrice formelle des transitions et la revue finale de non-régression.
+- Phase 2 Risques : le backlog détaillé est créé dans l'issue #8. Il porte sur les évaluations inhérentes/résiduelles, la version de méthodologie, les décisions de traitement, l'acceptation explicite et l'historique append-only.
+- PR #1 reste Draft et non fusionnée ; main demeure inchangée.
+
+Les phases suivantes seront développées dans l'ordre de la roadmap : Risques, TPRM, Conformité, Audits, Gouvernance/workflows, Pilotage/reporting, puis Automatisation/IA/production. L'installation locale et la recette humaine seront réalisées après la clôture de tous ces développements.
