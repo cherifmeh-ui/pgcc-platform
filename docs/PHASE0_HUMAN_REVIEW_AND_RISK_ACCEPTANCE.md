@@ -175,3 +175,15 @@ Vérification GitHub du PR #1 après les derniers ajouts de tests :
 - La PR demeure ouverte, Draft et non fusionnée. Aucune revue GitHub indépendante n'est enregistrée.
 
 **Conséquence pour la clôture :** le reviewer indépendant doit examiner le graphe d'historique et le diff complet, pas uniquement les changements Phase 0 récents. Le périmètre est trop large pour déclarer une approbation par simple inspection ciblée ; envisager une revue structurée par domaines et une stratégie de PR plus petite après analyse du graphe, sans réécrire l'historique ni toucher à main dans le cadre actuel.
+
+
+### Relevé PR actualisé après validation Auth — 28 novembre 2026
+
+- HEAD actuel de la PR #1 : `6336e6d0a324fa0a1880c40e6e09fe26c784c24c`.
+- Base/main : `91d47a8fe29b391245449b99b55e651fa444ccb8`, inchangée.
+- Métadonnées GitHub : 1 763 commits en avance, 0 en retard, 236 fichiers modifiés, 33 748 additions et 1 048 suppressions.
+- État PR #1 : ouverte, Draft, non fusionnée.
+- Revue GitHub : aucune revue indépendante enregistrée.
+- Workflow Push `46158162680` sur le HEAD exact `6336e6d` : **5/5 jobs réussis** après actualisation des documents de Phase 0.
+
+La revue indépendante du diff complet reste obligatoire. Les chiffres du diff sont des métadonnées de périmètre, pas une conclusion sur la qualité ; le reviewer doit examiner le graphe d'historique et les changements par domaine. Aucun reviewer n'a encore approuvé la PR.
