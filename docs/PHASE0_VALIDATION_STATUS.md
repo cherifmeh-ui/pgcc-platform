@@ -1698,3 +1698,30 @@ Cette décision réduit la surface de stockage de secrets, au prix d'une déconn
 - CI sur le commit `b351a243a934db788499f352727a6b5587d443f1`, workflow `46158582424` : **5/5 jobs réussis**.
 - La matrice réelle FastAPI/PostgreSQL reste 6/6 sur Chromium, Firefox et WebKit, avec réponse perdue après commit et retry 401.
 - Limite : un gel complet du document par le système d'exploitation peut suspendre l'exécution des timers ; la validation d'un onglet longuement suspendu sur le parc CTF reste ouverte. Le timeout borne la requête quand le navigateur exécute normalement son event loop, ce n'est pas un TTL de Web Locks.
+
+
+## Organisation de la recette finale — décision de pilotage (28/11/2026)
+
+La recette humaine, les essais utilisateurs et la validation sur poste local
+sont volontairement reportés **après la clôture du développement fonctionnel
+et technique de l'ensemble du PGCC**. Ils ne constituent pas un prérequis
+pour poursuivre les développements, les revues de code ou les validations
+automatisées.
+
+Jusqu'à cette étape finale, le travail continue sur la branche de stabilisation
+avec tests unitaires, tests HTTP/JWT, PostgreSQL, scénarios navigateur E2E,
+tests de sécurité, migrations, build et smoke tests. Les résultats sont
+rattachés au SHA exact et leurs limites restent explicites.
+
+Cette décision ne transforme pas les contrôles dépendant de l'infrastructure
+CTF en contrôles réussis : topologie réseau/proxy/DNS/TLS, secrets et certificats
+réels, collecte/alertes, sauvegarde chiffrée hors hôte, restauration et RPO/RTO
+restent des contrôles de déploiement/recette à exécuter lors de l'installation
+locale et de la validation finale. Aucune donnée, clé ou infrastructure CTF
+n'est simulée comme preuve acquise.
+
+La Phase 0 conserve donc deux états distincts :
+- **socle technique automatisé** : progression et clôture sur preuves CI et
+  tests reproductibles ;
+- **acceptation de déploiement** : recette humaine et contrôles CTF réels,
+  regroupés à la fin du projet avant mise en service.
