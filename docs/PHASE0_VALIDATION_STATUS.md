@@ -1499,3 +1499,23 @@ Cette validation démontre un niveau élevé de maturité automatisée du code s
 - Étape D — décision de risque, mise à jour de ce registre et rapport de clôture signé.
 
 Aucun délai ferme pour les étapes B à D ne peut être promis sans disponibilité de l'environnement, des sauvegardes et des approbateurs. Le travail de code Phase 0 est désormais principalement en validation et remédiation éventuelle, pas en développement de nouvelles fonctionnalités.
+
+
+## Validation complémentaire — HEAD documentaire 9194419 — 28 novembre 2026
+
+- HEAD exact : `9194419b8017d8b8154a7c29bc6322fbfc8e4d90`.
+- Workflow Pull Request `46140116019` : **5/5 jobs terminés avec succès** (Backend, PostgreSQL Integration, Frontend, Compose Smoke, Production Runtime Smoke).
+- Backend : **562 passed, 63 skipped, 1 warning**. PostgreSQL : **62 passed, 1 warning**.
+- Le job PostgreSQL a exécuté le parcours migration jusqu'à `0031_risk_action_restrict`, `alembic check`, upgrade/downgrade ciblé et dump/restore vers une base jetable. Durée mesurée du restore CI : 0 seconde après arrondi ; cette valeur n'est pas un RTO de production.
+- Compose et Production Runtime ont démarré le parseur isolé et ClamAV ; le fichier propre a été accepté et le fichier de test EICAR détecté.
+- Le workflow a émis des avertissements non bloquants : dépréciation AnyIO/Starlette côté tests et dépréciation Node 20 des actions GitHub. Ils sont à traiter dans la maintenance des dépendances/workflows, sans les confondre avec des échecs de tests.
+
+### Revue de source ciblée — session navigateur
+
+- Le frontend mutualise le renouvellement des access tokens à l'intérieur d'un même onglet via `isRefreshing` et `failedQueue` dans `frontend/src/services/api.js`.
+- Cette coordination est locale à l'onglet. Le cookie refresh étant partagé entre onglets, deux onglets peuvent envoyer simultanément le même refresh token ; le second peut être interprété comme un rejeu et déclencher la révocation des sessions actives. Aucun mécanisme inter-onglets (Web Locks/BroadcastChannel ou équivalent) ni test navigateur multi-onglets n'a été identifié dans la revue de source.
+- **Action Phase 0 :** concevoir et tester une coordination inter-onglets compatible avec la politique serveur anti-rejeu, ou documenter explicitement une contrainte d'usage validée par le métier et la sécurité. Ne pas désactiver la détection de rejeu côté serveur pour masquer cette course.
+
+### Statut de clôture
+
+La CI du HEAD documentaire courant est entièrement verte. La Phase 0 reste ouverte pour la revue indépendante, la coordination inter-onglets à valider, la recette avec configuration réelle, la restauration depuis sauvegarde réelle avec RPO/RTO approuvés et les décisions formelles de risque.
