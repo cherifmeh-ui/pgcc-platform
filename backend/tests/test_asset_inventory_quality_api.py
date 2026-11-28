@@ -3,7 +3,30 @@ from unittest.mock import AsyncMock, MagicMock
 
 import pytest
 
-from app.api.v1.endpoints.assets import get_asset_inventory_quality
+from app.api.v1.endpoints.assets import _csv_safe_value, get_asset_inventory_quality
+
+
+@pytest.mark.parametrize(
+    "value",
+    [
+        "=HYPERLINK(\"https://example.invalid\")",
+        "+1+1",
+        "-1+1",
+        "@SUM(A1:A2)",
+        "  =1+1",
+        "\\t=1+1",
+        "\\r=1+1",
+        "\\n=1+1",
+        "\\ufeff=1+1",
+    ],
+)
+def test_csv_export_neutralizes_formula_markers_after_leading_whitespace(value):
+    assert _csv_safe_value(value) == "'" + value
+
+
+def test_csv_export_preserves_ordinary_text_and_empty_values():
+    assert _csv_safe_value("PGCC asset inventory") == "PGCC asset inventory"
+    assert _csv_safe_value(None) == ""
 
 
 @pytest.mark.asyncio
