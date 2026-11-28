@@ -160,16 +160,21 @@ Les règles, destinataires et fréquence doivent être configurables et éviter 
 
 ## 10. Ordre de développement
 
-1. Documentation cible et compatibilité avec les modèles existants.
-2. Cartographie : modèles, migration, services, API, tests, RBAC et audit.
-3. Interface de cartographie : liste, fiche actif, relations et filtres.
-4. Liens progressifs avec risques, applications, documents et contrôles.
-5. Fournisseurs : référentiel, contrats, évaluations, accès.
-6. Pilotage : définitions KPI, dashboard, rapports.
-7. Notifications et automatisation.
-8. IA contextualisée et assistance.
+L'ordre de réalisation est aligné sur la roadmap GRC de neuf phases :
 
-Chaque étape doit être intégrée sans casser les routes, modèles, migrations, tests ou vues déjà en place.
+1. **Phase 0 — Stabilisation :** fondations, CI, migrations, sécurité, tests et non-régression.
+2. **Phase 1 — Cartographie :** actifs, applications, relations, dépendances, impact et liens transverses.
+3. **Phase 2 — Risques :** évaluations, traitements, acceptations, historique et intégrité.
+4. **Phase 3 — TPRM :** fournisseurs, contrats, services, accès et revues.
+5. **Phase 4 — Conformité :** référentiels, contrôles, preuves, écarts et SoA.
+6. **Phase 5 — Audits :** missions, constats, recommandations et suivi.
+7. **Phase 6 — Gouvernance :** responsabilités, décisions, approbations et workflows.
+8. **Phase 7 — Pilotage :** KPI, tableaux de bord et rapports.
+9. **Phase 8 — Automatisation/IA/production :** notifications, intégrations, IA contrôlée, monitoring et sauvegardes.
+
+Les dépendances sont explicites : Cartographie alimente Risques ; Risques alimente TPRM, Conformité et Audits ; les modules validés alimentent ensuite le Pilotage. L'IA et les automatisations ne doivent agir que sur des processus établis et autorisés.
+
+Chaque étape doit être intégrée sans casser les routes, modèles, migrations, tests ou vues déjà en place. L'installation locale et la recette humaine sont reportées après la clôture de l'ensemble des phases de développement.
 
 
 ## 6. Intégration Asset ↔ Risk livrée (première tranche)
