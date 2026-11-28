@@ -1,7 +1,8 @@
 import { test, expect } from '@playwright/test';
 
-test('real FastAPI/PostgreSQL refresh rotation is serialized across tabs and replay remains rejected', async ({ browser }) => {
-  const initialRefreshToken = process.env.PGCC_E2E_REFRESH_TOKEN;
+test('real FastAPI/PostgreSQL refresh rotation is serialized across tabs and replay remains rejected', async ({ browser }, testInfo) => {
+  const browserKey = testInfo.project.name.toUpperCase();
+  const initialRefreshToken = process.env[`PGCC_E2E_REFRESH_TOKEN_${browserKey}`];
   expect(initialRefreshToken, 'CI must seed an isolated PostgreSQL refresh session').toBeTruthy();
 
   const context = await browser.newContext();
