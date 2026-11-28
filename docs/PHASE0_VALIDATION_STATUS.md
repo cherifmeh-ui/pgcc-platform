@@ -1534,3 +1534,6 @@ Le point de revue statique est désormais suivi dans l'issue [#7 — Coordinatio
 - **Validation encore incomplète :** les tests unitaires du gestionnaire ne remplacent pas un test navigateur multi-pages avec cookie HttpOnly et backend PostgreSQL. Les scénarios suspension/fermeture d'onglet et perte de réponse après commit doivent encore être testés/documentés. Issue #7 reste ouverte ; ne pas considérer le gate Auth fermé avant ces preuves.
 
 Le workflow `46140646641` sur le commit documentaire `e7c0a32` a terminé avec 5/5 jobs réussis. Le nouveau code et les nouveaux tests ci-dessus sont postérieurs à ce run : leur validation CI est en attente sur les commits qui les introduisent.
+### Complément — restauration initiale de session
+
+La revue du store Pinia a révélé un second point d'entrée : `restoreSession()` appelait directement `/auth/refresh`, en dehors de l'intercepteur de renouvellement. Cet appel est maintenant lui aussi enveloppé dans le même verrou Web Locks. Ainsi, les rotations automatiques après 401 et la restauration au chargement de l'application partagent le même verrou inter-onglets. Cette correction est incluse dans le commit `af88df5` ; sa CI doit être vérifiée séparément.
