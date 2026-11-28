@@ -110,3 +110,34 @@ L'analyse d'impact transitive des actifs expose désormais, lorsque le profil po
 - Le type de relation et la prochaine échéance de revue.
 
 La requête ne retourne que les relations non terminées. Les liens sont présentés en complément des risques liés; ils ne modifient ni le calcul de criticité, ni le score de risque, ni les décisions d'approbation. Les profils sans permission fournisseur ne reçoivent pas ces données. Les contrôles RBAC sont appliqués côté serveur.
+
+
+## Revue complémentaire — agrégation des risques sur l'actif source et ses dépendances (28/11/2026)
+
+Une revue du contrat d'analyse d'impact a identifié que l'agrégat de risques
+portait uniquement sur les actifs dépendants. Les risques directement liés à
+l'actif source étaient omis ; si aucun dépendant n'existait, la synthèse
+était retournée vide même lorsque la source portait des risques.
+
+Correction du service et de l'API :
+- les risques de l'actif source et de tous les dépendants transitifs entrent
+  dans la synthèse ;
+- un même risque lié à plusieurs actifs du périmètre est compté une seule fois
+  dans le total et les catégories ;
+- les risques de l'actif source sont exposés séparément dans `source.linked_risks` ;
+- l'interface les présente avec référence, titre, score et statut ;
+- les contrôles de permission `risks:read` continuent de conditionner leur
+  exposition.
+
+Tests : un scénario PostgreSQL persiste trois actifs en chaîne, un risque
+partagé entre la source et un dépendant et un risque lié uniquement à la
+source. Il vérifie les distances transitives, l'affichage des liens source,
+la déduplication de l'agrégat et les catégories de risque. Un test unitaire
+couvre aussi la source sans aucun dépendant.
+
+Le workflow sur le SHA `80659881ee3a1111296f3e5f86c8af18db12a6ae` a passé
+Backend (596 passed / 64 skipped) et PostgreSQL Integration (63 passed).
+Les autres jobs de ce HEAD sont encore en cours au moment de cette mise à jour.
+
+Cette synthèse ne modifie pas le score de risque ni les seuils méthodologiques
+de classification ; elle agrège uniquement les valeurs déjà persistées.
