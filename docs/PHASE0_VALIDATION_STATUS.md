@@ -1524,3 +1524,13 @@ La CI du HEAD documentaire courant est entièrement verte. La Phase 0 reste ouve
 ### Suivi dédié — concurrence de refresh entre onglets
 
 Le point de revue statique est désormais suivi dans l'issue [#7 — Coordination du renouvellement de session entre onglets navigateur](https://github.com/cherifmeh-ui/pgcc-platform/issues/7). Cette issue est un gate Auth Phase 0 : elle reste ouverte jusqu'à l'implémentation, aux tests navigateur multi-onglets et à la preuve que le rejeu réel reste détecté.
+
+### 28 novembre 2026 — première correction du verrou de refresh inter-onglets
+
+- Le frontend utilise désormais `navigator.locks.request('pgcc-auth-refresh', { mode: 'exclusive' }, ...)` autour de l'appel `/auth/refresh`. Le verrou Web Locks est partagé entre les contextes de même origine ; la réponse et son `Set-Cookie` sont traités avant la libération du verrou.
+- La file `isRefreshing`/`failedQueue` reste en place pour les appels concurrents d'un même onglet. Le verrou navigateur sérialise les rotations entre onglets sans modifier la politique backend de détection de rejeu.
+- Si Web Locks est absent, le refresh échoue de manière fermée et le flux existant conduit à la reconnexion ; aucun verrou artisanal à expiration n'est utilisé.
+- Tests Node ajoutés pour la sérialisation, l'absence d'API et la libération après erreur ; `npm test` est ajouté au job Frontend de CI.
+- **Validation encore incomplète :** les tests unitaires du gestionnaire ne remplacent pas un test navigateur multi-pages avec cookie HttpOnly et backend PostgreSQL. Les scénarios suspension/fermeture d'onglet et perte de réponse après commit doivent encore être testés/documentés. Issue #7 reste ouverte ; ne pas considérer le gate Auth fermé avant ces preuves.
+
+Le workflow `46140646641` sur le commit documentaire `e7c0a32` a terminé avec 5/5 jobs réussis. Le nouveau code et les nouveaux tests ci-dessus sont postérieurs à ce run : leur validation CI est en attente sur les commits qui les introduisent.
