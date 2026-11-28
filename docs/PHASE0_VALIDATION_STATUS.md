@@ -1548,3 +1548,19 @@ La revue du store Pinia a révélé un second point d'entrée : `restoreSession(
 - Workflow PR déclenché sur le commit `1c7b128b3207c4915e78b41a56515257b37ae316` : run `46147897538`, résultat à confirmer.
 - **Limite de preuve :** l'endpoint est simulé dans le navigateur. Ce test prouve l'interaction Chromium/Web Locks/cookie HttpOnly partagé, mais ne remplace pas un parcours navigateur contre le véritable backend FastAPI/PostgreSQL. Les tests PostgreSQL existants couvrent séparément la concurrence et la détection de rejeu côté serveur.
 - Les scénarios de perte de réponse après commit, suspension/fermeture d'onglet et la matrice de compatibilité navigateur restent à compléter. Issue #7 reste ouverte ; le gate Auth n'est pas clôturé.
+
+
+### Résultat final — workflow PR 46148021953 (28 novembre 2026)
+
+- Commit de code testé : `48acdb21a7e5a7adfa0f287520a6fc418c05a73c`.
+- Workflow Pull Request `46148021953` : **5/5 jobs réussis** (Backend, PostgreSQL Integration, Frontend, Compose Smoke, Production Runtime Smoke).
+- Backend : **562 passed, 63 skipped, 1 warning**.
+- PostgreSQL Integration : **62 passed, 1 warning** ; migrations, contrôle de dérive, scénario legacy, sauvegarde/restauration CI et tests d'intégration terminés.
+- Frontend : **3 tests Node réussis**, **1 test Playwright Chromium multi-onglets réussi**, build Vite 6.4.6 réussi, npm audit : **0 vulnérabilité**.
+- Compose Smoke et Production Runtime Smoke : réussis.
+- Le premier essai Playwright avait échoué parce que le montage de l'application déclenchait également les appels de restauration de session. Le test a été corrigé pour isoler le module Web Locks ; le scénario corrigé est passé. Ce premier échec était une erreur de conception du harnais, pas une défaillance démontrée du mécanisme.
+- Portée exacte du test navigateur : deux pages Chromium du même contexte, cookie HttpOnly partagé, endpoint de refresh simulé par interception Playwright. Les tests PostgreSQL backend couvrent séparément la concurrence et le rejeu côté serveur.
+- Limites restantes : intégration navigateur contre le vrai backend FastAPI/PostgreSQL, réponse perdue après commit, fermeture/suspension d'onglet, matrice de compatibilité navigateurs et revue humaine. Issue #7 reste ouverte.
+- Avertissements observés : un avertissement pytest et avertissements Node/outillage ; aucun job en échec.
+
+**Décision :** le contrôle navigateur inter-onglets est maintenant validé dans son périmètre simulé et la CI complète du commit est verte. Le gate Auth et la Phase 0 ne sont pas clôturés : les scénarios d'échec réseau, l'intégration réelle, les opérations sur l'environnement cible et les approbations humaines restent nécessaires.
