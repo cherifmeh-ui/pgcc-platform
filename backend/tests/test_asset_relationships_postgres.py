@@ -3,17 +3,18 @@ from __future__ import annotations
 
 import asyncio
 import os
+from time import perf_counter
 from uuid import uuid4
 
 import pytest
 from fastapi import HTTPException, Request
-from sqlalchemy import delete, or_, select
+from sqlalchemy import delete, event, or_, select
 from sqlalchemy.ext.asyncio import async_sessionmaker, create_async_engine
 from unittest.mock import AsyncMock, MagicMock
 
 from app.api.v1.endpoints.assets import (
     AssetRiskLinkCreate, AssetUpdate, RelationshipCreate, create_asset_relationship,
-    get_asset_impact, link_asset_to_risk, retire_asset, update_asset,
+    get_asset_dependency_graph, get_asset_impact, link_asset_to_risk, retire_asset, update_asset,
 )
 from app.models.action_item import ActionItem  # register Risk.actions mapper target before ORM use
 from app.api.v1.endpoints.risks import delete_risk
@@ -547,5 +548,75 @@ async def test_asset_impact_includes_source_and_transitive_risks_once(monkeypatc
             await cleanup.execute(
                 delete(Risk).where(Risk.id.in_([shared_risk.id, source_only_risk.id]))
             )
+            await cleanup.commit()
+        await engine.dispose()
+
+
+@pytest.mark.asyncio
+async def test_asset_graph_query_count_is_constant_for_large_inventory():
+    """The graph read model must not regress to per-node ORM lazy-load queries."""
+    engine = create_async_engine(DATABASE_URL, pool_size=5, max_overflow=0)
+    sessions = async_sessionmaker(engine, expire_on_commit=False)
+    assets = [
+        Asset(
+            reference=f"GRAPH-BENCH-{uuid4().hex[:12]}",
+            name=f"Graph benchmark asset {index:04d}",
+            asset_type="hardware",
+            lifecycle_status="Actif",
+        )
+        for index in range(600)
+    ]
+    select_statements = []
+
+    def count_selects(connection, cursor, statement, parameters, context, executemany):
+        if statement.lstrip().upper().startswith("SELECT"):
+            select_statements.append(statement.lower())
+
+    try:
+        async with sessions() as setup:
+            setup.add_all(assets)
+            await setup.flush()
+            setup.add_all([
+                AssetRelationship(
+                    source_asset_id=assets[index + 1].id,
+                    target_asset_id=assets[index].id,
+                    relationship_type="depends_on",
+                )
+                for index in range(len(assets) - 1)
+            ])
+            await setup.commit()
+
+        event.listen(engine.sync_engine, "before_cursor_execute", count_selects)
+        started = perf_counter()
+        async with sessions() as db:
+            result = await get_asset_dependency_graph(
+                db=db,
+                current_user=MagicMock(role="admin"),
+            )
+        elapsed_seconds = perf_counter() - started
+        event.remove(engine.sync_engine, "before_cursor_execute", count_selects)
+
+        assert result["node_count"] == 600
+        assert result["edge_count"] == 599
+        assert len(select_statements) == 2
+        assert all("assets.description" not in statement for statement in select_statements)
+        assert all("assets.serial_number" not in statement for statement in select_statements)
+        # Record elapsed time for CI diagnostics without asserting a fragile wall-clock SLA.
+        assert elapsed_seconds >= 0
+    finally:
+        try:
+            event.remove(engine.sync_engine, "before_cursor_execute", count_selects)
+        except Exception:
+            pass
+        async with sessions() as cleanup:
+            await cleanup.execute(
+                delete(AssetRelationship).where(
+                    or_(
+                        AssetRelationship.source_asset_id.in_([asset.id for asset in assets]),
+                        AssetRelationship.target_asset_id.in_([asset.id for asset in assets]),
+                    )
+                )
+            )
+            await cleanup.execute(delete(Asset).where(Asset.id.in_([asset.id for asset in assets])))
             await cleanup.commit()
         await engine.dispose()
