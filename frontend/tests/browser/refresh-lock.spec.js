@@ -103,8 +103,10 @@ test('a waiting tab acquires the refresh lock when the lock owner tab closes', a
       },
     );
   });
-  await waiter.waitForTimeout(100);
-  await waiter.waitForFunction(() => window.__waitingLockAcquired === false);
+  await waiter.waitForFunction(async () => {
+    const state = await navigator.locks.query();
+    return state.pending.some((lock) => lock.name === 'pgcc-auth-refresh');
+  });
 
   // Closing the browsing context destroys the lock owner; Web Locks must
   // release its exclusive lock so another live tab is not blocked forever.
