@@ -305,8 +305,8 @@ async def test_asset_csv_http_preview_then_confirm_persists_same_validated_data(
     reference = f"PH0-PREVIEW-CONFIRM-{actor_id.hex[:10]}"
     filename = f"phase0-preview-confirm-{actor_id.hex}.csv"
     csv_content = (
-        "reference,name,asset_type,criticality,owner,comment\\n"
-        f'{reference},"Serveur, production",hardware,Critique,Direction IT,"ligne 1; ligne 2"\\n'
+        "reference,name,asset_type,criticality,owner,comment\n"
+        f'{reference},"Serveur, production",hardware,Critique,Direction IT,"ligne 1; ligne 2"\n'
     )
     app = FastAPI()
     app.include_router(assets_endpoint.router, prefix="/api/v1")
