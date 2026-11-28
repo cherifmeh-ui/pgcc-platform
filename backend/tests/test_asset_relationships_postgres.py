@@ -448,3 +448,59 @@ async def test_concurrent_three_edge_dependency_cycle_is_rejected(monkeypatch):
             await cleanup.execute(delete(Asset).where(Asset.id.in_(asset_ids)))
             await cleanup.commit()
         await engine.dispose()
+
+
+@pytest.mark.asyncio
+async def test_multiple_assets_can_reference_same_application_on_postgres():
+    """The deployed schema must preserve Application 1:N Asset cardinality."""
+    from app.models.application import Application
+
+    engine = create_async_engine(DATABASE_URL, pool_size=3, max_overflow=0)
+    sessions = async_sessionmaker(engine, expire_on_commit=False)
+    application_id = uuid4()
+    asset_ids = [uuid4(), uuid4()]
+    reference_prefix = f"APP-CARD-{application_id.hex[:10]}"
+
+    try:
+        async with sessions() as setup:
+            setup.add(Application(
+                id=application_id,
+                name=f"Phase 1 cardinality {application_id.hex[:8]}",
+                criticality="Moyenne",
+            ))
+            await setup.flush()
+            setup.add_all([
+                Asset(
+                    id=asset_ids[0],
+                    reference=f"{reference_prefix}-A",
+                    name="Application technical component A",
+                    asset_type="server",
+                    application_id=application_id,
+                    lifecycle_status="Actif",
+                ),
+                Asset(
+                    id=asset_ids[1],
+                    reference=f"{reference_prefix}-B",
+                    name="Application technical component B",
+                    asset_type="software",
+                    application_id=application_id,
+                    lifecycle_status="Actif",
+                ),
+            ])
+            await setup.commit()
+
+        async with sessions() as verify:
+            linked_ids = (
+                await verify.execute(
+                    select(Asset.id).where(Asset.application_id == application_id)
+                )
+            ).scalars().all()
+            assert set(linked_ids) == set(asset_ids)
+    finally:
+        async with sessions() as cleanup:
+            await cleanup.execute(delete(Asset).where(Asset.id.in_(asset_ids)))
+            await cleanup.execute(
+                delete(Application).where(Application.id == application_id)
+            )
+            await cleanup.commit()
+        await engine.dispose()
