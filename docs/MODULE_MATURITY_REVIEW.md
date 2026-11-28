@@ -812,3 +812,14 @@ supervision, la revue humaine complète ni l'acceptation des risques résiduels.
 
 **Statut : Phase 0 reste ouverte.** Aucun passage aux phases fonctionnelles
 suivantes n'est déclaré par cette mise à jour.
+
+
+### 28 novembre 2026 — checkpoint CI du HEAD 28de85a
+
+- Les workflows Push `46139190920` et Pull Request `46139194452` ont terminé avec **5/5 jobs réussis chacun** sur `28de85a9f468b7e3f4408d159ef624eff906eba5`.
+- Backend : **562 passed, 63 skipped, 1 warning** ; PostgreSQL Integration : **62 passed, 1 warning**. Frontend, Compose Smoke et Production Runtime Smoke sont réussis.
+- Le parcours de confirmation CSV HTTP négatif vérifie désormais qu'une erreur de validation renvoie HTTP 422 sans révéler la valeur fournie et sans effectuer d'écriture.
+- Les migrations de production sont exécutées jusqu'à `0031_risk_action_restrict` dans le smoke runtime CI ; le démarrage, health checks, TLS/proxy et parcours parser sont validés dans cet environnement éphémère.
+- Cette preuve renforce la maturité automatisée. Elle ne remplace pas la revue humaine de sécurité, la recette avec secrets/certificats et réseau réels, la restauration d'une sauvegarde chiffrée/offsite avec RPO/RTO approuvés, ni l'acceptation des risques résiduels.
+
+**Statut : Phase 0 reste ouverte pour les gates opérationnels et humains.**
