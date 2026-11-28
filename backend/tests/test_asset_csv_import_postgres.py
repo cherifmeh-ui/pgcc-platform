@@ -268,3 +268,130 @@ async def test_asset_csv_multirow_conflict_rolls_back_every_insert(monkeypatch):
             await cleanup.execute(delete(User).where(User.id == actor_id))
             await cleanup.commit()
         await engine.dispose()
+
+
+@pytest.mark.asyncio
+async def test_asset_csv_http_preview_then_confirm_persists_same_validated_data(monkeypatch):
+    """Exercise preview and confirm over HTTP with the same CSV and real PostgreSQL."""
+    from fastapi import FastAPI
+    from fastapi.testclient import TestClient
+    from sqlalchemy.pool import NullPool
+
+    from app.api.v1.endpoints import assets as assets_endpoint
+    from app.core.config import settings
+    from app.core.database import get_db
+    from app.core.security import create_access_token
+
+    monkeypatch.setattr(
+        settings, "JWT_SECRET", "pgcc-postgres-csv-preview-confirm-secret-long"
+    )
+    monkeypatch.setattr(settings, "JWT_ALGORITHM", "HS256")
+
+    engine = create_async_engine(DATABASE_URL, poolclass=NullPool)
+    sessions = async_sessionmaker(engine, expire_on_commit=False)
+    actor_id = uuid4()
+    actor_email = f"phase0-csv-preview-confirm-{actor_id.hex}@example.invalid"
+    actor = User(
+        id=actor_id,
+        email=actor_email,
+        full_name="Phase 0 CSV preview-confirm administrator",
+        role="admin",
+        password_hash="not-used",
+        must_change_password=False,
+        is_active=True,
+        mfa_enabled=True,
+        auth_version=4,
+    )
+    reference = f"PH0-PREVIEW-CONFIRM-{actor_id.hex[:10]}"
+    filename = f"phase0-preview-confirm-{actor_id.hex}.csv"
+    csv_content = (
+        "reference,name,asset_type,criticality,owner,comment\\n"
+        f'{reference},"Serveur, production",hardware,Critique,Direction IT,"ligne 1; ligne 2"\\n'
+    )
+    app = FastAPI()
+    app.include_router(assets_endpoint.router, prefix="/api/v1")
+
+    async def override_db():
+        async with sessions() as db:
+            yield db
+
+    app.dependency_overrides[get_db] = override_db
+    token = create_access_token(
+        subject=actor_email, role="admin", auth_version=4
+    )
+    headers = {"Authorization": f"Bearer {token}"}
+
+    try:
+        async with sessions() as setup:
+            setup.add(actor)
+            await setup.commit()
+
+        with TestClient(app) as client:
+            preview_response = client.post(
+                "/api/v1/assets/import/preview",
+                headers=headers,
+                files={
+                    "file": (
+                        filename,
+                        csv_content.encode("utf-8"),
+                        "text/csv",
+                    )
+                },
+            )
+            assert preview_response.status_code == 200, preview_response.text
+            preview = preview_response.json()
+            assert preview["can_import"] is True
+            assert preview["rows_parsed"] == 1
+            assert preview["rows_valid"] == 1
+            assert preview["validated_rows"][0]["data"]["reference"] == reference
+            assert preview["validated_rows"][0]["data"]["name"] == "Serveur, production"
+            assert preview["validated_rows"][0]["data"]["comment"] == "ligne 1; ligne 2"
+
+            confirm_response = client.post(
+                "/api/v1/assets/import/confirm",
+                headers=headers,
+                files={
+                    "file": (
+                        filename,
+                        csv_content.encode("utf-8"),
+                        "text/csv",
+                    )
+                },
+            )
+            assert confirm_response.status_code == 201, confirm_response.text
+            assert confirm_response.json()["imported"] == 1
+
+        async with sessions() as verify:
+            persisted = (
+                await verify.execute(
+                    select(Asset).where(Asset.reference == reference)
+                )
+            ).scalar_one()
+            assert persisted.name == preview["validated_rows"][0]["data"]["name"]
+            assert persisted.asset_type == preview["validated_rows"][0]["data"]["asset_type"]
+            assert persisted.criticality == preview["validated_rows"][0]["data"]["criticality"]
+            assert persisted.owner == preview["validated_rows"][0]["data"]["owner"]
+            assert persisted.comment == preview["validated_rows"][0]["data"]["comment"]
+
+            import_events = (
+                await verify.execute(
+                    select(AuditOutbox.id).where(
+                        AuditOutbox.payload["action"].astext == "IMPORT",
+                        AuditOutbox.payload["details"].astext
+                        == f"CSV asset import completed: 1 assets from {filename}",
+                    )
+                )
+            ).scalars().all()
+            assert len(import_events) == 1
+    finally:
+        async with sessions() as cleanup:
+            await cleanup.execute(delete(Asset).where(Asset.reference == reference))
+            await cleanup.execute(
+                delete(AuditOutbox).where(
+                    AuditOutbox.payload["details"].astext
+                    == f"CSV asset import completed: 1 assets from {filename}"
+                )
+            )
+            await cleanup.execute(delete(User).where(User.id == actor_id))
+            await cleanup.commit()
+        await engine.dispose()
