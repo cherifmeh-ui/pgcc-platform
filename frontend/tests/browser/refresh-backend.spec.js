@@ -9,7 +9,7 @@ test('real FastAPI/PostgreSQL refresh rotation is serialized across tabs and rep
   await context.addCookies([{
     name: 'pgcc_refresh',
     value: initialRefreshToken,
-    url: 'http://127.0.0.1:4173',
+    url: 'http://localhost:4173',
     path: '/api/v1/auth',
     httpOnly: true,
     sameSite: 'Strict',
@@ -47,7 +47,7 @@ test('real FastAPI/PostgreSQL refresh rotation is serialized across tabs and rep
   await replayContext.addCookies([{
     name: 'pgcc_refresh',
     value: initialRefreshToken,
-    url: 'http://127.0.0.1:4173',
+    url: 'http://localhost:4173',
     path: '/api/v1/auth',
     httpOnly: true,
     sameSite: 'Strict',
