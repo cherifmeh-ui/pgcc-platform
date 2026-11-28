@@ -347,10 +347,13 @@ test('admin creates and updates an asset, then exports the filtered inventory', 
     request.method() === 'DELETE' && new URL(request.url()).pathname.endsWith('/' + assetOne.id)
   );
   const retirementDialog = page.waitForEvent('dialog');
+  const acceptedDialog = retirementDialog.then(async (dialog) => {
+    await dialog.accept();
+    return dialog;
+  });
   await page.getByRole('button', { name: 'Retirer' }).first().click();
-  const dialog = await retirementDialog;
+  const dialog = await acceptedDialog;
   expect(dialog.message()).toContain('Retirer l’actif AST-001');
-  await dialog.accept();
   await retirementRequest;
 });
 
