@@ -1,6 +1,6 @@
 # Phase 0 Validation Status
 
-Updated: 2026-11-27
+Updated: 2026-11-28
 
 ## Scope
 
@@ -1603,3 +1603,22 @@ Ce résultat valide le workflow automatisé sur ce HEAD et les environnements é
 - Cette preuve ferme le point de couverture des quatre mutations dans l'environnement PostgreSQL CI. Elle ne constitue pas une validation sur l'environnement CTF ni une revue humaine indépendante.
 
 **État des gates Phase 0 :** la couverture de révocation administrative est maintenant démontrée par les tests PostgreSQL. Restent notamment la recette opérationnelle réelle (proxy/CIDR, seuils/alertes), l'exercice de restauration depuis sauvegarde chiffrée réelle avec RPO/RTO, le test refresh navigateur contre FastAPI/PostgreSQL avec perte de réponse, et la revue humaine indépendante / acceptation formelle des risques.
+
+
+### Checkpoint exact HEAD — 28 novembre 2026 (validation après révocation administrative)
+
+- Branche contrôlée : chore/phase0-stabilization.
+- HEAD exact : fe4d44e207e815485cbfb1355c11f5bf44d447c9 (docs(phase0): record admin session invalidation coverage).
+- Workflow GitHub Actions PR 46153795709 sur ce SHA : **5/5 jobs réussis** — Backend, PostgreSQL Integration, Frontend, Compose Smoke et Production Runtime Smoke.
+- Frontend : tests Node, installation Chromium, scénario Playwright multi-onglets, build frontend : étapes toutes réussies.
+- PostgreSQL Integration : migrations, contrôle de dérive, upgrade/downgrade legacy, sauvegarde/restauration CI et suite d'intégration incluant les tests de cycle de vie administratif : étapes toutes réussies.
+- Compose Smoke : configuration Compose, image frontend de production, proxy TLS, stack et vérifications parser/ClamAV : étapes toutes réussies.
+- Production Runtime Smoke : images durcies, migrations, health/TLS/proxy/isolation réseau, authentification, comportement fail-closed et verdicts ClamAV : étapes toutes réussies.
+- Backend : compilation et suite de tests unitaires : étapes toutes réussies.
+- main reste à 91d47a8fe29b391245449b99b55e651fa444ccb8. PR #1 reste ouverte, Draft et non fusionnée.
+
+#### Limites inchangées
+
+Le test Playwright utilise toujours un endpoint refresh simulé ; il ne démontre pas un parcours navigateur contre le backend FastAPI/PostgreSQL ni le traitement d'une réponse perdue après commit. La sauvegarde/restauration exécutée est une preuve CI sur une base éphémère, pas un exercice sur une sauvegarde chiffrée de l'environnement CTF avec RPO/RTO approuvés. La recette des paramètres réels du reverse proxy/CIDR/rate-limit/alertes et la revue humaine indépendante restent nécessaires.
+
+**Décision :** le HEAD exact est vert en CI, mais Phase 0 reste ouverte. Ne pas fusionner PR #1 et ne pas présenter ce résultat comme une homologation ou une readiness production.
