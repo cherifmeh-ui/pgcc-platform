@@ -1110,3 +1110,25 @@ sur PostgreSQL. Il ne remplace pas les scénarios négatifs (fichier modifié
 entre preview et confirm, droits insuffisants, validation métier rejetée,
 collision concurrente) déjà couverts partiellement ou restant à compléter.
 La Phase 0 reste ouverte.
+
+
+## Complément — réduction des colonnes chargées par le graphe Cartographie (28/11/2026)
+
+La route `GET /api/v1/assets/graph` charge désormais explicitement uniquement
+les colonnes nécessaires à la représentation des nœuds et des relations.
+Les descriptions longues, identifiants techniques et autres attributs
+d'inventaire non affichés par ce graphe ne sont plus transférés depuis
+PostgreSQL pour chaque actif. Le tri des nœuds et des relations est rendu
+déterministe avec des clés secondaires stables.
+
+Cette optimisation ne limite pas artificiellement le nombre d'actifs et ne
+modifie pas le contrat JSON de l'API. Elle réduit le volume de données ORM
+chargé en mémoire ; elle ne constitue pas encore une mesure de performance
+sur un volume représentatif. Un benchmark avec données synthétiques et une
+mesure des plans SQL restent nécessaires avant toute décision de pagination
+ou de plafonnement du graphe.
+
+Le test `test_graph_returns_active_assets_and_relationships` vérifie que les
+colonnes utiles restent sélectionnées et que les colonnes inutiles
+(`description` de l'actif, `serial_number`, horodatage de création de la
+relation) ne sont plus incluses dans les requêtes du graphe.
