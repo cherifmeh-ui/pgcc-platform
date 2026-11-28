@@ -14,10 +14,10 @@ from app.api.v1.endpoints.assets import _csv_safe_value, get_asset_inventory_qua
         "-1+1",
         "@SUM(A1:A2)",
         "  =1+1",
-        "\\t=1+1",
-        "\\r=1+1",
-        "\\n=1+1",
-        "\\ufeff=1+1",
+        "\t=1+1",
+        "\r=1+1",
+        "\n=1+1",
+        "\ufeff=1+1",
     ],
 )
 def test_csv_export_neutralizes_formula_markers_after_leading_whitespace(value):
