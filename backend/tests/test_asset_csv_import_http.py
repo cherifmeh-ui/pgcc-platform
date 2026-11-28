@@ -211,3 +211,34 @@ def test_csv_preview_does_not_echo_rejected_field_values():
     assert "criticality" in payload["errors"][0]["error"]
     assert "input_value" not in response.text
     db.commit.assert_not_awaited()
+
+
+def test_csv_confirm_rejects_invalid_rows_without_writing_or_echoing_input():
+    db = AsyncMock()
+    db.execute.return_value = _empty_result()
+    sentinel = "DO_NOT_DISCLOSE_CONFIRM_CSV_SECRET_4c91d2"
+    csv_content = (
+        "reference,name,asset_type,criticality\\n"
+        f"CSV-CONFIRM-INVALID-001,Invalid asset,hardware,{sentinel}\\n"
+    )
+
+    with _csv_client(db) as client:
+        response = client.post(
+            "/api/v1/assets/import/confirm",
+            files={
+                "file": (
+                    "inventory.csv",
+                    csv_content.encode("utf-8"),
+                    "text/csv",
+                )
+            },
+        )
+
+    assert response.status_code == 422
+    payload = response.json()
+    assert "Import refusé" in payload["detail"]["message"]
+    assert "criticality" in payload["detail"]["errors"][0]["error"]
+    assert sentinel not in response.text
+    db.add_all.assert_not_called()
+    db.flush.assert_not_awaited()
+    db.commit.assert_not_awaited()
