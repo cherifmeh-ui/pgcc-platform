@@ -13,7 +13,7 @@ from unittest.mock import AsyncMock, MagicMock
 
 from app.api.v1.endpoints.assets import (
     AssetRiskLinkCreate, AssetUpdate, RelationshipCreate, create_asset_relationship,
-    link_asset_to_risk, retire_asset, update_asset,
+    get_asset_impact, link_asset_to_risk, retire_asset, update_asset,
 )
 from app.models.action_item import ActionItem  # register Risk.actions mapper target before ORM use
 from app.api.v1.endpoints.risks import delete_risk
@@ -449,3 +449,103 @@ async def test_concurrent_three_edge_dependency_cycle_is_rejected(monkeypatch):
             await cleanup.commit()
         await engine.dispose()
 
+
+
+@pytest.mark.asyncio
+async def test_asset_impact_includes_source_and_transitive_risks_once(monkeypatch):
+    """Risk synthesis includes the source asset and deduplicates shared risk links."""
+    engine = create_async_engine(DATABASE_URL, pool_size=5, max_overflow=0)
+    sessions = async_sessionmaker(engine, expire_on_commit=False)
+    source, dependent, downstream = [
+        Asset(
+            reference=f"IMPACT-{label}-{uuid4().hex[:10]}",
+            name=f"Phase 1 impact {label}",
+            asset_type="hardware",
+            lifecycle_status="Actif",
+        )
+        for label in ("SOURCE", "DEPENDENT", "DOWNSTREAM")
+    ]
+    shared_risk = Risk(
+        ref=f"IMPACT-SHARED-{uuid4().hex[:10]}",
+        title="Shared impact risk",
+        impact=4,
+        likelihood=5,
+        risk_level=20,
+        status="Ouvert",
+    )
+    source_only_risk = Risk(
+        ref=f"IMPACT-SOURCE-{uuid4().hex[:10]}",
+        title="Source-only impact risk",
+        impact=3,
+        likelihood=3,
+        risk_level=9,
+        status="En traitement",
+    )
+
+    try:
+        async with sessions() as setup:
+            setup.add_all([source, dependent, downstream, shared_risk, source_only_risk])
+            await setup.flush()
+            setup.add_all([
+                AssetRelationship(
+                    source_asset_id=dependent.id,
+                    target_asset_id=source.id,
+                    relationship_type="depends_on",
+                ),
+                AssetRelationship(
+                    source_asset_id=downstream.id,
+                    target_asset_id=dependent.id,
+                    relationship_type="depends_on",
+                ),
+                AssetRiskLink(asset_id=source.id, risk_id=shared_risk.id),
+                AssetRiskLink(asset_id=dependent.id, risk_id=shared_risk.id),
+                AssetRiskLink(asset_id=source.id, risk_id=source_only_risk.id),
+            ])
+            await setup.commit()
+            await setup.refresh(source)
+
+        async with sessions() as db:
+            result = await get_asset_impact(
+                asset_id=source.id,
+                db=db,
+                current_user=MagicMock(role="executive"),
+            )
+
+        assert result["total_impacted"] == 2
+        assert [item["dependency_distance"] for item in result["impacted_assets"]] == [1, 2]
+        assert {item["ref"] for item in result["source"]["linked_risks"]} == {
+            shared_risk.ref, source_only_risk.ref,
+        }
+        assert result["risk_summary"]["total"] == 2
+        assert result["risk_summary"]["unacceptable"] == 1
+        assert result["risk_summary"]["moderate"] == 1
+        assert result["risk_summary"]["by_status"] == {
+            "Ouvert": 1, "En traitement": 1,
+        }
+        shared_dependent = next(
+            item for item in result["impacted_assets"] if item["id"] == dependent.id
+        )
+        assert [risk["id"] for risk in shared_dependent["linked_risks"]] == [shared_risk.id]
+    finally:
+        async with sessions() as cleanup:
+            await cleanup.execute(
+                delete(AssetRiskLink).where(
+                    AssetRiskLink.asset_id.in_([source.id, dependent.id, downstream.id])
+                )
+            )
+            await cleanup.execute(
+                delete(AssetRelationship).where(
+                    or_(
+                        AssetRelationship.source_asset_id.in_([source.id, dependent.id, downstream.id]),
+                        AssetRelationship.target_asset_id.in_([source.id, dependent.id, downstream.id]),
+                    )
+                )
+            )
+            await cleanup.execute(
+                delete(Asset).where(Asset.id.in_([source.id, dependent.id, downstream.id]))
+            )
+            await cleanup.execute(
+                delete(Risk).where(Risk.id.in_([shared_risk.id, source_only_risk.id]))
+            )
+            await cleanup.commit()
+        await engine.dispose()
