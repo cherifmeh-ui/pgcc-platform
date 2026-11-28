@@ -1,6 +1,7 @@
 // frontend/src/stores/auth.js
 import { defineStore } from 'pinia';
 import apiClient, { setAccessToken } from '@/services/api';
+import { withCrossTabRefreshLock } from '@/services/refreshLock.js';
 
 let restorePromise = null;
 
@@ -97,7 +98,9 @@ export const useAuthStore = defineStore('auth', {
       restorePromise = (async () => {
         this.isLoading = true;
         try {
-          const { data } = await apiClient.post('/auth/refresh', null, { withCredentials: true });
+          const { data } = await withCrossTabRefreshLock(() =>
+            apiClient.post('/auth/refresh', null, { withCredentials: true })
+          );
           this.accessToken = data.access_token;
           setAccessToken(this.accessToken);
           this.user = data.user;
