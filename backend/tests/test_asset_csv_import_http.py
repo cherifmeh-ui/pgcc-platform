@@ -218,8 +218,8 @@ def test_csv_confirm_rejects_invalid_rows_without_writing_or_echoing_input():
     db.execute.return_value = _empty_result()
     sentinel = "DO_NOT_DISCLOSE_CONFIRM_CSV_SECRET_4c91d2"
     csv_content = (
-        "reference,name,asset_type,criticality\\n"
-        f"CSV-CONFIRM-INVALID-001,Invalid asset,hardware,{sentinel}\\n"
+        "reference,name,asset_type,criticality\n"
+        f"CSV-CONFIRM-INVALID-001,Invalid asset,hardware,{sentinel}\n"
     )
 
     with _csv_client(db) as client:
