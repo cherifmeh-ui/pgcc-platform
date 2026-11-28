@@ -5,7 +5,7 @@ test('two real browser tabs serialize refresh and share the rotated HttpOnly coo
   await context.addCookies([{
     name: 'refresh_token',
     value: 'seed-token',
-    url: 'http://localhost:4173',
+    domain: 'localhost',
     path: '/',
     httpOnly: true,
     sameSite: 'Strict',
