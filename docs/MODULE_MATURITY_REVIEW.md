@@ -853,3 +853,8 @@ Le test navigateur est multi-pages avec cookie HttpOnly partagé, mais le endpoi
 ### Auth — décision de conception sur le refresh ambigu (28/11/2026)
 
 Le cas commit DB / réponse HTTP perdue est documenté. Un grace period sur ancien token seul est rejeté ; le protocole candidat exige un identifiant d'opération, un stockage chiffré temporaire du successeur et une coordination inter-onglets. Pas de modification backend sans revue sécurité/clé et tests end-to-end. Voir docs/REFRESH_ROTATION_RECOVERY_DESIGN.md. Maturité Auth non clôturée.
+
+
+### Auth — extension de la matrice navigateurs (28 novembre 2026)
+
+Le test Playwright de coordination inter-onglets est étendu à Chromium, Firefox et WebKit. Un scénario additionnel vérifie qu'un onglet en attente acquiert le verrou lorsque l'onglet propriétaire est fermé. Cette preuve reste circonscrite à l'API Web Locks avec endpoint HTTP simulé ; elle ne remplace pas l'intégration réelle FastAPI/PostgreSQL ni le scénario de réponse perdue après commit. Les résultats sont en attente du workflow déclenché sur le nouveau HEAD.
