@@ -11,6 +11,15 @@ test('two real browser tabs serialize refresh and share the rotated HttpOnly coo
     sameSite: 'Strict',
   }]);
 
+  // Keep the Vue application from auto-running restoreSession(): this test
+  // isolates the shared lock helper, while a separate app-startup scenario can
+  // exercise the store integration without adding implicit refresh requests.
+  await context.route('http://127.0.0.1:4173/', (route) => route.fulfill({
+    status: 200,
+    contentType: 'text/html',
+    body: '<!doctype html><html><head></head><body></body></html>',
+  }));
+
   const observedCookies = [];
   let requestCount = 0;
   await context.route('**/api/v1/auth/refresh', async (route) => {
