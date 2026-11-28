@@ -1,6 +1,6 @@
 import { test, expect } from '@playwright/test';
 
-test('real FastAPI/PostgreSQL refresh rotation is serialized across tabs and replay remains rejected', async ({ browser }, testInfo) => {
+test('real FastAPI/PostgreSQL refresh rotation is serialized and lost responses fail closed', async ({ browser }, testInfo) => {
   const browserKey = testInfo.project.name.toUpperCase();
   const initialRefreshToken = process.env[`PGCC_E2E_REFRESH_TOKEN_${browserKey}`];
   expect(initialRefreshToken, 'CI must seed an isolated PostgreSQL refresh session').toBeTruthy();
@@ -41,29 +41,47 @@ test('real FastAPI/PostgreSQL refresh rotation is serialized across tabs and rep
   expect(results[1].payload.access_token).toBeTruthy();
   expect(results[0].payload.access_token).not.toBe(results[1].payload.access_token);
 
-  // A separate browser context replays the original, now-revoked cookie.
-  // The real API must reject it and preserve the anti-replay policy.
-  const replayContext = await browser.newContext();
-  await replayContext.addCookies([{
-    name: 'pgcc_refresh',
-    value: initialRefreshToken,
-    url: 'http://localhost:4173',
-    path: '/api/v1/auth',
-    httpOnly: true,
-    sameSite: 'Strict',
-  }]);
-  const replayTab = await replayContext.newPage();
-  await replayTab.goto('/');
-  const replay = await replayTab.evaluate(async () => {
+  // Simulate the transport losing a successful response after FastAPI has
+  // committed the rotation. route.fetch reaches the real backend, but aborting
+  // the browser response prevents its Set-Cookie from reaching the cookie jar.
+  const cookieBeforeLoss = await context.cookies('http://localhost:4173');
+  const oldCookie = cookieBeforeLoss.find((cookie) => cookie.name === 'pgcc_refresh');
+  expect(oldCookie?.value).toBeTruthy();
+
+  await firstTab.route('**/api/v1/auth/refresh', async (route) => {
+    const committedResponse = await route.fetch();
+    expect(committedResponse.status()).toBe(200);
+    await route.abort('failed');
+  });
+  const responseWasLost = await firstTab.evaluate(async () => {
+    try {
+      await fetch('/api/v1/auth/refresh', {
+        method: 'POST',
+        credentials: 'include',
+      });
+      return false;
+    } catch {
+      return true;
+    }
+  });
+  expect(responseWasLost).toBe(true);
+  await firstTab.unroute('**/api/v1/auth/refresh');
+
+  const cookieAfterLoss = await context.cookies('http://localhost:4173');
+  expect(cookieAfterLoss.find((cookie) => cookie.name === 'pgcc_refresh')?.value)
+    .toBe(oldCookie.value);
+
+  // The browser still has the consumed token. The retry must be rejected as
+  // replay rather than silently accepting the stale cookie or weakening policy.
+  const retry = await firstTab.evaluate(async () => {
     const response = await fetch('/api/v1/auth/refresh', {
       method: 'POST',
       credentials: 'include',
     });
     return { status: response.status, payload: await response.json() };
   });
-  expect(replay.status).toBe(401);
-  expect(replay.payload.detail).toContain('Réutilisation');
+  expect(retry.status).toBe(401);
+  expect(retry.payload.detail).toContain('Réutilisation');
 
-  await replayContext.close();
   await context.close();
 });
